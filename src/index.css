@@ -1,0 +1,936 @@
+:root {
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --border: #e2e4e9;
+  --text: #1d2129;
+  --muted: #6b7280;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --danger: #dc2626;
+  --note: #7c3aed;
+  --markdown: #0891b2;
+
+  /* Bề mặt & màu phụ — tách riêng khỏi màu cứng để dark theme ghi đè dễ dàng */
+  --subtle: #fafbfc; /* nền thanh công cụ, tab, select phụ */
+  --hover-bg: #f0f1f3; /* nền nút khi rê chuột */
+  --code-bg: #f3f4f6; /* nền khối code / inline code */
+  --danger-border: #f1c0c0;
+  --danger-bg: #fdf0f0; /* nền nút nguy hiểm khi rê chuột */
+  --share-bg: #ecfdf5; /* thanh thông báo đang chia sẻ */
+  --share-border: #a7f3d0;
+  --shadow: rgba(0, 0, 0, 0.05);
+
+  color-scheme: light;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+/* Giao diện tối: chỉ cần ghi đè các biến màu, mọi component dùng var() tự đổi theo */
+[data-theme='dark'] {
+  --bg: #0f1115;
+  --card: #1a1d24;
+  --border: #2c313b;
+  --text: #e6e8ec;
+  --muted: #9aa3b2;
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --danger: #f87171;
+  --note: #a78bfa;
+  --markdown: #22d3ee;
+
+  --subtle: #20242c;
+  --hover-bg: #2a2f39;
+  --code-bg: #15181e;
+  --danger-border: #5a2d2d;
+  --danger-bg: #2a1a1a;
+  --share-bg: #0e2a20;
+  --share-border: #1f5e45;
+  --shadow: rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  transition: background 0.15s, border-color 0.15s;
+}
+button:hover {
+  background: var(--hover-bg);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button.primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+button.primary:hover {
+  background: var(--primary-hover);
+}
+button.danger {
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+button.danger:hover {
+  background: var(--danger-bg);
+}
+
+/* Ô nhập liệu kế thừa màu theme (dark mode cần nền tối + chữ sáng) */
+input,
+textarea,
+select {
+  color: var(--text);
+  background: var(--card);
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+.muted {
+  color: var(--muted);
+}
+.warn {
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.container {
+  width: 100%;
+  margin: 0;
+  padding: 24px 28px 64px;
+}
+
+/* ---------- Login ---------- */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+/* Nút đổi giao diện ở góc trên phải trang đăng nhập */
+.login-theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+}
+.login-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 4px 24px var(--shadow);
+}
+.login-card h1 {
+  margin: 0 0 8px;
+}
+.login-card button {
+  margin-top: 16px;
+  width: 100%;
+}
+
+/* ---------- Header / list ---------- */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.app-header h1 {
+  font-size: 22px;
+  margin: 0;
+}
+.user-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.actions {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+}
+.empty {
+  padding: 32px;
+  text-align: center;
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.doc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.doc-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+}
+.doc-item:hover {
+  border-color: var(--primary);
+  text-decoration: none;
+}
+.doc-title {
+  flex: 1;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-date {
+  font-size: 13px;
+}
+.doc-dates {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+  white-space: nowrap;
+}
+.doc-dates .doc-date {
+  font-size: 12px;
+  line-height: 1.3;
+}
+.badge {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 600;
+}
+.badge-note {
+  background: var(--note);
+}
+.badge-markdown {
+  background: var(--markdown);
+}
+.badge-html {
+  background: #7c3aed;
+}
+.badge-shared {
+  background: #059669;
+}
+.share-flag {
+  font-size: 13px;
+}
+
+/* Nút bật/tắt giao diện sáng/tối (icon vuông) */
+.theme-toggle {
+  padding: 8px 10px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* ---------- Share ---------- */
+.share-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: var(--share-bg);
+  border: 1px solid var(--share-border);
+  border-radius: 10px;
+  font-size: 14px;
+}
+.share-url {
+  flex: 1;
+  min-width: 200px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--card);
+}
+.share-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.share-header .brand {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+.share-doc h1 {
+  margin-top: 0;
+}
+/* Cụm ngày tạo/cập nhật dưới tiêu đề tài liệu chia sẻ (hàng ngang) */
+.share-doc-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: -8px 0 18px;
+}
+.share-doc-dates .doc-date {
+  font-size: 13px;
+}
+.note-content.readonly {
+  min-height: auto;
+  padding: 0;
+}
+/* Trang chia sẻ cả folder: tiêu đề + danh sách tài liệu bấm để mở */
+.share-folder-title {
+  margin: 0 0 16px;
+}
+.share-back {
+  display: inline-block;
+  margin-bottom: 12px;
+  text-decoration: none;
+}
+.share-folder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.share-folder-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--card);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.share-folder-item:hover {
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+.share-folder-glyph {
+  width: 28px;
+  text-align: center;
+  font-weight: 700;
+}
+.share-folder-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-folder-arrow {
+  color: var(--muted);
+}
+
+/* Cụm nút chỉnh cỡ chữ + badge nằm cùng bên phải header */
+.share-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+/* Bộ điều khiển cỡ chữ cho người xem (giúp đọc rõ hơn) */
+.font-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+.font-control-btn {
+  min-width: 36px;
+  padding: 4px 8px;
+  font-weight: 700;
+  background: var(--subtle);
+}
+.font-control-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+.font-control-value {
+  min-width: 44px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Nút tải tài liệu về máy cho người xem trang chia sẻ */
+.share-download-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.share-download-btn:hover {
+  border-color: var(--primary);
+}
+
+/* Nội dung tài liệu chia sẻ scale theo cỡ chữ người xem chọn.
+   Ghi đè font-size cố định của .note-content để nó kế thừa cỡ này. */
+.share-doc {
+  font-size: var(--share-font-size, 16px);
+}
+.share-doc .note-content.readonly,
+.share-doc .markdown-body {
+  font-size: inherit;
+}
+
+/* ---------- Editor ---------- */
+/* Trang document full màn hình: dùng hết chiều rộng + chiều cao viewport,
+   vùng soạn thảo co giãn và tự cuộn bên trong. */
+.doc-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 20px 16px;
+}
+.doc-page > .back-bar {
+  margin-bottom: 10px;
+}
+.doc-page .doc-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.doc-page .note-editor,
+.doc-page .md-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.doc-page .md-editor .markdown-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.back-bar {
+  margin-bottom: 16px;
+}
+.doc-editor-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.title-input {
+  flex: 1;
+  min-width: 200px;
+  font-size: 18px;
+  font-weight: 600;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.type-select,
+.folder-select {
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+.folder-select {
+  max-width: 220px;
+}
+
+.note-editor,
+.md-editor {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--subtle);
+}
+.toolbar button {
+  padding: 5px 9px;
+  font-size: 13px;
+  border-radius: 6px;
+  min-width: 32px;
+}
+.toolbar .sep {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.note-content {
+  flex: 1;
+  min-height: 0;
+  padding: 18px;
+  outline: none;
+  font-size: 15px;
+  overflow-y: auto;
+}
+.note-content:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+}
+.note-content h1 { font-size: 1.6em; }
+.note-content h2 { font-size: 1.35em; }
+.note-content h3 { font-size: 1.15em; }
+.note-content blockquote {
+  margin: 8px 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+.note-content pre {
+  background: var(--code-bg);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--subtle);
+}
+.tabs button.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.md-textarea {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  border: none;
+  padding: 18px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  resize: none;
+  outline: none;
+}
+/* Khung xem HTML "đúng chuẩn": iframe sandbox cô lập CSS khỏi app */
+.html-frame {
+  width: 100%;
+  height: 70vh;
+  border: 1px solid var(--border);
+  border-radius: 0 0 12px 12px;
+  background: #fff;
+  display: block;
+}
+/* Trong trình sửa: lấp đầy không gian còn lại (tab Preview) */
+.doc-page .md-editor .html-frame {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  border: none;
+  border-radius: 0;
+}
+/* Trang chia sẻ công khai */
+.share-doc .html-frame {
+  height: 75vh;
+  border-radius: 12px;
+}
+
+/* ---------- Xem toàn màn hình (maximize trong trang) ---------- */
+.fs-wrap {
+  position: relative;
+}
+.fs-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  padding: 6px 10px;
+  font-size: 16px;
+  line-height: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  opacity: 0.85;
+}
+.fs-btn:hover {
+  opacity: 1;
+}
+/* Khi phóng to: phủ kín vùng hiển thị, ẩn header/padding xung quanh */
+.fs-wrap.is-max {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background: var(--bg);
+}
+.fs-wrap.is-max .fs-btn {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+}
+/* Nội dung lấp đầy khung khi phóng to */
+.fs-wrap.is-max > .html-frame {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  border: none;
+  border-radius: 0;
+}
+.fs-wrap.is-max > .markdown-body,
+.fs-wrap.is-max > .note-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* Trong trình sửa: wrapper lấp đầy vùng preview như nội dung trước đó */
+.doc-page .md-editor .fs-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.markdown-body {
+  padding: 18px;
+}
+.markdown-body :first-child {
+  margin-top: 0;
+}
+.markdown-body pre {
+  background: var(--code-bg);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+.markdown-body code {
+  background: var(--code-bg);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.markdown-body table {
+  border-collapse: collapse;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+}
+
+/* ---------- Trang chủ kiểu màn hình iOS ---------- */
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 38px 16px;
+  margin-top: 28px;
+}
+
+/* Một ô (tài liệu hoặc folder) */
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tile:hover {
+  text-decoration: none;
+}
+.tile:active {
+  transform: scale(0.93);
+}
+.tile,
+.tile:active {
+  transition: transform 0.12s ease;
+}
+
+/* Icon vuông bo góc kiểu iOS */
+.tile-icon {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56px;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+.tile-glyph {
+  line-height: 1;
+}
+.icon-note {
+  background: linear-gradient(160deg, #a78bfa, #7c3aed);
+}
+.icon-markdown {
+  background: linear-gradient(160deg, #22d3ee, #0891b2);
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.tile-share {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 14px;
+  background: var(--card);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Nhãn dưới icon */
+.tile-label {
+  font-size: 17px;
+  line-height: 1.3;
+  max-width: 150px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Ô folder: nền mờ chứa lưới 3x3 icon thu nhỏ */
+.folder-icon-box {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 28px;
+  padding: 12px;
+  background: rgba(120, 120, 128, 0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+/* Dark mode: viền trắng đậm trông chói → làm dịu lại */
+[data-theme='dark'] .folder-icon-box {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.folder-mini {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 6px;
+}
+.mini-doc {
+  border-radius: 7px;
+}
+.mini-note {
+  background: var(--note);
+}
+.mini-markdown {
+  background: var(--markdown);
+}
+/* Folder đang được kéo tài liệu vào */
+.folder-tile.drop-over .folder-icon-box {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35);
+}
+
+/* ----- Trang chi tiết folder (full page, danh sách dọc) ----- */
+.folder-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.folder-name-edit {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  padding: 2px 8px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  outline: none;
+}
+/* Mỗi dòng: thẻ tài liệu (Link) + nút đưa ra khỏi folder */
+.doc-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.doc-line .doc-item {
+  flex: 1;
+}
+.doc-remove {
+  padding: 8px 12px;
+  font-size: 16px;
+  line-height: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+}
+.doc-remove:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
+/* ---------- Trang tải lên hàng loạt ---------- */
+.upload-toolbar {
+  margin: 16px 0;
+}
+.folder-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.folder-pick .folder-select {
+  padding: 8px 12px;
+  max-width: 260px;
+}
+
+/* Vùng kéo-thả file */
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 40px 24px;
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.drop-zone:hover {
+  border-color: var(--primary);
+}
+.drop-zone.drag-over {
+  border-color: var(--primary);
+  background: var(--hover-bg);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+.drop-icon {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.upload-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0 10px;
+  font-size: 14px;
+}
+
+.upload-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.upload-title {
+  flex: 1;
+  min-width: 120px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.upload-row .type-select {
+  padding: 7px 10px;
+}
+.upload-filename {
+  max-width: 180px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Kéo file từ máy vào trang folder: làm nổi vùng trang + banner nhắc thả */
+.container.file-drag-over {
+  outline: 2px dashed var(--primary);
+  outline-offset: -10px;
+  border-radius: 14px;
+  background: var(--hover-bg);
+}
+.file-drop-banner {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--card);
+  border: 1px solid var(--primary);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px var(--shadow);
+}
