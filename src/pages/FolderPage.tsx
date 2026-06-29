@@ -5,6 +5,7 @@ import { useUploadDocuments } from '../hooks/useUploadDocuments';
 import { useMultiSelect } from '../hooks/useMultiSelect';
 import ThemeToggle from '../components/ThemeToggle';
 import MoveToFolderDialog from '../components/MoveToFolderDialog';
+import { downloadDocument } from '../lib/downloadHelpers';
 import type { DocItem, DocumentType } from '../types';
 
 function formatDate(iso: string): string {
@@ -144,6 +145,32 @@ export default function FolderPage() {
       )
     )
       deleteDocument(id);
+  };
+
+  // Gom tài liệu để tải từ lựa chọn: docs chọn trực tiếp + docs trong folder
+  // được chọn (gồm cả sub-folder). Khử trùng theo id.
+  const collectSelectedDocs = (): DocItem[] => {
+    const seen = new Set<string>();
+    const result: DocItem[] = [];
+    for (const d of documents) {
+      const inSelectedFolder =
+        !!d.folderId &&
+        (sel.folders.has(d.folderId) ||
+          (() => {
+            const parent = folders.find((f) => f.id === d.folderId)?.parentId;
+            return !!parent && sel.folders.has(parent);
+          })());
+      if ((sel.docs.has(d.id) || inSelectedFolder) && !seen.has(d.id)) {
+        seen.add(d.id);
+        result.push(d);
+      }
+    }
+    return result;
+  };
+
+  // Tải hàng loạt: tải lần lượt từng tài liệu (mỗi cái 1 file).
+  const handleBulkDownload = () => {
+    collectSelectedDocs().forEach((d) => downloadDocument(d));
   };
 
   // Xóa hàng loạt các mục đang chọn (có confirm tóm tắt).
@@ -325,6 +352,13 @@ export default function FolderPage() {
           <span>Đã chọn {sel.count}</span>
           <button
             type="button"
+            disabled={collectSelectedDocs().length === 0}
+            onClick={handleBulkDownload}
+          >
+            ⬇ Tải về
+          </button>
+          <button
+            type="button"
             className="danger"
             disabled={sel.count === 0}
             onClick={handleBulkDelete}
@@ -443,6 +477,14 @@ export default function FolderPage() {
                 </Link>
                 {!sel.selectMode && (
                   <div className="doc-line-actions">
+                    <button
+                      type="button"
+                      className="doc-action"
+                      title="Tải tài liệu về máy"
+                      onClick={() => downloadDocument(d)}
+                    >
+                      ⬇
+                    </button>
                     <button
                       type="button"
                       className="doc-action"

@@ -4,6 +4,7 @@ import { useDocuments } from '../context/DocumentsContext';
 import { useUploadDocuments } from '../hooks/useUploadDocuments';
 import { useMultiSelect } from '../hooks/useMultiSelect';
 import { useAuth } from '../auth/useAuth';
+import { downloadDocument } from '../lib/downloadHelpers';
 import ThemeToggle from '../components/ThemeToggle';
 import type { DocItem, DocumentType, Folder } from '../types';
 
@@ -28,6 +29,32 @@ export default function DocsAllPage() {
 
   // Folder đang được kéo qua (làm nổi viền ô folder).
   const [dragOver, setDragOver] = useState<string | null>(null);
+
+  // Gom tài liệu để tải từ lựa chọn: docs chọn trực tiếp + docs trong folder
+  // được chọn (gồm cả sub-folder). Khử trùng theo id.
+  const collectSelectedDocs = (): DocItem[] => {
+    const seen = new Set<string>();
+    const result: DocItem[] = [];
+    for (const d of documents) {
+      const inSelectedFolder =
+        !!d.folderId &&
+        (sel.folders.has(d.folderId) ||
+          (() => {
+            const parent = folders.find((f) => f.id === d.folderId)?.parentId;
+            return !!parent && sel.folders.has(parent);
+          })());
+      if ((sel.docs.has(d.id) || inSelectedFolder) && !seen.has(d.id)) {
+        seen.add(d.id);
+        result.push(d);
+      }
+    }
+    return result;
+  };
+
+  // Tải hàng loạt: tải lần lượt từng tài liệu (mỗi cái 1 file).
+  const handleBulkDownload = () => {
+    collectSelectedDocs().forEach((d) => downloadDocument(d));
+  };
 
   // Xóa hàng loạt các mục đang chọn (có confirm tóm tắt).
   const handleBulkDelete = () => {
@@ -152,6 +179,13 @@ export default function DocsAllPage() {
       {sel.selectMode && (
         <div className="select-bar">
           <span>Đã chọn {sel.count}</span>
+          <button
+            type="button"
+            disabled={collectSelectedDocs().length === 0}
+            onClick={handleBulkDownload}
+          >
+            ⬇ Tải về
+          </button>
           <button
             type="button"
             className="danger"

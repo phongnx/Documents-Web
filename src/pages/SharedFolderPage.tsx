@@ -9,7 +9,6 @@ import MarkdownPreview from '../components/MarkdownPreview';
 import FullscreenViewer from '../components/FullscreenViewer';
 import ThemeToggle from '../components/ThemeToggle';
 import { useFontScale } from '../components/FontSizeControl';
-import { downloadDocument } from '../lib/downloadHelpers';
 import { formatDate } from '../lib/formatDate';
 
 // Bản công khai của một folder: metadata folder + toàn bộ tài liệu bên trong.
@@ -73,16 +72,6 @@ export default function SharedFolderPage() {
         <Link to="/" className="brand">📄 Docs Web</Link>
         <div className="share-header-actions">
           {state === 'ready' && current && control}
-          {state === 'ready' && current && (
-            <button
-              type="button"
-              className="share-download-btn"
-              onClick={() => downloadDocument(current)}
-              title="Tải tài liệu này về máy"
-            >
-              ⬇ Tải về
-            </button>
-          )}
           <ThemeToggle />
           <span className="badge badge-shared">Chia sẻ công khai · chỉ đọc</span>
         </div>

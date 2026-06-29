@@ -6,6 +6,7 @@ import NoteEditor from './NoteEditor';
 import MarkdownPreview from './MarkdownPreview';
 import HtmlFrame from './HtmlFrame';
 import FullscreenViewer from './FullscreenViewer';
+import { downloadDocument } from '../lib/downloadHelpers';
 
 type DocUpdates = Partial<Pick<DocItem, 'title' | 'content' | 'type'>>;
 
@@ -91,6 +92,9 @@ export default function DocumentEditor({ doc }: { doc: DocItem }) {
     updateDocument(doc.id, { type: v });
   };
 
+  // Tải về dùng nội dung đang sửa (state cục bộ) để gồm cả thay đổi chưa lưu.
+  const onDownload = () => downloadDocument({ ...doc, title, content, type });
+
   const onDelete = () => {
     if (!window.confirm('Xóa tài liệu này? Hành động không thể hoàn tác.')) return;
     deleteDocument(doc.id);
@@ -140,6 +144,9 @@ export default function DocumentEditor({ doc }: { doc: DocItem }) {
                 )),
             ])}
         </select>
+        <button type="button" onClick={onDownload} title="Tải tài liệu về máy">
+          ⬇ Tải về
+        </button>
         <button
           type="button"
           className={doc.isShared ? 'primary' : ''}
