@@ -107,36 +107,40 @@ export default function DocsAllPage() {
       ) : (
         <div className="home-grid">
           {/* Ô folder — bấm để mở trang chi tiết */}
-          {folders.map((f) => (
-            <div
-              key={f.id}
-              className={`tile folder-tile${dragOver === f.id ? ' drop-over' : ''}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => openFolder(f)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') openFolder(f);
-              }}
-              onDragOver={(e) => allowDrop(e, f.id)}
-              onDragLeave={() => setDragOver((k) => (k === f.id ? null : k))}
-              onDrop={(e) => onDropToFolder(e, f.id)}
-              title={f.name}
-            >
-              <span className="folder-icon-box">
-                {f.isShared && (
-                  <span className="tile-share" title="Đang chia sẻ công khai">🔗</span>
-                )}
-                <span className="folder-mini">
-                  {docsOf(f.id)
-                    .slice(0, 9)
-                    .map((d) => (
+          {folders.map((f) => {
+            const items = docsOf(f.id);
+            return (
+              <div
+                key={f.id}
+                className={`tile folder-tile${dragOver === f.id ? ' drop-over' : ''}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => openFolder(f)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') openFolder(f);
+                }}
+                onDragOver={(e) => allowDrop(e, f.id)}
+                onDragLeave={() => setDragOver((k) => (k === f.id ? null : k))}
+                onDrop={(e) => onDropToFolder(e, f.id)}
+                title={f.name}
+              >
+                <span className="folder-icon-box">
+                  <span className="folder-count" title="Số tài liệu trong thư mục">
+                    {items.length}
+                  </span>
+                  {f.isShared && (
+                    <span className="tile-share" title="Đang chia sẻ công khai">🔗</span>
+                  )}
+                  <span className="folder-mini">
+                    {items.slice(0, 9).map((d) => (
                       <span key={d.id} className={`mini-doc mini-${d.type}`} />
                     ))}
+                  </span>
                 </span>
-              </span>
-              <span className="tile-label">{f.name}</span>
-            </div>
-          ))}
+                <span className="tile-label">{f.name}</span>
+              </div>
+            );
+          })}
 
           {/* Tài liệu không thuộc folder nào — nằm thẳng trên lưới */}
           {looseDocs.map(renderDoc)}

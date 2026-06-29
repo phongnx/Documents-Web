@@ -94,7 +94,10 @@ export default function DocumentEditor({ doc }: { doc: DocItem }) {
   const onDelete = () => {
     if (!window.confirm('Xóa tài liệu này? Hành động không thể hoàn tác.')) return;
     deleteDocument(doc.id);
-    navigate('/docs');
+    // Xóa xong quay về đúng ngữ cảnh: folder chứa tài liệu (nếu còn tồn tại),
+    // ngược lại về danh sách gốc.
+    const inFolder = !!doc.folderId && folders.some((f) => f.id === doc.folderId);
+    navigate(inFolder ? `/docs/folder/${doc.folderId}` : '/docs');
   };
 
   return (
