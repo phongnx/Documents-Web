@@ -12,6 +12,25 @@ function formatDate(iso: string): string {
   return d.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+// Sắp xếp danh sách tài liệu trong folder; lưu lựa chọn vào localStorage.
+type SortValue = 'created-desc' | 'created-asc' | 'name-asc' | 'name-desc';
+const SORT_KEY = 'docs-sort';
+function loadSort(): SortValue {
+  try {
+    const v = localStorage.getItem(SORT_KEY);
+    if (
+      v === 'created-desc' ||
+      v === 'created-asc' ||
+      v === 'name-asc' ||
+      v === 'name-desc'
+    )
+      return v;
+  } catch {
+    /* localStorage không khả dụng → dùng mặc định */
+  }
+  return 'created-desc';
+}
+
 export default function FolderPage() {
   const { folderId } = useParams();
   const {
@@ -41,6 +60,30 @@ export default function FolderPage() {
   const [fileDragOver, setFileDragOver] = useState(false);
   // Tài liệu đang mở dialog "Di chuyển tới…" (null = không mở).
   const [moveDoc, setMoveDoc] = useState<DocItem | null>(null);
+  // Kiểu sắp xếp danh sách tài liệu (nhớ qua localStorage).
+  const [sort, setSort] = useState<SortValue>(loadSort);
+  const onChangeSort = (v: SortValue) => {
+    setSort(v);
+    try {
+      localStorage.setItem(SORT_KEY, v);
+    } catch {
+      /* bỏ qua nếu không lưu được */
+    }
+  };
+
+  // Danh sách tài liệu đã sắp xếp theo lựa chọn (chỉ đổi hiển thị, không ghi DB).
+  const sortedDocs = [...docs].sort((a, b) => {
+    switch (sort) {
+      case 'name-asc':
+        return (a.title || '').localeCompare(b.title || '', 'vi');
+      case 'name-desc':
+        return (b.title || '').localeCompare(a.title || '', 'vi');
+      case 'created-asc':
+        return a.createdAt.localeCompare(b.createdAt);
+      default: // 'created-desc'
+        return b.createdAt.localeCompare(a.createdAt);
+    }
+  });
 
   const backBar = (
     <div className="back-bar">
@@ -340,6 +383,24 @@ export default function FolderPage() {
         </div>
       )}
 
+      {docs.length > 0 && (
+        <div className="doc-sort-bar">
+          <label>
+            Sắp xếp:
+            <select
+              className="sort-select"
+              value={sort}
+              onChange={(e) => onChangeSort(e.target.value as SortValue)}
+            >
+              <option value="created-desc">Mới nhất</option>
+              <option value="created-asc">Cũ nhất</option>
+              <option value="name-asc">Tên A→Z</option>
+              <option value="name-desc">Tên Z→A</option>
+            </select>
+          </label>
+        </div>
+      )}
+
       {docs.length === 0 ? (
         <p className="muted empty">
           Chưa có tài liệu trong thư mục này. Bấm nút phía trên để tạo, hoặc kéo
@@ -347,7 +408,7 @@ export default function FolderPage() {
         </p>
       ) : (
         <ul className="doc-list">
-          {docs.map((d) => {
+          {sortedDocs.map((d) => {
             const selected = sel.selectMode && sel.docs.has(d.id);
             return (
               <li key={d.id} className={`doc-line${selected ? ' selected' : ''}`}>

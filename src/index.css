@@ -873,6 +873,26 @@ a:hover {
 .doc-action.danger:hover {
   background: var(--danger-bg);
 }
+/* Thanh sắp xếp danh sách tài liệu trong folder */
+.doc-sort-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.doc-sort-bar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.sort-select {
+  padding: 6px 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 /* ---------- Modal chung (dialog chọn folder…) ---------- */
 .modal-overlay {
   position: fixed;
@@ -970,7 +990,7 @@ a:hover {
   left: -6px;
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  border-radius: 6px;
   background: var(--card);
   border: 2px solid var(--primary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
