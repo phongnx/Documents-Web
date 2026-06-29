@@ -125,11 +125,20 @@ export default function DocumentEditor({ doc }: { doc: DocItem }) {
           title="Chọn folder cho tài liệu"
         >
           <option value="">📁 Không có folder</option>
-          {folders.map((f) => (
-            <option key={f.id} value={f.id}>
-              📁 {f.name}
-            </option>
-          ))}
+          {folders
+            .filter((f) => !f.parentId)
+            .flatMap((root) => [
+              <option key={root.id} value={root.id}>
+                📁 {root.name}
+              </option>,
+              ...folders
+                .filter((s) => s.parentId === root.id)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    　↳ {s.name}
+                  </option>
+                )),
+            ])}
         </select>
         <button
           type="button"

@@ -42,7 +42,8 @@ interface DocumentsState {
   updateDocument: (id: string, updates: DocUpdates) => void;
   deleteDocument: (id: string) => void;
   toggleShareDocument: (id: string) => void;
-  addFolder: (name?: string) => Folder | null;
+  /** parentId có giá trị ⇒ tạo sub-folder (chỉ 1 cấp; parent phải là folder gốc) */
+  addFolder: (name?: string, parentId?: string) => Folder | null;
   renameFolder: (id: string, name: string) => void;
   deleteFolder: (id: string) => void;
   toggleShareFolder: (id: string) => void;
@@ -241,15 +242,25 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
   );
 
   const addFolder = useCallback(
-    (name?: string): Folder | null => {
+    (name?: string, parentId?: string): Folder | null => {
       if (!db || !uid) return null;
       const cur = stateRef.current.folders;
+      // Giữ đúng 1 cấp: chỉ cho tạo sub-folder bên trong folder GỐC.
+      // Nếu parentId không hợp lệ hoặc lại là sub-folder ⇒ tạo ở cấp gốc.
+      let pid = parentId;
+      if (pid) {
+        const parent = cur.find((f) => f.id === pid);
+        if (!parent || parent.parentId) pid = undefined;
+      }
       const now = new Date().toISOString();
+      // order tính trong phạm vi cùng cấp cha (cùng parentId, gốc = rỗng).
+      const scope = cur.filter((f) => (f.parentId ?? '') === (pid ?? ''));
       const created: Folder = {
         id: uuidv4(),
         name: name ?? 'Folder mới',
-        order: cur.length,
+        order: scope.length,
         createdAt: now,
+        ...(pid ? { parentId: pid } : {}),
       };
       set(ref(db, `users/${uid}/folders/${created.id}`), created);
       return created;
@@ -275,18 +286,25 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
   const deleteFolder = useCallback(
     (id: string) => {
       if (!db || !uid) return;
+      const allFolders = stateRef.current.folders;
       const docs = stateRef.current.documents;
-      // Xóa folder và TẤT CẢ tài liệu bên trong (theo lựa chọn của người dùng).
-      const writes: Record<string, unknown> = {
-        [`users/${uid}/folders/${id}`]: null,
-      };
-      // Nếu folder đang chia sẻ công khai, xóa luôn cả cụm shared/f/{id}.
-      const folder = stateRef.current.folders.find((f) => f.id === id);
-      if (folder?.isShared) writes[`shared/f/${id}`] = null;
+      const target = allFolders.find((f) => f.id === id);
+      if (!target) return;
+      // Tập folder cần xóa: chính nó + (nếu là folder gốc) tất cả sub-folder của nó.
+      const subFolders = allFolders.filter((f) => f.parentId === id);
+      const folderIds = new Set<string>([id, ...subFolders.map((f) => f.id)]);
+      const writes: Record<string, unknown> = {};
+      for (const fid of folderIds) {
+        writes[`users/${uid}/folders/${fid}`] = null;
+        // Nếu folder/sub-folder đang chia sẻ công khai, xóa luôn cả cụm shared/f/{fid}.
+        const f = allFolders.find((x) => x.id === fid);
+        if (f?.isShared) writes[`shared/f/${fid}`] = null;
+      }
+      // Xóa TẤT CẢ tài liệu nằm trong các folder đó (gồm cả sub-folder).
       for (const d of docs) {
-        if (d.folderId === id) {
+        if (d.folderId && folderIds.has(d.folderId)) {
           writes[`users/${uid}/documents/${d.id}`] = null;
-          // Xóa luôn bản công khai nếu tài liệu đang chia sẻ.
+          // Xóa luôn bản công khai lẻ nếu tài liệu đang chia sẻ.
           if (d.isShared) writes[`shared/d/${d.id}`] = null;
         }
       }

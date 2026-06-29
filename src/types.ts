@@ -7,6 +7,8 @@ export interface Folder {
   createdAt: string;
   /** true = đã bật chia sẻ công khai, có bản sao tại shared/f/{id} */
   isShared?: boolean;
+  /** undefined/rỗng = folder gốc (cấp 1); có giá trị = sub-folder của folder đó (chỉ 1 cấp) */
+  parentId?: string;
 }
 
 export interface DocItem {

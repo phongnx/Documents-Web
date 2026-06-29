@@ -805,6 +805,10 @@ a:hover {
   justify-content: center;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
+/* Lưới thư mục con trong trang folder gốc */
+.subfolder-grid {
+  margin-bottom: 24px;
+}
 /* Folder đang được kéo tài liệu vào */
 .folder-tile.drop-over .folder-icon-box {
   border-color: var(--primary);
@@ -847,6 +851,157 @@ a:hover {
 .doc-remove:hover {
   background: var(--hover-bg);
   color: var(--text);
+}
+/* Cụm nút thao tác cuối mỗi dòng tài liệu (di chuyển / đổi tên / xóa) */
+.doc-line-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.doc-action {
+  padding: 8px 10px;
+  font-size: 15px;
+  line-height: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.doc-action:hover {
+  background: var(--hover-bg);
+}
+.doc-action.danger:hover {
+  background: var(--danger-bg);
+}
+/* ---------- Modal chung (dialog chọn folder…) ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal-dialog {
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  padding: 16px;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.modal-close {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  font-size: 16px;
+}
+.modal-subtitle {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.move-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.move-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  padding: 10px 12px;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+}
+.move-option:hover {
+  border-color: var(--primary);
+  background: var(--hover-bg);
+}
+.move-option.indent {
+  margin-left: 18px;
+}
+.move-option.current {
+  opacity: 0.7;
+  cursor: default;
+}
+.move-current-tag {
+  font-size: 12px;
+  color: var(--muted);
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+/* ---------- Chọn nhiều để xóa ---------- */
+.select-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+/* Ô đánh dấu chọn: vòng tròn, tô đầy + dấu ✓ khi được chọn */
+.sel-check {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 2px solid var(--primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  z-index: 6;
+}
+.sel-check.on {
+  background: var(--primary);
+}
+.sel-check.on::after {
+  content: '✓';
+  color: #fff;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+/* Biến thể nằm trong dòng (danh sách tài liệu của folder) */
+.sel-check-inline {
+  position: static;
+  flex-shrink: 0;
+}
+/* Trạng thái đã chọn */
+.tile.selected .tile-icon,
+.tile.selected .folder-icon-box {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+.doc-line.selected .doc-item {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
 }
 
 /* ---------- Trang tải lên hàng loạt ---------- */

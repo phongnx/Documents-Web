@@ -2,6 +2,7 @@ import { useState, type DragEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDocuments } from '../context/DocumentsContext';
 import { useUploadDocuments } from '../hooks/useUploadDocuments';
+import { useMultiSelect } from '../hooks/useMultiSelect';
 import { useAuth } from '../auth/useAuth';
 import ThemeToggle from '../components/ThemeToggle';
 import type { DocItem, DocumentType, Folder } from '../types';
@@ -10,16 +11,47 @@ import type { DocItem, DocumentType, Folder } from '../types';
 const GLYPH: Record<DocumentType, string> = { note: '✏️', markdown: '#', html: '🌐' };
 
 export default function DocsAllPage() {
-  const { documents, folders, loading, addDocument, addFolder, moveDocument } =
-    useDocuments();
+  const {
+    documents,
+    folders,
+    loading,
+    addDocument,
+    addFolder,
+    moveDocument,
+    deleteDocument,
+    deleteFolder,
+  } = useDocuments();
   const { uploadFiles } = useUploadDocuments();
+  const sel = useMultiSelect();
   const { user, signOutUser } = useAuth();
   const navigate = useNavigate();
 
   // Folder đang được kéo qua (làm nổi viền ô folder).
   const [dragOver, setDragOver] = useState<string | null>(null);
 
-  const docsOf = (fid: string) => documents.filter((d) => d.folderId === fid);
+  // Xóa hàng loạt các mục đang chọn (có confirm tóm tắt).
+  const handleBulkDelete = () => {
+    if (sel.count === 0) return;
+    const parts: string[] = [];
+    if (sel.docs.size > 0) parts.push(`${sel.docs.size} tài liệu`);
+    if (sel.folders.size > 0)
+      parts.push(`${sel.folders.size} thư mục (gồm toàn bộ nội dung bên trong)`);
+    const msg = `Xóa ${parts.join(' và ')}? Hành động không thể hoàn tác.`;
+    if (!window.confirm(msg)) return;
+    sel.docs.forEach((id) => deleteDocument(id));
+    sel.folders.forEach((id) => deleteFolder(id));
+    sel.exit();
+  };
+
+  // Tài liệu trong cả cây folder gốc: docs trực tiếp + docs trong các sub-folder.
+  const treeDocsOf = (fid: string) => {
+    const subIds = folders.filter((f) => f.parentId === fid).map((f) => f.id);
+    return documents.filter(
+      (d) => d.folderId === fid || (!!d.folderId && subIds.includes(d.folderId)),
+    );
+  };
+  // Trang chủ chỉ hiển thị folder gốc (sub-folder nằm bên trong folder cha).
+  const topFolders = folders.filter((f) => !f.parentId);
   const looseDocs = documents.filter((d) => !d.folderId);
 
   const create = (type: DocumentType) => {
@@ -54,25 +86,37 @@ export default function DocsAllPage() {
 
   const openFolder = (f: Folder) => navigate(`/docs/folder/${f.id}`);
 
-  // Một ô tài liệu (icon + nhãn), có thể kéo.
-  const renderDoc = (d: DocItem) => (
-    <Link
-      key={d.id}
-      to={`/docs/view/document/${d.id}`}
-      className="tile"
-      draggable
-      onDragStart={(e) => onDragStart(e, d.id)}
-      title={d.title || '(không tiêu đề)'}
-    >
-      <span className={`tile-icon icon-${d.type}`}>
-        <span className="tile-glyph">{GLYPH[d.type]}</span>
-        {d.isShared && (
-          <span className="tile-share" title="Đang chia sẻ công khai">🔗</span>
-        )}
-      </span>
-      <span className="tile-label">{d.title || '(không tiêu đề)'}</span>
-    </Link>
-  );
+  // Một ô tài liệu (icon + nhãn), có thể kéo. Ở select mode: click để chọn.
+  const renderDoc = (d: DocItem) => {
+    const selected = sel.selectMode && sel.docs.has(d.id);
+    return (
+      <Link
+        key={d.id}
+        to={`/docs/view/document/${d.id}`}
+        className={`tile${selected ? ' selected' : ''}`}
+        draggable={!sel.selectMode}
+        onDragStart={(e) => onDragStart(e, d.id)}
+        onClick={(e) => {
+          if (sel.selectMode) {
+            e.preventDefault();
+            sel.toggleDoc(d.id);
+          }
+        }}
+        title={d.title || '(không tiêu đề)'}
+      >
+        <span className={`tile-icon icon-${d.type}`}>
+          {sel.selectMode && (
+            <span className={`sel-check${selected ? ' on' : ''}`} />
+          )}
+          <span className="tile-glyph">{GLYPH[d.type]}</span>
+          {d.isShared && (
+            <span className="tile-share" title="Đang chia sẻ công khai">🔗</span>
+          )}
+        </span>
+        <span className="tile-label">{d.title || '(không tiêu đề)'}</span>
+      </Link>
+    );
+  };
 
   return (
     <div className="container">
@@ -96,7 +140,28 @@ export default function DocsAllPage() {
         <button type="button" onClick={() => navigate('/docs/upload')}>
           ⬆️ Tải lên hàng loạt
         </button>
+        <button
+          type="button"
+          className={sel.selectMode ? 'primary' : ''}
+          onClick={sel.toggleMode}
+        >
+          {sel.selectMode ? '✖ Xong' : '☑️ Chọn'}
+        </button>
       </div>
+
+      {sel.selectMode && (
+        <div className="select-bar">
+          <span>Đã chọn {sel.count}</span>
+          <button
+            type="button"
+            className="danger"
+            disabled={sel.count === 0}
+            onClick={handleBulkDelete}
+          >
+            🗑️ Xóa mục đã chọn
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <p className="muted">Đang tải…</p>
@@ -107,17 +172,23 @@ export default function DocsAllPage() {
       ) : (
         <div className="home-grid">
           {/* Ô folder — bấm để mở trang chi tiết */}
-          {folders.map((f) => {
-            const items = docsOf(f.id);
+          {topFolders.map((f) => {
+            const items = treeDocsOf(f.id);
+            const selected = sel.selectMode && sel.folders.has(f.id);
             return (
               <div
                 key={f.id}
-                className={`tile folder-tile${dragOver === f.id ? ' drop-over' : ''}`}
+                className={`tile folder-tile${dragOver === f.id ? ' drop-over' : ''}${
+                  selected ? ' selected' : ''
+                }`}
                 role="button"
                 tabIndex={0}
-                onClick={() => openFolder(f)}
+                onClick={() =>
+                  sel.selectMode ? sel.toggleFolder(f.id) : openFolder(f)
+                }
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') openFolder(f);
+                  if (e.key === 'Enter' || e.key === ' ')
+                    sel.selectMode ? sel.toggleFolder(f.id) : openFolder(f);
                 }}
                 onDragOver={(e) => allowDrop(e, f.id)}
                 onDragLeave={() => setDragOver((k) => (k === f.id ? null : k))}
@@ -125,9 +196,13 @@ export default function DocsAllPage() {
                 title={f.name}
               >
                 <span className="folder-icon-box">
-                  <span className="folder-count" title="Số tài liệu trong thư mục">
-                    {items.length}
-                  </span>
+                  {sel.selectMode ? (
+                    <span className={`sel-check${selected ? ' on' : ''}`} />
+                  ) : (
+                    <span className="folder-count" title="Số tài liệu trong thư mục">
+                      {items.length}
+                    </span>
+                  )}
                   {f.isShared && (
                     <span className="tile-share" title="Đang chia sẻ công khai">🔗</span>
                   )}
