@@ -2,7 +2,9 @@
 // có document context riêng (giữ nguyên <head>/<style>/CSS), cô lập hoàn toàn khỏi
 // CSS của app, đồng thời chặn <script> để an toàn (không XSS cho cả người xem công khai).
 //
-// sandbox: KHÔNG có allow-scripts ⇒ script bị chặn; allow-popups + escape ⇒ link
+// sandbox: có allow-scripts (để HTML render bằng JS — vd dashboard — hiển thị đầy
+// đủ) NHƯNG KHÔNG có allow-same-origin ⇒ script chạy ở origin cô lập (opaque),
+// không đọc/ghi được cookie hay dữ liệu của app. allow-popups + escape ⇒ link
 // trong nội dung mở được ra tab mới (kèm <base target="_blank"> bên dưới).
 
 // Dựng chuỗi srcdoc: bọc fragment thành tài liệu tối thiểu và chèn
@@ -32,7 +34,7 @@ export default function HtmlFrame({ value }: { value: string }) {
     <iframe
       className="html-frame"
       title="Nội dung HTML"
-      sandbox="allow-popups allow-popups-to-escape-sandbox"
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
       srcDoc={buildSrcDoc(value)}
     />
   );
