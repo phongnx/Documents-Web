@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import {
-  CATEGORY_META,
+  catMeta,
   DONE_STATUS,
   type PlanWorkstream,
   type TaskItem,
@@ -165,7 +165,7 @@ export default function BoardCalendarPage() {
         ) : (
           <ul className="cal-list">
             {releases.map(({ project, w }, i) => {
-              const meta = CATEGORY_META[w.category] ?? CATEGORY_META.other;
+              const meta = catMeta(w.category);
               const items = (w.items ?? []).filter((it) => it.trim());
               return (
                 <li key={i} className="cal-item">

@@ -1688,6 +1688,25 @@ a:hover {
   flex: 1;
   font-weight: 600;
 }
+/* Dropdown gắn app cho dự án (để dialog Chọn task trỏ đúng app). */
+.plan-project-app {
+  max-width: 220px;
+  flex: 0 1 auto;
+}
+/* Nút gợi ý gắn app khi dự án chưa gắn. */
+.plan-app-suggest {
+  margin: 0 0 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+  border: 1px dashed var(--primary);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+}
+.plan-app-suggest:hover {
+  background: var(--subtle);
+}
 .plan-project {
   border-left: 3px solid var(--primary);
 }

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/useAuth';
 import { DocumentsProvider } from './context/DocumentsContext';
@@ -27,8 +28,27 @@ function DocsLayout() {
   );
 }
 
+// Đổi favicon + tiêu đề tab theo href cho trước.
+function setFavicon(href: string, title: string) {
+  let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.head.appendChild(link);
+  }
+  link.type = 'image/svg+xml';
+  link.href = href;
+  document.title = title;
+}
+
 // Layout bọc các trang "Bảng dự án" bằng PmProvider (giữ 1 provider xuyên các route).
 function BoardLayout() {
+  // Khi vào khu Bảng dự án: đổi icon/tiêu đề tab; rời đi thì trả lại mặc định.
+  useEffect(() => {
+    setFavicon('/favicon-board.svg', 'Bảng dự án');
+    return () => setFavicon('/favicon.svg', 'Docs Web');
+  }, []);
+
   return (
     <PmProvider>
       <Outlet />

@@ -405,7 +405,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
         createdAt: now,
         updatedAt: now,
       };
-      set(ref(db, `users/${uid}/pm/plans/${created.id}`), created);
+      // Chuẩn hóa để loại các key undefined (RTDB set sẽ ném lỗi nếu còn undefined).
+      set(ref(db, `users/${uid}/pm/plans/${created.id}`), normalizePlan(created));
       return created;
     },
     [uid],
@@ -423,7 +424,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
         createdAt: prev?.createdAt ?? now,
         updatedAt: now,
       };
-      set(ref(db, `users/${uid}/pm/plans/${id}`), next);
+      // Chuẩn hóa để loại các key undefined (RTDB set sẽ ném lỗi nếu còn undefined).
+      set(ref(db, `users/${uid}/pm/plans/${id}`), normalizePlan(next));
     },
     [uid],
   );

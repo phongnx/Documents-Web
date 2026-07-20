@@ -1,21 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import {
-  CATEGORY_META,
+  catMeta,
+  DEFAULT_PLAN_CATEGORIES,
   type PlanProject,
   type PlanWorkstream,
   type WeeklyPlan,
-  type WorkstreamCategory,
 } from '../pmTypes';
 import { buildDetailedHtml, buildReleaseTestHtml } from '../lib/planExport';
 import { downloadTextFile } from '../lib/downloadHelpers';
 import TaskPickerDialog from '../components/board/TaskPickerDialog';
 
 type PlanForm = Omit<WeeklyPlan, 'id' | 'order' | 'createdAt' | 'updatedAt'>;
-
-const CATEGORIES = Object.keys(CATEGORY_META) as WorkstreamCategory[];
 
 function toForm(p: WeeklyPlan): PlanForm {
   return {
@@ -33,8 +31,14 @@ function fileBase(name: string): string {
   return name.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_').slice(0, 80) || 'plan';
 }
 
+// Chuẩn hóa tên để so khớp gợi ý app (thường hóa, bỏ khoảng trắng & ký tự đặc biệt).
+function normName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
 export default function BoardPlanEditPage() {
   const { id = '' } = useParams();
+  const navigate = useNavigate();
   const { plans, apps, tasks, loading, updatePlan } = usePm();
   const plan = plans.find((p) => p.id === id);
 
@@ -45,6 +49,8 @@ export default function BoardPlanEditPage() {
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   // Giá trị select "thêm dự án từ app" (reset về '' sau mỗi lần chọn).
   const [addAppSel, setAddAppSel] = useState('');
+  // Các loại nhánh do người dùng tự thêm trong phiên này (ngoài preset).
+  const [extraCats, setExtraCats] = useState<string[]>([]);
 
   // Nạp dữ liệu vào form một lần khi plan (theo id) sẵn sàng — tránh ghi đè khi đang gõ.
   useEffect(() => {
@@ -54,6 +60,17 @@ export default function BoardPlanEditPage() {
       setDirty(false);
     }
   }, [plan]);
+
+  // Cảnh báo khi rời/tải lại trang lúc còn thay đổi chưa lưu (đóng tab, F5, back trình duyệt).
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   if (loading && !form) {
     return (
@@ -143,14 +160,62 @@ export default function BoardPlanEditPage() {
     downloadTextFile(`${fileBase(base)}.html`, html, 'text/html');
   };
 
+  // Back về danh sách: nếu còn thay đổi chưa lưu thì hỏi lưu hay không.
+  const onBack = () => {
+    if (dirty) {
+      const doSave = window.confirm(
+        'Có thay đổi chưa lưu.\nOK để LƯU rồi rời đi, Cancel để rời mà KHÔNG lưu.',
+      );
+      if (doSave) save();
+    }
+    navigate('/board/plan');
+  };
+
+  // Danh sách loại nhánh cho dropdown: preset + tự thêm + loại đang có trong plan (giữ giá trị lạ).
+  const usedCats = form.projects.flatMap((p) => p.workstreams.map((w) => w.category));
+  const catOptions = [
+    ...new Set([...DEFAULT_PLAN_CATEGORIES, ...extraCats, ...usedCats]),
+  ].filter(Boolean);
+
+  // Thêm loại nhánh mới rồi gán ngay cho nhánh hiện tại.
+  const addCategory = (pi: number, wi: number) => {
+    const name = window.prompt('Tên loại nhánh mới (VD: Research, QA…):')?.trim();
+    if (!name) return;
+    if (!catOptions.includes(name)) setExtraCats((cs) => [...cs, name]);
+    setWorkstream(pi, wi, { category: name });
+  };
+
+  // Gợi ý app khớp tên project (khớp chính xác trước, rồi chứa nhau); '' nếu không có.
+  const suggestAppId = (name: string): string => {
+    const pn = normName(name);
+    if (!pn) return '';
+    const exact = apps.find((a) => normName(a.name) === pn);
+    if (exact) return exact.id;
+    const partial = apps.find(
+      (a) => normName(a.name).includes(pn) || pn.includes(normName(a.name)),
+    );
+    return partial?.id ?? '';
+  };
+
+  // App focus mặc định cho dialog chọn task: ưu tiên appId của project,
+  // rồi match theo tên project ↔ tên app (không phân biệt hoa/thường); không có → dialog tự về app đầu.
+  const pickerAppId = (() => {
+    if (pickerFor === null) return undefined;
+    const pr = form.projects[pickerFor];
+    if (!pr) return undefined;
+    if (pr.appId) return pr.appId;
+    const norm = pr.name.trim().toLowerCase();
+    return apps.find((a) => a.name.trim().toLowerCase() === norm)?.id;
+  })();
+
   return (
     <div className="container">
       <BoardNav />
 
       <div className="cal-header">
-        <Link to="/board/plan" className="board-docs-link">
+        <button type="button" className="board-docs-link" onClick={onBack}>
           ← Danh sách plan
-        </Link>
+        </button>
         <strong className="cal-title">Sửa plan tuần</strong>
         <div className="plan-toolbar">
           <button type="button" className="primary" onClick={save} disabled={!dirty}>
@@ -210,6 +275,22 @@ export default function BoardPlanEditPage() {
               onChange={(e) => setProject(pi, { name: e.target.value })}
               placeholder="Tên dự án"
             />
+            <select
+              className="plan-project-app"
+              value={p.appId ?? ''}
+              title="Gắn app cho dự án (để dialog Chọn task trỏ đúng app)"
+              onChange={(e) => setProject(pi, { appId: e.target.value || undefined })}
+            >
+              <option value="">🔗 (chưa gắn app)</option>
+              {p.appId && !apps.some((a) => a.id === p.appId) && (
+                <option value={p.appId}>(app không tồn tại)</option>
+              )}
+              {apps.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} · {a.platform}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               className="doc-action danger"
@@ -219,6 +300,21 @@ export default function BoardPlanEditPage() {
               🗑️
             </button>
           </div>
+
+          {!p.appId &&
+            (() => {
+              const sug = suggestAppId(p.name);
+              const app = sug ? apps.find((a) => a.id === sug) : null;
+              return app ? (
+                <button
+                  type="button"
+                  className="plan-app-suggest"
+                  onClick={() => setProject(pi, { appId: app.id })}
+                >
+                  🔗 Gợi ý gắn: {app.name} · {app.platform}
+                </button>
+              ) : null;
+            })()}
 
           {p.workstreams.map((w, wi) => (
             <div key={wi} className="plan-workstream">
@@ -231,18 +327,22 @@ export default function BoardPlanEditPage() {
                 />
                 <select
                   value={w.category}
-                  onChange={(e) =>
-                    setWorkstream(pi, wi, {
-                      category: e.target.value as WorkstreamCategory,
-                    })
-                  }
+                  onChange={(e) => setWorkstream(pi, wi, { category: e.target.value })}
                 >
-                  {CATEGORIES.map((c) => (
+                  {catOptions.map((c) => (
                     <option key={c} value={c}>
-                      {CATEGORY_META[c].label}
+                      {catMeta(c).label}
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  className="doc-action"
+                  title="Thêm loại nhánh mới"
+                  onClick={() => addCategory(pi, wi)}
+                >
+                  ＋
+                </button>
                 <button
                   type="button"
                   className="doc-action danger"
@@ -390,7 +490,7 @@ export default function BoardPlanEditPage() {
         <TaskPickerDialog
           apps={apps}
           tasks={tasks}
-          initialAppId={form.projects[pickerFor]?.appId}
+          initialAppId={pickerAppId}
           onConfirm={(ws) => {
             addWorkstreamsFromTasks(pickerFor, ws);
             setPickerFor(null);

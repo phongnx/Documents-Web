@@ -68,7 +68,8 @@ export interface PlanMilestone {
 export interface PlanWorkstream {
   /** VD: 'Android', 'iOS', 'Ads Integration', 'Baby & Mom'… */
   title: string;
-  category: WorkstreamCategory;
+  /** Loại nhánh: 5 preset (release/test/ads/plan/other) hoặc tự thêm (chuỗi tự do). */
+  category: string;
   /** Danh sách đầu việc (mỗi phần tử 1 gạch đầu dòng). */
   items: string[];
   milestone?: PlanMilestone;
@@ -115,6 +116,16 @@ export const CATEGORY_META: Record<
   plan: { label: 'Plan', badgeClass: 'research-badge' },
   other: { label: 'Khác', badgeClass: 'research-badge' },
 };
+
+/** Danh sách loại nhánh mặc định (preset). */
+export const DEFAULT_PLAN_CATEGORIES = ['release', 'test', 'ads', 'plan', 'other'];
+
+/** Nhãn + class badge cho 1 category (preset dùng CATEGORY_META, tự thêm dùng chính nó). */
+export function catMeta(c: string): { label: string; badgeClass: string } {
+  return (
+    CATEGORY_META[c as WorkstreamCategory] ?? { label: c, badgeClass: 'research-badge' }
+  );
+}
 
 export const DEFAULT_TASK_TYPES = [
   'Release',

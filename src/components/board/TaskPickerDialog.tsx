@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { DONE_STATUS } from '../../pmTypes';
 import type {
   AppItem,
   PlanWorkstream,
@@ -46,10 +47,11 @@ export default function TaskPickerDialog({
   // Dòng đã chọn theo từng task: taskId → Set(chỉ số dòng).
   const [picked, setPicked] = useState<Record<string, Set<number>>>({});
 
+  // Chỉ lấy task của app đang chọn và CHƯA hoàn thành (bỏ task đã "Đã hoàn thành").
   const appTasks = useMemo(
     () =>
       tasks
-        .filter((t) => t.appId === appId)
+        .filter((t) => t.appId === appId && t.status !== DONE_STATUS)
         .sort((a, b) => sortDate(b).localeCompare(sortDate(a))),
     [tasks, appId],
   );
@@ -126,7 +128,7 @@ export default function TaskPickerDialog({
 
         <div className="picker-list">
           {appTasks.length === 0 ? (
-            <p className="muted">App này chưa có task nào.</p>
+            <p className="muted">Không có task đang mở (chưa hoàn thành).</p>
           ) : (
             appTasks.map((t) => {
               const lines = taskLines(t);

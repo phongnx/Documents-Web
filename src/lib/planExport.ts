@@ -1,8 +1,4 @@
-import {
-  CATEGORY_META,
-  type PlanWorkstream,
-  type WeeklyPlan,
-} from '../pmTypes';
+import { catMeta, type PlanWorkstream, type WeeklyPlan } from '../pmTypes';
 
 // Sinh 2 file HTML tĩnh từ 1 WeeklyPlan, bám sát 2 template mẫu trong docs/plan.
 
@@ -161,7 +157,7 @@ export function buildDetailedHtml(plan: WeeklyPlan): string {
     .map((p, i) => {
       const streams = (p.workstreams ?? [])
         .map((w) => {
-          const meta = CATEGORY_META[w.category] ?? CATEGORY_META.other;
+          const meta = catMeta(w.category);
           const items = (w.items ?? [])
             .filter((it) => it.trim())
             .map((it) => `            <li>${esc(it)}</li>`)

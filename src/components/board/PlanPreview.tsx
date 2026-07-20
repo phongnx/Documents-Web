@@ -1,13 +1,12 @@
 import {
-  CATEGORY_META,
+  catMeta,
   type PlanProject,
   type PlanWorkstream,
   type WeeklyPlan,
-  type WorkstreamCategory,
 } from '../../pmTypes';
 
-// Class màu badge (tái dùng từ trang Task) theo loại nhánh.
-const CAT_BADGE: Record<WorkstreamCategory, string> = {
+// Class màu badge (tái dùng từ trang Task) theo loại nhánh; loại tự thêm → mặc định.
+const CAT_BADGE: Record<string, string> = {
   release: 'st-done',
   test: 'st-fix',
   ads: 'type',
@@ -23,7 +22,7 @@ const hasRelease = (p: PlanProject) =>
 
 // Render 1 nhánh (tiêu đề + badge loại + milestone + list item).
 function Workstream({ w }: { w: PlanWorkstream }) {
-  const meta = CATEGORY_META[w.category] ?? CATEGORY_META.other;
+  const meta = catMeta(w.category);
   const items = (w.items ?? []).filter((it) => it.trim());
   return (
     <div className="pp-ws">
