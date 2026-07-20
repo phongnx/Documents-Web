@@ -150,6 +150,7 @@ export default function DocsAllPage() {
       <header className="app-header">
         <h1>📄 Tài liệu của tôi</h1>
         <div className="user-box">
+          <Link to="/board" className="board-docs-link">📊 Bảng dự án</Link>
           <ThemeToggle />
           <span className="muted">{user?.email}</span>
           <button type="button" onClick={() => signOutUser()}>Đăng xuất</button>

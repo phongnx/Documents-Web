@@ -63,11 +63,20 @@ export function downloadDocument(doc: DocItem): void {
       content = wrapHtml(doc.title, doc.content);
   }
 
+  downloadTextFile(`${safeFileName(doc.title)}.${ext}`, content, mime);
+}
+
+// Tải một chuỗi text (HTML/MD/JSON…) về máy dưới tên file cho trước.
+export function downloadTextFile(
+  filename: string,
+  content: string,
+  mime = 'text/html',
+): void {
   const blob = new Blob([content], { type: `${mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${safeFileName(doc.title)}.${ext}`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();

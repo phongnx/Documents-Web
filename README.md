@@ -10,6 +10,7 @@
 - Tự lưu khi gõ (auto-save có debounce ~600ms).
 - **Folder (thư mục)**: tạo / đổi tên / xóa folder; gom tài liệu vào folder bằng **kéo-thả** trên trang chủ.
 - Chia sẻ tài liệu công khai qua link cho người xem ẩn danh (chỉ đọc).
+- **Bảng dự án (`/board`)**: quản lý app + task/release của team — thống kê KPI & biểu đồ, lọc task theo app/trạng thái/loại, lịch mốc release theo tuần, danh sách app đã release, và **Import JSON** để nạp dữ liệu hàng loạt.
 
 ## Công nghệ
 - Vite 6, React 19, React Router 7, TypeScript 5
@@ -98,8 +99,17 @@ Claude Code sẽ chạy đúng các lệnh (`npm install`, `npm run dev`, `npm r
 | `/docs/folder/:folderId` | `FolderPage` | Tài liệu trong một folder; đổi tên / xóa folder. |
 | `/docs/view/document/:id` | `DocViewerPage` | Xem / sửa một tài liệu. |
 | `/share/d/:id` | `SharePage` | Xem công khai, chỉ đọc (nằm **ngoài** lớp đăng nhập). |
+| `/board` | `BoardOverviewPage` | Tổng quan bảng dự án: KPI + biểu đồ + app đã release; nút Import JSON. |
+| `/board/tasks` | `BoardTasksPage` | Danh sách app (gom task theo app); tìm app; thêm task nhanh. |
+| `/board/tasks/:appId` | `BoardAppTasksPage` | Task của một app (hoặc `_none` = chưa gán); task **đang trong plan tuần** được đánh dấu 📌 và đưa lên đầu, còn lại sắp theo ngày release desc; lọc/sửa/xóa/chọn-nhiều-xóa. |
+| `/board/calendar` | `BoardCalendarPage` | Lịch release, filter **Theo tuần**/**Theo tháng**. Quy tắc chung: tuần **có Plan tuần** → lấy theo plan (timeline + chi tiết Release, tự cập nhật); tuần **không có plan** (các tuần trước) → giữ data preset cũ từ `task.planDate`. Mỗi tuần gắn nhãn nguồn **Plan**/**Preset**. |
+| `/board/plan` | `BoardPlanListPage` | Danh sách plan tuần; tạo plan từ mẫu. |
+| `/board/plan/:id` | `BoardPlanEditPage` | Sửa plan tuần (project → nhánh → việc + milestone + timeline) và **export ra 2 file HTML tĩnh**. |
+| `/board/apps` | `BoardAppsPage` | CRUD app, hiển thị **theo nhóm (`group`) trước rồi platform**; nút **⑂ Tách flavor** (VD Weather → WF1/WF3/WF3_Radar/Weather Channel thành các app **độc lập cùng platform**, phân loại theo flavor/tiêu đề, task "All flavor" nhân cho các flavor gốc); nút Import JSON. |
 
-Dữ liệu lưu trong Realtime Database tại `users/{uid}/documents`, `users/{uid}/folders`, và bản chia sẻ tại `shared/d/{id}` (luật bảo mật trong `database.rules.json`).
+Dữ liệu lưu trong Realtime Database tại `users/{uid}/documents`, `users/{uid}/folders`, và bản chia sẻ tại `shared/d/{id}` (luật bảo mật trong `database.rules.json`). Dữ liệu bảng dự án lưu riêng tư tại `users/{uid}/pm/{apps,tasks,meta,plans}` (không có bản chia sẻ công khai).
+
+**Ràng buộc liên kết Plan tuần ↔ Lịch release ↔ Task:** trang Lịch release **không có dữ liệu riêng** — nó suy trực tiếp từ `plans`. Khi tạo nhánh từ task (dialog chọn task), nhánh lưu `sourceTaskIds` để biết task nào thuộc plan; từ đó trang Task đánh dấu/ưu tiên task & app đang nằm trong **plan của tuần hiện tại** (helper `src/lib/planLinks.ts`).
 
 ## Build & Deploy
 
