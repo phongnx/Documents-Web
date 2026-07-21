@@ -5,6 +5,8 @@ import BoardNav from '../components/board/BoardNav';
 import {
   catMeta,
   DONE_STATUS,
+  releaseKeysOf,
+  WORKSTREAM_STATE_META,
   type PlanWorkstream,
   type TaskItem,
   type WeeklyPlan,
@@ -25,11 +27,13 @@ function mondayOf(iso: string): string {
   return isoLocal(d);
 }
 
-// Nhánh thuộc nhóm release (theo category hoặc milestone).
-const isRelease = (w: PlanWorkstream) =>
-  w.category === 'release' || w.milestone?.type === 'release';
-const releaseCount = (p: WeeklyPlan) =>
-  (p.projects ?? []).flatMap((pr) => pr.workstreams ?? []).filter(isRelease).length;
+// Nhánh thuộc nhóm release (category release hoặc milestone thuộc loại release).
+const isRelease = (w: PlanWorkstream, releaseKeys: Set<string>) =>
+  w.category === 'release' || (!!w.milestone && releaseKeys.has(w.milestone.type));
+const releaseCount = (p: WeeklyPlan, releaseKeys: Set<string>) =>
+  (p.projects ?? [])
+    .flatMap((pr) => pr.workstreams ?? [])
+    .filter((w) => isRelease(w, releaseKeys)).length;
 
 // 'Thứ 2'..'Thứ 7' → 0..5, 'Chủ nhật'/'CN' → 6 (offset từ Thứ Hai). null nếu không rõ.
 function dayOffset(day: string): number | null {
@@ -60,7 +64,8 @@ function releaseLines(t: TaskItem): string[] {
 type TaskWeek = { monday: string; sunday: string; list: TaskItem[] };
 
 export default function BoardCalendarPage() {
-  const { apps, tasks, plans, loading } = usePm();
+  const { apps, tasks, plans, meta, loading } = usePm();
+  const releaseKeys = useMemo(() => releaseKeysOf(meta.milestoneTypes), [meta.milestoneTypes]);
   const now = new Date();
   const today = isoLocal(now);
 
@@ -110,7 +115,8 @@ export default function BoardCalendarPage() {
     });
   }, [tasks, plans, monthKey]);
   const monthTotal = monthWeeks.reduce(
-    (s, e) => s + (e.type === 'plan' ? releaseCount(e.plan) : e.week.list.length),
+    (s, e) =>
+      s + (e.type === 'plan' ? releaseCount(e.plan, releaseKeys) : e.week.list.length),
     0,
   );
 
@@ -132,15 +138,21 @@ export default function BoardCalendarPage() {
       })
       .sort((a, b) => (a.date && b.date ? a.date.localeCompare(b.date) : 0));
     const releases = (plan.projects ?? []).flatMap((pr) =>
-      (pr.workstreams ?? []).filter(isRelease).map((w) => ({ project: pr.name, w })),
+      (pr.workstreams ?? [])
+        .filter((w) => isRelease(w, releaseKeys))
+        .map((w) => ({ project: pr.name, w })),
     );
+    const releaseDone = releases.filter((r) => (r.w.state ?? 'todo') === 'done').length;
     return (
       <section key={plan.id} className="cal-week">
         <h2 className="cal-week-title">
           Tuần {formatDay(plan.weekStart)} – {formatDay(plan.weekEnd)}
           {isCurrent && <span className="plan-current-tag">Tuần này</span>}
           <span className="cal-src-tag">Plan</span>
-          <span className="muted"> · {releases.length} release</span>
+          <span className="muted">
+            {' '}
+            · {releaseDone}/{releases.length} release đã xong
+          </span>
           <Link to={`/board/plan/${plan.id}`} className="cal-edit-link">
             ✏️ Sửa
           </Link>
@@ -167,17 +179,22 @@ export default function BoardCalendarPage() {
             {releases.map(({ project, w }, i) => {
               const meta = catMeta(w.category);
               const items = (w.items ?? []).filter((it) => it.trim());
+              const st = WORKSTREAM_STATE_META[w.state ?? 'todo'];
+              const done = (w.state ?? 'todo') === 'done';
               return (
-                <li key={i} className="cal-item">
+                <li key={i} className={`cal-item${done ? ' cal-item-done' : ''}`}>
                   <div className="cal-main">
                     <span className="cal-body">
                       <span className="task-badge app">{project}</span>
                       {w.title && <span className="cal-title-text">{w.title}</span>}
                       <span className="task-badge type">{meta.label}</span>
+                      <span className={`task-badge ${st.badgeClass}`}>
+                        {st.icon} {st.label}
+                      </span>
                       {w.milestone && (
                         <span
                           className={`task-badge ${
-                            w.milestone.type === 'release' ? 'st-done' : 'st-fix'
+                            releaseKeys.has(w.milestone.type) ? 'st-done' : 'st-fix'
                           }`}
                         >
                           → {w.milestone.text}

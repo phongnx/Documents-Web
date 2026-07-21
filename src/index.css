@@ -1258,6 +1258,11 @@ a:hover {
   background: var(--subtle);
   color: var(--muted);
 }
+.task-badge.st-block {
+  background: rgba(220, 38, 38, 0.15);
+  border-color: transparent;
+  color: #dc2626;
+}
 .task-plan {
   font-size: 12px;
   white-space: nowrap;
@@ -1710,6 +1715,306 @@ a:hover {
 .plan-project {
   border-left: 3px solid var(--primary);
 }
+
+/* ---------- Báo cáo ngày ---------- */
+.report-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+.report-hint code {
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 5px;
+  margin: 0 2px;
+}
+.report-body {
+  width: 100%;
+  min-height: 140px;
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.report-preview-panel {
+  background: var(--card);
+}
+.report-preview .rp-head {
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+.rp-projects {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.rp-project-name {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.rp-roman {
+  color: var(--primary);
+}
+.rp-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rp-line {
+  font-size: 14px;
+  line-height: 1.55;
+}
+.rp-section {
+  font-weight: 600;
+  margin-top: 6px;
+  padding-left: 12px;
+}
+.rp-bullet {
+  padding-left: 22px;
+}
+.rp-arrow {
+  padding-left: 22px;
+  color: var(--primary);
+  font-weight: 500;
+}
+.rp-sub {
+  padding-left: 40px;
+  color: var(--muted);
+}
+.rp-text {
+  padding-left: 12px;
+}
+.rp-mark {
+  display: inline-block;
+  width: 1em;
+  margin-right: 4px;
+}
+
+/* Nhánh/mục release đã hoàn thành: gạch ngang tiêu đề + mờ nhẹ. */
+.pp-ws-done .pp-ws-title,
+.cal-item-done .cal-title-text {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+.cal-item-done {
+  opacity: 0.85;
+}
+
+/* ---------- Modal quản lý danh mục ---------- */
+.cat-manager {
+  max-width: 520px;
+}
+/* Vùng nội dung cuộn giữa header và nút Xong (min-height:0 để flex cho phép co lại). */
+.cat-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.cat-section {
+  margin-bottom: 18px;
+}
+.cat-title {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.cat-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cat-name {
+  flex: 1;
+}
+.cat-ms-label {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 14px;
+}
+.cat-ms-release {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.cat-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cat-add input[type='text'],
+.cat-add > input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ---------- Card tiến độ tuần (Tổng quan) ---------- */
+.pp-card-progress {
+  margin-bottom: 18px;
+}
+.pp-prog-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.pp-prog-head .chart-title {
+  margin: 0;
+}
+.pp-prog-week {
+  font-size: 13px;
+}
+.pp-sync-btn {
+  margin-left: auto;
+  padding: 5px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--subtle);
+  color: var(--text);
+  cursor: pointer;
+}
+.pp-sync-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.pp-sync-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pp-overall {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.pp-bar {
+  flex: 1;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.pp-bar-sm {
+  height: 8px;
+}
+.pp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #16a34a);
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+.pp-overall-pct {
+  font-weight: 700;
+  min-width: 44px;
+  text-align: right;
+}
+.pp-goal-label {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.pp-nogoal {
+  margin: 4px 0 12px;
+}
+.pp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.pp-chip {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+.pp-sub-title {
+  font-weight: 600;
+  margin: 6px 0;
+}
+.pp-release-list,
+.pp-projects {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pp-release-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+}
+.pp-release-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pp-rel-title {
+  font-weight: 500;
+}
+.pp-rel-ms {
+  font-size: 13px;
+}
+.pp-proj {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.pp-proj-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.pp-proj-name {
+  font-weight: 600;
+  min-width: 120px;
+}
+.pp-proj-pct {
+  min-width: 40px;
+  text-align: right;
+  font-size: 13px;
+}
+.pp-ws-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0 3px 12px;
+  flex-wrap: wrap;
+}
+.pp-ws-title {
+  flex: 1;
+  min-width: 140px;
+  font-size: 14px;
+}
+.pp-state-select {
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+}
+
 .plan-workstream {
   background: var(--subtle);
   border: 1px solid var(--border);

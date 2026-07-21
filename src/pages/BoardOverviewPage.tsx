@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import ImportDataButton from '../components/board/ImportDataButton';
+import PlanProgressCard from '../components/board/PlanProgressCard';
 import { BarChart, DonutChart, type DonutSegment } from '../components/board/charts';
 import { DONE_STATUS, type TaskItem } from '../pmTypes';
 import { formatDay } from '../lib/formatDate';
@@ -165,6 +166,8 @@ export default function BoardOverviewPage() {
           <span className="kpi-label">Release tháng này</span>
         </div>
       </div>
+
+      <PlanProgressCard />
 
       <div className="chart-grid">
         <section className="chart-card">

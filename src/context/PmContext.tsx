@@ -13,13 +13,18 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../auth/useAuth';
 import { computeSplit, keyOfTask } from '../lib/flavorSplit';
 import {
+  DEFAULT_MILESTONE_TYPES,
+  DEFAULT_PLAN_CATEGORIES,
   DEFAULT_STATUSES,
   DEFAULT_TASK_TYPES,
+  msKeyFromLabel,
   type AppItem,
+  type DailyReport,
   type PmImportPayload,
   type PmMeta,
   type TaskItem,
   type WeeklyPlan,
+  type WorkstreamState,
 } from '../pmTypes';
 
 // Các trường cho phép sửa/tạo task (bỏ id/order/createdAt/updatedAt do context quản lý).
@@ -30,6 +35,9 @@ type TaskUpdates = Partial<Omit<TaskItem, 'id' | 'createdAt'>>;
 
 // Trường được phép truyền khi tạo plan (id/order/createdAt/updatedAt do context điền).
 type PlanInput = Omit<WeeklyPlan, 'id' | 'order' | 'createdAt' | 'updatedAt'>;
+
+// Trường được phép truyền khi tạo báo cáo ngày.
+type ReportInput = Omit<DailyReport, 'id' | 'order' | 'createdAt' | 'updatedAt'>;
 
 interface PmState {
   apps: AppItem[];
@@ -52,12 +60,36 @@ interface PmState {
   /** Gán nhiều task vào 1 app (appId rỗng = bỏ gán). */
   assignTasksToApp: (taskIds: string[], appId: string) => void;
   addTaskType: (name: string) => void;
+  /** Đổi tên loại task + cascade các task đang dùng. */
+  updateTaskType: (oldName: string, newName: string) => void;
+  /** Xóa loại task; trả về số task đang dùng (>0 = bị chặn, chưa xóa). */
+  deleteTaskType: (name: string) => number;
+  addMilestoneType: (label: string, isRelease: boolean) => void;
+  updateMilestoneType: (
+    key: string,
+    patch: { label?: string; isRelease?: boolean },
+  ) => void;
+  deleteMilestoneType: (key: string) => void;
+  addPlanCategory: (name: string) => void;
+  /** Đổi tên loại nhánh (chỉ loại tự thêm) + cascade category trong mọi plan. */
+  updatePlanCategory: (oldName: string, newName: string) => void;
+  deletePlanCategory: (name: string) => void;
   /** Ghi đè toàn bộ users/{uid}/pm bằng payload (dùng cho import). */
   importData: (payload: PmImportPayload) => Promise<void>;
   addPlan: (data: PlanInput) => WeeklyPlan | null;
   /** Ghi đè toàn bộ plan (trình sửa lưu cả object). */
   updatePlan: (id: string, data: PlanInput) => void;
   deletePlan: (id: string) => void;
+  /** Cập nhật trạng thái/tiến độ nhiều nhánh trong 1 plan (ghi 1 lần). */
+  setWorkstreamProgress: (
+    planId: string,
+    updates: { pi: number; wi: number; state?: WorkstreamState; progress?: number }[],
+  ) => void;
+  reports: DailyReport[];
+  addReport: (data: ReportInput) => DailyReport | null;
+  /** Ghi đè toàn bộ báo cáo ngày (trình sửa lưu cả object). */
+  updateReport: (id: string, data: ReportInput) => void;
+  deleteReport: (id: string) => void;
 }
 
 // RTDB bỏ mảng rỗng → chuẩn hóa để mọi mảng lồng nhau luôn tồn tại khi đọc về.
@@ -73,9 +105,23 @@ function normalizePlan(p: WeeklyPlan): WeeklyPlan {
         items: w.items ?? [],
         ...(w.milestone ? { milestone: w.milestone } : {}),
         ...(w.sourceTaskIds ? { sourceTaskIds: w.sourceTaskIds } : {}),
+        ...(w.state ? { state: w.state } : {}),
+        ...(typeof w.progress === 'number' ? { progress: w.progress } : {}),
       })),
     })),
     timeline: p.timeline ?? [],
+  };
+}
+
+// Chuẩn hóa báo cáo ngày (đảm bảo mảng tồn tại, loại key undefined trước khi ghi).
+function normalizeReport(r: DailyReport): DailyReport {
+  return {
+    ...r,
+    projects: (r.projects ?? []).map((p) => ({
+      name: p.name ?? '',
+      ...(p.appId ? { appId: p.appId } : {}),
+      body: p.body ?? '',
+    })),
   };
 }
 
@@ -90,8 +136,11 @@ export function PmProvider({ children }: { children: ReactNode }) {
   const [meta, setMeta] = useState<PmMeta>({
     taskTypes: DEFAULT_TASK_TYPES,
     statuses: DEFAULT_STATUSES,
+    milestoneTypes: DEFAULT_MILESTONE_TYPES,
+    planCategories: DEFAULT_PLAN_CATEGORIES,
   });
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
+  const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Đọc state mới nhất trong mutator (không đọc closure) — như DocumentsContext.
@@ -100,23 +149,37 @@ export function PmProvider({ children }: { children: ReactNode }) {
     tasks: TaskItem[];
     meta: PmMeta;
     plans: WeeklyPlan[];
+    reports: DailyReport[];
   }>({
     apps: [],
     tasks: [],
-    meta: { taskTypes: DEFAULT_TASK_TYPES, statuses: DEFAULT_STATUSES },
+    meta: {
+      taskTypes: DEFAULT_TASK_TYPES,
+      statuses: DEFAULT_STATUSES,
+      milestoneTypes: DEFAULT_MILESTONE_TYPES,
+      planCategories: DEFAULT_PLAN_CATEGORIES,
+    },
     plans: [],
+    reports: [],
   });
   stateRef.current.apps = apps;
   stateRef.current.tasks = tasks;
   stateRef.current.meta = meta;
   stateRef.current.plans = plans;
+  stateRef.current.reports = reports;
 
   useEffect(() => {
     if (!db || !uid) {
       setApps([]);
       setTasks([]);
-      setMeta({ taskTypes: DEFAULT_TASK_TYPES, statuses: DEFAULT_STATUSES });
+      setMeta({
+        taskTypes: DEFAULT_TASK_TYPES,
+        statuses: DEFAULT_STATUSES,
+        milestoneTypes: DEFAULT_MILESTONE_TYPES,
+        planCategories: DEFAULT_PLAN_CATEGORIES,
+      });
       setPlans([]);
+      setReports([]);
       setLoading(false);
       return;
     }
@@ -155,6 +218,14 @@ export function PmProvider({ children }: { children: ReactNode }) {
           val?.statuses && val.statuses.length
             ? val.statuses
             : DEFAULT_STATUSES,
+        milestoneTypes:
+          val?.milestoneTypes && val.milestoneTypes.length
+            ? val.milestoneTypes
+            : DEFAULT_MILESTONE_TYPES,
+        planCategories:
+          val?.planCategories && val.planCategories.length
+            ? val.planCategories
+            : DEFAULT_PLAN_CATEGORIES,
       });
     });
 
@@ -172,11 +243,26 @@ export function PmProvider({ children }: { children: ReactNode }) {
       setPlans(list);
     });
 
+    const reportsRef = ref(db, `users/${uid}/pm/reports`);
+    const unsubReports = onValue(reportsRef, (snap) => {
+      const val = snap.val() as Record<string, DailyReport> | null;
+      const list = val ? Object.values(val).map(normalizeReport) : [];
+      // Mới nhất trước: theo ngày, rồi order/thời gian tạo.
+      list.sort(
+        (a, b) =>
+          b.date.localeCompare(a.date) ||
+          b.order - a.order ||
+          b.createdAt.localeCompare(a.createdAt),
+      );
+      setReports(list);
+    });
+
     return () => {
       unsubApps();
       unsubTasks();
       unsubMeta();
       unsubPlans();
+      unsubReports();
     };
   }, [uid]);
 
@@ -378,6 +464,153 @@ export function PmProvider({ children }: { children: ReactNode }) {
     [uid],
   );
 
+  // Đổi tên loại task: cập nhật danh mục + cascade mọi task đang dùng (ghi 1 lần).
+  const updateTaskType = useCallback(
+    (oldName: string, newName: string) => {
+      if (!db || !uid) return;
+      const n = newName.trim();
+      const cur = stateRef.current.meta.taskTypes;
+      if (!n || oldName === n || !cur.includes(oldName) || cur.includes(n)) return;
+      const now = new Date().toISOString();
+      const writes: Record<string, unknown> = {};
+      writes[`users/${uid}/pm/meta/taskTypes`] = cur.map((t) => (t === oldName ? n : t));
+      for (const t of stateRef.current.tasks) {
+        if (t.type === oldName) {
+          writes[`users/${uid}/pm/tasks/${t.id}/type`] = n;
+          writes[`users/${uid}/pm/tasks/${t.id}/updatedAt`] = now;
+        }
+      }
+      update(ref(db), writes);
+    },
+    [uid],
+  );
+
+  // Xóa loại task: chặn nếu còn task dùng — trả về SỐ task đang dùng (0 = đã xóa).
+  const deleteTaskType = useCallback(
+    (name: string): number => {
+      if (!db || !uid) return 0;
+      const used = stateRef.current.tasks.filter((t) => t.type === name).length;
+      if (used > 0) return used;
+      const cur = stateRef.current.meta.taskTypes;
+      if (!cur.includes(name)) return 0;
+      set(
+        ref(db, `users/${uid}/pm/meta/taskTypes`),
+        cur.filter((t) => t !== name),
+      );
+      return 0;
+    },
+    [uid],
+  );
+
+  const addMilestoneType = useCallback(
+    (label: string, isRelease: boolean) => {
+      if (!db || !uid) return;
+      const l = label.trim();
+      if (!l) return;
+      const cur = stateRef.current.meta.milestoneTypes;
+      const key = msKeyFromLabel(l, cur.length);
+      if (cur.some((t) => t.key === key)) return;
+      set(ref(db, `users/${uid}/pm/meta/milestoneTypes`), [
+        ...cur,
+        { key, label: l, isRelease },
+      ]);
+    },
+    [uid],
+  );
+
+  const updateMilestoneType = useCallback(
+    (key: string, patch: { label?: string; isRelease?: boolean }) => {
+      if (!db || !uid) return;
+      const cur = stateRef.current.meta.milestoneTypes;
+      const next = cur.map((t) =>
+        t.key === key
+          ? {
+              ...t,
+              ...(patch.label !== undefined ? { label: patch.label.trim() || t.label } : {}),
+              ...(patch.isRelease !== undefined ? { isRelease: patch.isRelease } : {}),
+            }
+          : t,
+      );
+      set(ref(db, `users/${uid}/pm/meta/milestoneTypes`), next);
+    },
+    [uid],
+  );
+
+  // Xóa loại milestone: chặn 2 loại gốc; plan đang dùng key cũ vẫn giữ (chỉ bỏ khỏi danh mục).
+  const deleteMilestoneType = useCallback(
+    (key: string) => {
+      if (!db || !uid) return;
+      if (key === 'release' || key === 'test') return;
+      const cur = stateRef.current.meta.milestoneTypes;
+      set(
+        ref(db, `users/${uid}/pm/meta/milestoneTypes`),
+        cur.filter((t) => t.key !== key),
+      );
+    },
+    [uid],
+  );
+
+  const addPlanCategory = useCallback(
+    (name: string) => {
+      if (!db || !uid) return;
+      const n = name.trim();
+      if (!n) return;
+      const cur = stateRef.current.meta.planCategories;
+      if (cur.includes(n)) return;
+      set(ref(db, `users/${uid}/pm/meta/planCategories`), [...cur, n]);
+    },
+    [uid],
+  );
+
+  // Đổi tên loại nhánh (chỉ loại tự thêm) + cascade category trong mọi plan (ghi 1 lần).
+  const updatePlanCategory = useCallback(
+    (oldName: string, newName: string) => {
+      if (!db || !uid) return;
+      const n = newName.trim();
+      const cur = stateRef.current.meta.planCategories;
+      if (DEFAULT_PLAN_CATEGORIES.includes(oldName)) return; // không sửa preset
+      if (!n || oldName === n || !cur.includes(oldName) || cur.includes(n)) return;
+      const now = new Date().toISOString();
+      const writes: Record<string, unknown> = {};
+      writes[`users/${uid}/pm/meta/planCategories`] = cur.map((c) =>
+        c === oldName ? n : c,
+      );
+      for (const p of stateRef.current.plans) {
+        let touched = false;
+        const projects = (p.projects ?? []).map((pr) => ({
+          ...pr,
+          workstreams: (pr.workstreams ?? []).map((w) => {
+            if (w.category === oldName) {
+              touched = true;
+              return { ...w, category: n };
+            }
+            return w;
+          }),
+        }));
+        if (touched) {
+          writes[`users/${uid}/pm/plans/${p.id}/projects`] = projects;
+          writes[`users/${uid}/pm/plans/${p.id}/updatedAt`] = now;
+        }
+      }
+      update(ref(db), writes);
+    },
+    [uid],
+  );
+
+  // Xóa loại nhánh (chỉ loại tự thêm); plan đang dùng vẫn giữ giá trị (chỉ bỏ khỏi danh mục).
+  const deletePlanCategory = useCallback(
+    (name: string) => {
+      if (!db || !uid) return;
+      if (DEFAULT_PLAN_CATEGORIES.includes(name)) return; // không xóa preset
+      const cur = stateRef.current.meta.planCategories;
+      set(
+        ref(db, `users/${uid}/pm/meta/planCategories`),
+        cur.filter((c) => c !== name),
+      );
+    },
+    [uid],
+  );
+
   const importData = useCallback(
     async (payload: PmImportPayload) => {
       if (!db || !uid) return;
@@ -388,6 +621,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
         meta: payload.meta ?? {
           taskTypes: DEFAULT_TASK_TYPES,
           statuses: DEFAULT_STATUSES,
+          milestoneTypes: DEFAULT_MILESTONE_TYPES,
+          planCategories: DEFAULT_PLAN_CATEGORIES,
         },
       });
     },
@@ -438,6 +673,80 @@ export function PmProvider({ children }: { children: ReactNode }) {
     [uid],
   );
 
+  const setWorkstreamProgress = useCallback(
+    (
+      planId: string,
+      updates: { pi: number; wi: number; state?: WorkstreamState; progress?: number }[],
+    ) => {
+      if (!db || !uid || updates.length === 0) return;
+      const prev = stateRef.current.plans.find((p) => p.id === planId);
+      if (!prev) return;
+      // Gom patch theo (pi,wi) để tra nhanh.
+      const byKey = new Map(updates.map((u) => [`${u.pi}:${u.wi}`, u]));
+      const next: WeeklyPlan = {
+        ...prev,
+        updatedAt: new Date().toISOString(),
+        projects: (prev.projects ?? []).map((pr, pi) => ({
+          ...pr,
+          workstreams: (pr.workstreams ?? []).map((w, wi) => {
+            const u = byKey.get(`${pi}:${wi}`);
+            if (!u) return w;
+            const merged = { ...w };
+            if (u.state !== undefined) merged.state = u.state;
+            if (u.progress !== undefined) merged.progress = u.progress;
+            return merged;
+          }),
+        })),
+      };
+      // Chuẩn hóa để loại key undefined trước khi ghi.
+      set(ref(db, `users/${uid}/pm/plans/${planId}`), normalizePlan(next));
+    },
+    [uid],
+  );
+
+  const addReport = useCallback(
+    (data: ReportInput): DailyReport | null => {
+      if (!db || !uid) return null;
+      const now = new Date().toISOString();
+      const created: DailyReport = {
+        ...data,
+        id: uuidv4(),
+        order: stateRef.current.reports.length,
+        createdAt: now,
+        updatedAt: now,
+      };
+      set(ref(db, `users/${uid}/pm/reports/${created.id}`), normalizeReport(created));
+      return created;
+    },
+    [uid],
+  );
+
+  const updateReport = useCallback(
+    (id: string, data: ReportInput) => {
+      if (!db || !uid) return;
+      const prev = stateRef.current.reports.find((r) => r.id === id);
+      const now = new Date().toISOString();
+      const next: DailyReport = {
+        ...data,
+        id,
+        order: prev?.order ?? stateRef.current.reports.length,
+        createdAt: prev?.createdAt ?? now,
+        updatedAt: now,
+      };
+      // Chuẩn hóa để loại các key undefined (RTDB set sẽ ném lỗi nếu còn undefined).
+      set(ref(db, `users/${uid}/pm/reports/${id}`), normalizeReport(next));
+    },
+    [uid],
+  );
+
+  const deleteReport = useCallback(
+    (id: string) => {
+      if (!db || !uid) return;
+      set(ref(db, `users/${uid}/pm/reports/${id}`), null);
+    },
+    [uid],
+  );
+
   return (
     <PmContext.Provider
       value={{
@@ -457,10 +766,23 @@ export function PmProvider({ children }: { children: ReactNode }) {
         deleteTasks,
         assignTasksToApp,
         addTaskType,
+        updateTaskType,
+        deleteTaskType,
+        addMilestoneType,
+        updateMilestoneType,
+        deleteMilestoneType,
+        addPlanCategory,
+        updatePlanCategory,
+        deletePlanCategory,
         importData,
         addPlan,
         updatePlan,
         deletePlan,
+        setWorkstreamProgress,
+        reports,
+        addReport,
+        updateReport,
+        deleteReport,
       }}
     >
       {children}

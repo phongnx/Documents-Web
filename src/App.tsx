@@ -18,6 +18,8 @@ import BoardCalendarPage from './pages/BoardCalendarPage';
 import BoardAppsPage from './pages/BoardAppsPage';
 import BoardPlanListPage from './pages/BoardPlanListPage';
 import BoardPlanEditPage from './pages/BoardPlanEditPage';
+import BoardReportListPage from './pages/BoardReportListPage';
+import BoardReportEditPage from './pages/BoardReportEditPage';
 
 // Layout bọc các trang tài liệu bằng DocumentsProvider.
 function DocsLayout() {
@@ -80,6 +82,8 @@ function AppShell() {
         <Route path="/board/apps" element={<BoardAppsPage />} />
         <Route path="/board/plan" element={<BoardPlanListPage />} />
         <Route path="/board/plan/:id" element={<BoardPlanEditPage />} />
+        <Route path="/board/report" element={<BoardReportListPage />} />
+        <Route path="/board/report/:id" element={<BoardReportEditPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/docs" replace />} />
     </Routes>

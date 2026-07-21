@@ -1,0 +1,234 @@
+// Tính tiến độ tuần từ Plan tuần + gợi ý trạng thái từ Báo cáo ngày.
+import {
+  workstreamPct,
+  type DailyReport,
+  type PlanWorkstream,
+  type WeeklyPlan,
+  type WorkstreamState,
+} from '../pmTypes';
+import { parseBody } from './reportFormat';
+
+// Nhánh thuộc nhóm release: category release HOẶC milestone có loại nằm trong releaseKeys.
+export const isReleaseWs = (
+  w: PlanWorkstream,
+  releaseKeys: Set<string> = new Set(['release']),
+): boolean =>
+  w.category === 'release' || (!!w.milestone && releaseKeys.has(w.milestone.type));
+
+// Nhánh là "mục tiêu tuần": release HOẶC có milestone (bất kỳ loại).
+export const isGoalWs = (
+  w: PlanWorkstream,
+  releaseKeys: Set<string> = new Set(['release']),
+): boolean => isReleaseWs(w, releaseKeys) || !!w.milestone;
+
+// Chọn plan của tuần hiện tại; không có → plan mới nhất (đánh dấu isCurrent=false).
+export function pickCurrentPlan(
+  plans: WeeklyPlan[],
+  today: string,
+): { plan: WeeklyPlan; isCurrent: boolean } | null {
+  const cur = plans.find((p) => p.weekStart <= today && today <= p.weekEnd);
+  if (cur) return { plan: cur, isCurrent: true };
+  if (plans.length === 0) return null;
+  // `plans` đã sort mới nhất trước ở context.
+  return { plan: plans[0], isCurrent: false };
+}
+
+// Báo cáo mới nhất nằm trong khoảng tuần của plan (theo ngày desc); null nếu không có.
+export function latestReportInWeek(
+  reports: DailyReport[],
+  plan: WeeklyPlan,
+): DailyReport | null {
+  const inWeek = reports
+    .filter((r) => r.date >= plan.weekStart && r.date <= plan.weekEnd)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  return inWeek[0] ?? null;
+}
+
+export interface WsRef {
+  pi: number;
+  wi: number;
+  project: string;
+  w: PlanWorkstream;
+  pct: number;
+}
+export interface PlanProgress {
+  total: number;
+  /** % tuần = số mục tiêu ĐẠT (Xong) / tổng mục tiêu × 100. */
+  overallPct: number;
+  counts: Record<WorkstreamState, number>;
+  all: WsRef[];
+  /** Mục tiêu tuần (release + nhánh có milestone). */
+  goals: WsRef[];
+  goalDone: number;
+  goalTotal: number;
+}
+
+// Tổng hợp tiến độ toàn plan (tiến độ tuần đo theo MỤC TIÊU tuần, binary Xong).
+export function planProgress(
+  plan: WeeklyPlan,
+  releaseKeys: Set<string> = new Set(['release']),
+): PlanProgress {
+  const all: WsRef[] = [];
+  const counts: Record<WorkstreamState, number> = {
+    todo: 0,
+    doing: 0,
+    testing: 0,
+    done: 0,
+    blocked: 0,
+  };
+  (plan.projects ?? []).forEach((pr, pi) => {
+    (pr.workstreams ?? []).forEach((w, wi) => {
+      all.push({ pi, wi, project: pr.name, w, pct: workstreamPct(w) });
+      counts[w.state ?? 'todo'] += 1;
+    });
+  });
+  const total = all.length;
+  const goals = all.filter((r) => isGoalWs(r.w, releaseKeys));
+  const goalDone = goals.filter((r) => (r.w.state ?? 'todo') === 'done').length;
+  const goalTotal = goals.length;
+  const overallPct = goalTotal === 0 ? 0 : Math.round((goalDone / goalTotal) * 100);
+  return { total, overallPct, counts, all, goals, goalDone, goalTotal };
+}
+
+// Chuẩn hóa tên để so khớp (thường hóa, bỏ khoảng trắng & ký tự đặc biệt).
+function norm(s: string): string {
+  return (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+export interface StateSuggestion {
+  pi: number;
+  wi: number;
+  project: string;
+  wsTitle: string;
+  state: WorkstreamState;
+  progress?: number;
+  /** State hiện tại (để chỉ đề xuất khi khác). */
+  from: WorkstreamState;
+}
+
+// Hai chuỗi (đã norm) coi là "khớp milestone" nếu chứa nhau hoặc chung tiền tố ≥6 ký tự.
+function looseMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a.includes(b) || b.includes(a)) return true;
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i >= 6;
+}
+
+// Hạng trạng thái để áp dụng luật "không hạ cấp" (blocked coi như thấp nhất, có thể được gỡ).
+const STATE_RANK: Record<WorkstreamState, number> = {
+  blocked: 0,
+  todo: 0,
+  doing: 1,
+  testing: 2,
+  done: 3,
+};
+
+// Suy trạng thái/% cho từng nhánh của plan từ nội dung 1 báo cáo ngày.
+// Nguyên tắc: match project theo appId; 1-nhánh → đọc cả body; nhiều-nhánh → theo section
+// hoặc milestone.text; luật done STRICT; KHÔNG hạ cấp trạng thái đã set tay.
+export function suggestFromReport(
+  plan: WeeklyPlan,
+  report: DailyReport,
+): StateSuggestion[] {
+  const out: StateSuggestion[] = [];
+  const projects = plan.projects ?? [];
+  projects.forEach((pr, pi) => {
+    // Nối report-project ↔ plan-project theo appId, rồi theo tên.
+    const rp =
+      (pr.appId && report.projects.find((x) => x.appId === pr.appId)) ||
+      report.projects.find((x) => norm(x.name) === norm(pr.name)) ||
+      report.projects.find(
+        (x) => norm(x.name).includes(norm(pr.name)) && norm(pr.name).length > 0,
+      );
+    if (!rp) return;
+    const lines = parseBody(rp.body);
+    const allArrows = lines.filter((l) => l.kind === 'arrow');
+    const contentLines = lines.filter((l) => l.kind !== 'section');
+    const wss = pr.workstreams ?? [];
+    const singleWs = wss.length === 1;
+
+    wss.forEach((w, wi) => {
+      // Dòng liên quan tới nhánh: 1-nhánh → cả body; nhiều-nhánh → theo section khớp title.
+      let relevant: { kind: string; text: string }[];
+      if (singleWs) {
+        relevant = contentLines;
+      } else {
+        const wsKey = norm(w.title);
+        let active = false;
+        const chunk: { kind: string; text: string }[] = [];
+        for (const ln of lines) {
+          if (ln.kind === 'section') {
+            const sk = norm(ln.text);
+            active = wsKey.length > 0 && (sk.includes(wsKey) || wsKey.includes(sk));
+            continue;
+          }
+          if (active) chunk.push(ln);
+        }
+        relevant = chunk;
+      }
+
+      // Bổ sung các dòng '->' toàn project khớp milestone.text (nếu nhánh có milestone).
+      const msLines: { kind: string; text: string }[] = [];
+      if (w.milestone) {
+        const mKey = norm(w.milestone.text);
+        for (const a of allArrows) {
+          if (looseMatch(norm(a.text), mKey) && !relevant.includes(a)) msLines.push(a);
+        }
+      }
+      const consider = [...relevant, ...msLines];
+      if (consider.length === 0) return;
+
+      const text = consider.map((l) => l.text).join('\n').toLowerCase();
+      const pcts = [...text.matchAll(/(\d{1,3})\s*%/g)].map((m) => Number(m[1]));
+      const maxPct = pcts.length ? Math.max(...pcts) : undefined;
+      const hasBuildArrow = consider.some(
+        (l) =>
+          l.kind === 'arrow' &&
+          /(release|build|submit|publish|store)/.test(l.text.toLowerCase()),
+      );
+      // Đang test/chờ → CHƯA xong (ưu tiên, theo luật strict).
+      const pending =
+        /(tester|đang check|đang test|đang fix|chưa|pending|review|đang chờ|waiting)/.test(
+          text,
+        );
+      // Tín hiệu ĐẠT rõ ràng: hoàn thành / đã release / 100% / ✅.
+      const doneSignal =
+        /(hoàn thành|hoàn tất|đã xong|\bxong\b|\bdone\b|đã release|đã build xong|release thành công|đã lên store|đã submit|đã publish|✅)/.test(
+          text,
+        ) ||
+        (maxPct !== undefined && maxPct >= 100);
+
+      let state: WorkstreamState;
+      if (pending) state = 'testing';
+      else if (doneSignal) state = 'done';
+      else if (hasBuildArrow) state = 'testing';
+      else state = 'doing';
+
+      // Luật KHÔNG hạ cấp: chỉ nhận khi tiến lên hạng; bằng hạng chỉ cập nhật % khi cao hơn.
+      const from = w.state ?? 'todo';
+      const curRank = STATE_RANK[from];
+      const newRank = STATE_RANK[state];
+      const curPct = workstreamPct(w);
+      const sug: StateSuggestion = {
+        pi,
+        wi,
+        project: pr.name,
+        wsTitle: w.title,
+        state,
+        from,
+      };
+      if (newRank > curRank) {
+        if (maxPct !== undefined) sug.progress = maxPct;
+      } else if (newRank === curRank) {
+        sug.state = from; // giữ nguyên trạng thái, chỉ có thể cập nhật %
+        if (maxPct !== undefined && maxPct > curPct) sug.progress = maxPct;
+        else return; // không có gì để cập nhật
+      } else {
+        return; // hạ cấp → bỏ
+      }
+      out.push(sug);
+    });
+  });
+  return out;
+}

@@ -4,7 +4,7 @@ import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import {
   catMeta,
-  DEFAULT_PLAN_CATEGORIES,
+  msKeyFromLabel,
   type PlanProject,
   type PlanWorkstream,
   type WeeklyPlan,
@@ -39,7 +39,8 @@ function normName(s: string): string {
 export default function BoardPlanEditPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
-  const { plans, apps, tasks, loading, updatePlan } = usePm();
+  const { plans, apps, tasks, meta, loading, updatePlan, addMilestoneType, addPlanCategory } =
+    usePm();
   const plan = plans.find((p) => p.id === id);
 
   const [form, setForm] = useState<PlanForm | null>(null);
@@ -49,8 +50,6 @@ export default function BoardPlanEditPage() {
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   // Giá trị select "thêm dự án từ app" (reset về '' sau mỗi lần chọn).
   const [addAppSel, setAddAppSel] = useState('');
-  // Các loại nhánh do người dùng tự thêm trong phiên này (ngoài preset).
-  const [extraCats, setExtraCats] = useState<string[]>([]);
 
   // Nạp dữ liệu vào form một lần khi plan (theo id) sẵn sàng — tránh ghi đè khi đang gõ.
   useEffect(() => {
@@ -171,18 +170,27 @@ export default function BoardPlanEditPage() {
     navigate('/board/plan');
   };
 
-  // Danh sách loại nhánh cho dropdown: preset + tự thêm + loại đang có trong plan (giữ giá trị lạ).
+  // Danh sách loại nhánh cho dropdown: danh mục (meta.planCategories) + loại đang có trong plan.
   const usedCats = form.projects.flatMap((p) => p.workstreams.map((w) => w.category));
-  const catOptions = [
-    ...new Set([...DEFAULT_PLAN_CATEGORIES, ...extraCats, ...usedCats]),
-  ].filter(Boolean);
+  const catOptions = [...new Set([...meta.planCategories, ...usedCats])].filter(Boolean);
 
-  // Thêm loại nhánh mới rồi gán ngay cho nhánh hiện tại.
+  // Thêm loại nhánh mới vào DANH MỤC (lưu bền) rồi gán ngay cho nhánh hiện tại.
   const addCategory = (pi: number, wi: number) => {
     const name = window.prompt('Tên loại nhánh mới (VD: Research, QA…):')?.trim();
     if (!name) return;
-    if (!catOptions.includes(name)) setExtraCats((cs) => [...cs, name]);
+    addPlanCategory(name);
     setWorkstream(pi, wi, { category: name });
+  };
+
+  // Thêm loại milestone mới vào danh mục rồi gán ngay cho milestone hiện tại.
+  const addMilestoneTypeInline = (pi: number, wi: number) => {
+    const label = window.prompt('Tên loại milestone mới (VD: Beta, Submit store…):')?.trim();
+    if (!label) return;
+    const isRelease = window.confirm('Loại này có tính là RELEASE không? (OK = có, Cancel = không)');
+    const key = msKeyFromLabel(label, meta.milestoneTypes.length);
+    addMilestoneType(label, isRelease);
+    const ms = form.projects[pi].workstreams[wi].milestone;
+    setWorkstream(pi, wi, { milestone: { type: key, text: ms?.text ?? '' } });
   };
 
   // Gợi ý app khớp tên project (khớp chính xác trước, rồi chứa nhau); '' nếu không có.
@@ -376,16 +384,29 @@ export default function BoardPlanEditPage() {
                     value={w.milestone.type}
                     onChange={(e) =>
                       setWorkstream(pi, wi, {
-                        milestone: {
-                          type: e.target.value as 'release' | 'test',
-                          text: w.milestone!.text,
-                        },
+                        milestone: { type: e.target.value, text: w.milestone!.text },
                       })
                     }
                   >
-                    <option value="release">Release</option>
-                    <option value="test">Test/Fix</option>
+                    {meta.milestoneTypes.map((mt) => (
+                      <option key={mt.key} value={mt.key}>
+                        {mt.label}
+                        {mt.isRelease ? ' ⭐' : ''}
+                      </option>
+                    ))}
+                    {/* Giữ giá trị lạ (loại đã bị xóa khỏi danh mục) để không mất. */}
+                    {!meta.milestoneTypes.some((mt) => mt.key === w.milestone!.type) && (
+                      <option value={w.milestone.type}>{w.milestone.type}</option>
+                    )}
                   </select>
+                  <button
+                    type="button"
+                    className="doc-action"
+                    title="Thêm loại milestone mới"
+                    onClick={() => addMilestoneTypeInline(pi, wi)}
+                  >
+                    ＋
+                  </button>
                   <input
                     className="plan-ms-text"
                     value={w.milestone.text}
