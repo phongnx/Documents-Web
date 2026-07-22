@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePm, useReleaseKeys } from '../context/PmContext';
+import { useSeededForm } from '../hooks/useSeededForm';
+import { useUnsavedGuard } from '../hooks/useUnsavedGuard';
 import BoardNav from '../components/board/BoardNav';
 import {
   catMeta,
@@ -40,33 +42,15 @@ export default function BoardPlanEditPage() {
   const releaseKeys = useReleaseKeys();
   const plan = plans.find((p) => p.id === id);
 
-  const [form, setForm] = useState<PlanForm | null>(null);
-  const [dirty, setDirty] = useState(false);
-  const seeded = useRef<string | null>(null);
+  const { form, dirty, setDirty, patch } = useSeededForm<PlanForm, WeeklyPlan>(
+    plan,
+    toForm,
+  );
+  useUnsavedGuard(dirty);
   // Chỉ số dự án đang mở dialog chọn task (null = đóng).
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   // Giá trị select "thêm dự án từ app" (reset về '' sau mỗi lần chọn).
   const [addAppSel, setAddAppSel] = useState('');
-
-  // Nạp dữ liệu vào form một lần khi plan (theo id) sẵn sàng — tránh ghi đè khi đang gõ.
-  useEffect(() => {
-    if (plan && seeded.current !== plan.id) {
-      seeded.current = plan.id;
-      setForm(toForm(plan));
-      setDirty(false);
-    }
-  }, [plan]);
-
-  // Cảnh báo khi rời/tải lại trang lúc còn thay đổi chưa lưu (đóng tab, F5, back trình duyệt).
-  useEffect(() => {
-    if (!dirty) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [dirty]);
 
   if (loading && !form) {
     return (
@@ -89,10 +73,6 @@ export default function BoardPlanEditPage() {
   }
 
   // ----- Cập nhật bất biến -----
-  const patch = (u: Partial<PlanForm>) => {
-    setForm((f) => (f ? { ...f, ...u } : f));
-    setDirty(true);
-  };
   const patchProjects = (projects: PlanProject[]) => patch({ projects });
 
   const setProject = (pi: number, u: Partial<PlanProject>) =>

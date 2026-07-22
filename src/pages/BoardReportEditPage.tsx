@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePm } from '../context/PmContext';
+import { useSeededForm } from '../hooks/useSeededForm';
+import { useUnsavedGuard } from '../hooks/useUnsavedGuard';
 import BoardNav from '../components/board/BoardNav';
 import ReportPreview from '../components/board/ReportPreview';
 import { buildReportText } from '../lib/reportFormat';
@@ -24,29 +26,12 @@ export default function BoardReportEditPage() {
   const { reports, apps, loading, updateReport } = usePm();
   const report = reports.find((r) => r.id === id);
 
-  const [form, setForm] = useState<ReportForm | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const { form, dirty, setDirty, patch } = useSeededForm<ReportForm, DailyReport>(
+    report,
+    toForm,
+  );
+  useUnsavedGuard(dirty);
   const [copied, setCopied] = useState(false);
-  const seeded = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (report && seeded.current !== report.id) {
-      seeded.current = report.id;
-      setForm(toForm(report));
-      setDirty(false);
-    }
-  }, [report]);
-
-  // Cảnh báo khi rời/tải lại trang lúc còn thay đổi chưa lưu.
-  useEffect(() => {
-    if (!dirty) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [dirty]);
 
   if (loading && !form) {
     return (
@@ -69,10 +54,6 @@ export default function BoardReportEditPage() {
   }
 
   // ----- Cập nhật bất biến -----
-  const patch = (u: Partial<ReportForm>) => {
-    setForm((f) => (f ? { ...f, ...u } : f));
-    setDirty(true);
-  };
   const patchProjects = (projects: ReportProject[]) => patch({ projects });
   const setProject = (pi: number, u: Partial<ReportProject>) =>
     patchProjects(form.projects.map((p, i) => (i === pi ? { ...p, ...u } : p)));
