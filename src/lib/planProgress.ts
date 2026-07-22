@@ -195,6 +195,8 @@ export function suggestFromReport(
         /(tester|đang check|đang test|đang fix|chưa|pending|review|đang chờ|waiting)/.test(
           text,
         );
+      // Cụm ép coi là ĐANG TEST: "fix bug(s) phát sinh" hoặc "build test".
+      const forceTest = /(fix\s*bugs?\s*phát\s*sinh|build\s*test)/.test(text);
       // Tín hiệu ĐẠT rõ ràng: hoàn thành / đã release / 100% / ✅ (chỉ trong phạm vi doneText).
       const doneSignal =
         /(hoàn thành|hoàn tất|đã xong|\bxong\b|\bdone\b|đã release|đã build xong|release thành công|đã lên store|đã submit|đã publish|✅)/.test(
@@ -203,7 +205,7 @@ export function suggestFromReport(
         (doneMaxPct !== undefined && doneMaxPct >= 100);
 
       let state: WorkstreamState;
-      if (pending) state = 'testing';
+      if (pending || forceTest) state = 'testing';
       else if (doneSignal) state = 'done';
       else if (hasBuildArrow) state = 'testing';
       else state = 'doing';

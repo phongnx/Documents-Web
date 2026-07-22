@@ -202,9 +202,17 @@ export default function PlanProgressCard() {
             ))}
           </div>
 
-          {/* Chi tiết theo project + dropdown cập nhật */}
+          {/* Chi tiết theo project + dropdown cập nhật.
+              App CÓ milestone lên trên, app KHÔNG milestone xuống cuối (stable trong nhóm). */}
           <div className="pp-projects">
-            {(plan.projects ?? []).map((pr, pi) => {
+            {(plan.projects ?? [])
+              .map((pr, pi) => ({ pr, pi }))
+              .sort((a, b) => {
+                const am = (a.pr.workstreams ?? []).some((w) => !!w.milestone) ? 0 : 1;
+                const bm = (b.pr.workstreams ?? []).some((w) => !!w.milestone) ? 0 : 1;
+                return am - bm;
+              })
+              .map(({ pr, pi }) => {
               const wss = pr.workstreams ?? [];
               if (wss.length === 0) return null;
               const avg = Math.round(
