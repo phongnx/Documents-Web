@@ -18,6 +18,7 @@ import {
   DEFAULT_PLAN_CATEGORIES,
   DEFAULT_STATUSES,
   DEFAULT_TASK_TYPES,
+  isPresetMilestoneType,
   msKeyFromLabel,
   releaseKeysOf,
   type AppItem,
@@ -28,6 +29,38 @@ import {
   type WeeklyPlan,
   type WorkstreamState,
 } from '../pmTypes';
+
+// Meta mặc định (dùng chung cho init state, reset khi đăng xuất, fallback import).
+function defaultMeta(): PmMeta {
+  return {
+    taskTypes: DEFAULT_TASK_TYPES,
+    statuses: DEFAULT_STATUSES,
+    milestoneTypes: DEFAULT_MILESTONE_TYPES,
+    planCategories: DEFAULT_PLAN_CATEGORIES,
+  };
+}
+
+// Chuẩn hóa task: chỉ giữ field optional khi có giá trị (loại undefined trước khi set/ghi RTDB).
+function normalizeTask(t: TaskItem): TaskItem {
+  return {
+    id: t.id,
+    title: t.title ?? '',
+    type: t.type,
+    status: t.status,
+    order: t.order,
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
+    ...(t.appId ? { appId: t.appId } : {}),
+    ...(t.version ? { version: t.version } : {}),
+    ...(t.description ? { description: t.description } : {}),
+    ...(t.startDate ? { startDate: t.startDate } : {}),
+    ...(t.endDate ? { endDate: t.endDate } : {}),
+    ...(t.planDate ? { planDate: t.planDate } : {}),
+    ...(t.milestone ? { milestone: t.milestone } : {}),
+    ...(t.assignee ? { assignee: t.assignee } : {}),
+    ...(t.flavor ? { flavor: t.flavor } : {}),
+  };
+}
 
 // Các trường cho phép sửa/tạo task (bỏ id/order/createdAt/updatedAt do context quản lý).
 type TaskInput = Partial<
@@ -135,12 +168,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
 
   const [apps, setApps] = useState<AppItem[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [meta, setMeta] = useState<PmMeta>({
-    taskTypes: DEFAULT_TASK_TYPES,
-    statuses: DEFAULT_STATUSES,
-    milestoneTypes: DEFAULT_MILESTONE_TYPES,
-    planCategories: DEFAULT_PLAN_CATEGORIES,
-  });
+  const [meta, setMeta] = useState<PmMeta>(defaultMeta());
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,12 +183,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
   }>({
     apps: [],
     tasks: [],
-    meta: {
-      taskTypes: DEFAULT_TASK_TYPES,
-      statuses: DEFAULT_STATUSES,
-      milestoneTypes: DEFAULT_MILESTONE_TYPES,
-      planCategories: DEFAULT_PLAN_CATEGORIES,
-    },
+    meta: defaultMeta(),
     plans: [],
     reports: [],
   });
@@ -174,12 +197,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
     if (!db || !uid) {
       setApps([]);
       setTasks([]);
-      setMeta({
-        taskTypes: DEFAULT_TASK_TYPES,
-        statuses: DEFAULT_STATUSES,
-        milestoneTypes: DEFAULT_MILESTONE_TYPES,
-        planCategories: DEFAULT_PLAN_CATEGORIES,
-      });
+      setMeta(defaultMeta());
       setPlans([]);
       setReports([]);
       setLoading(false);
@@ -382,7 +400,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
       const cur = stateRef.current.tasks;
       const m = stateRef.current.meta;
       const now = new Date().toISOString();
-      const created: TaskItem = {
+      // normalizeTask loại các trường optional undefined (tránh undefined trong RTDB).
+      const created: TaskItem = normalizeTask({
         id: uuidv4(),
         title: data.title,
         type: data.type ?? m.taskTypes[0] ?? 'Release',
@@ -390,17 +409,16 @@ export function PmProvider({ children }: { children: ReactNode }) {
         order: cur.length,
         createdAt: now,
         updatedAt: now,
-        // Chỉ ghi các trường tùy chọn khi có giá trị (tránh undefined trong RTDB).
-        ...(data.appId ? { appId: data.appId } : {}),
-        ...(data.version ? { version: data.version } : {}),
-        ...(data.description ? { description: data.description } : {}),
-        ...(data.startDate ? { startDate: data.startDate } : {}),
-        ...(data.endDate ? { endDate: data.endDate } : {}),
-        ...(data.planDate ? { planDate: data.planDate } : {}),
-        ...(data.milestone ? { milestone: data.milestone } : {}),
-        ...(data.assignee ? { assignee: data.assignee } : {}),
-        ...(data.flavor ? { flavor: data.flavor } : {}),
-      };
+        appId: data.appId,
+        version: data.version,
+        description: data.description,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        planDate: data.planDate,
+        milestone: data.milestone,
+        assignee: data.assignee,
+        flavor: data.flavor,
+      });
       set(ref(db, `users/${uid}/pm/tasks/${created.id}`), created);
       return created;
     },
@@ -542,7 +560,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
   const deleteMilestoneType = useCallback(
     (key: string) => {
       if (!db || !uid) return;
-      if (key === 'release' || key === 'test') return;
+      if (isPresetMilestoneType(key)) return;
       const cur = stateRef.current.meta.milestoneTypes;
       set(
         ref(db, `users/${uid}/pm/meta/milestoneTypes`),
@@ -620,12 +638,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
       await update(ref(db, `users/${uid}/pm`), {
         apps: payload.apps ?? {},
         tasks: payload.tasks ?? {},
-        meta: payload.meta ?? {
-          taskTypes: DEFAULT_TASK_TYPES,
-          statuses: DEFAULT_STATUSES,
-          milestoneTypes: DEFAULT_MILESTONE_TYPES,
-          planCategories: DEFAULT_PLAN_CATEGORIES,
-        },
+        meta: payload.meta ?? defaultMeta(),
       });
     },
     [uid],

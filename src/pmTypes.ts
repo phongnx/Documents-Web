@@ -68,6 +68,10 @@ export function releaseKeysOf(types: MilestoneType[]): Set<string> {
   return new Set(types.filter((t) => t.isRelease).map((t) => t.key));
 }
 
+/** Loại milestone gốc (không cho xóa) — suy từ DEFAULT_MILESTONE_TYPES, không hardcode literal. */
+export const isPresetMilestoneType = (key: string): boolean =>
+  DEFAULT_MILESTONE_TYPES.some((t) => t.key === key);
+
 /** Meta 1 loại milestone theo key; không có → dùng chính key làm label, không phải release. */
 export function msTypeMeta(types: MilestoneType[], key: string): MilestoneType {
   return types.find((t) => t.key === key) ?? { key, label: key, isRelease: false };
