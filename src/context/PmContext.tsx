@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -18,6 +19,7 @@ import {
   DEFAULT_STATUSES,
   DEFAULT_TASK_TYPES,
   msKeyFromLabel,
+  releaseKeysOf,
   type AppItem,
   type DailyReport,
   type PmImportPayload,
@@ -794,4 +796,10 @@ export function usePm() {
   const ctx = useContext(PmContext);
   if (!ctx) throw new Error('usePm must be used within PmProvider');
   return ctx;
+}
+
+/** Tập key milestone được đánh dấu là release (dẫn xuất từ meta.milestoneTypes) — dùng chung. */
+export function useReleaseKeys(): Set<string> {
+  const { meta } = usePm();
+  return useMemo(() => releaseKeysOf(meta.milestoneTypes), [meta.milestoneTypes]);
 }

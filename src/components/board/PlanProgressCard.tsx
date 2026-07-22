@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
-import { usePm } from '../../context/PmContext';
+import { usePm, useReleaseKeys } from '../../context/PmContext';
 import {
   catMeta,
-  releaseKeysOf,
+  isReleaseWs,
   WORKSTREAM_STATE_META,
   WORKSTREAM_STATES,
   workstreamPct,
@@ -11,7 +11,6 @@ import {
 import { formatDay } from '../../lib/formatDate';
 import { formatDateVi } from '../../lib/reportFormat';
 import {
-  isReleaseWs,
   latestReportInWeek,
   pickCurrentPlan,
   planProgress,
@@ -55,8 +54,8 @@ function StateSelect({
 }
 
 export default function PlanProgressCard() {
-  const { plans, reports, meta, setWorkstreamProgress } = usePm();
-  const releaseKeys = releaseKeysOf(meta.milestoneTypes);
+  const { plans, reports, setWorkstreamProgress } = usePm();
+  const releaseKeys = useReleaseKeys();
   const today = isoLocal(new Date());
 
   const picked = pickCurrentPlan(plans, today);

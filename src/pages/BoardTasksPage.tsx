@@ -5,7 +5,13 @@ import BoardNav from '../components/board/BoardNav';
 import TaskEditDialog, {
   type TaskFormValues,
 } from '../components/board/TaskEditDialog';
-import { DONE_STATUS, type TaskItem } from '../pmTypes';
+import {
+  DONE_STATUS,
+  isRunningStatus,
+  isWaitingStatus,
+  statusMeta,
+  type TaskItem,
+} from '../pmTypes';
 import { formatDay } from '../lib/formatDate';
 import { currentPlans, planLinks, isoLocal } from '../lib/planLinks';
 
@@ -14,10 +20,9 @@ const relDate = (t: TaskItem) => t.planDate || t.endDate || '';
 // Ngày để sắp xếp task đang chạy (mới nhất trước).
 const actDate = (t: TaskItem) => t.planDate || t.endDate || t.startDate || '';
 
-// Task "đang chạy" = đã bắt đầu, chưa xong (Đang thực hiện / Đang fix bugs).
-const isRunning = (t: TaskItem) => t.status.startsWith('Đang');
-// Task "đang chờ" = chưa bắt đầu.
-const isWaiting = (t: TaskItem) => t.status === 'Chưa bắt đầu';
+// Task "đang chạy" / "đang chờ" — dùng registry status tập trung.
+const isRunning = (t: TaskItem) => isRunningStatus(t.status);
+const isWaiting = (t: TaskItem) => isWaitingStatus(t.status);
 
 // Task đang chờ "gần nhất": có ngày plan/bắt đầu sớm nhất; không có ngày thì tạo gần nhất.
 function nearestWaiting(list: TaskItem[]): TaskItem | undefined {
@@ -38,14 +43,6 @@ function latest(tasks: TaskItem[]): TaskItem | undefined {
   return tasks
     .filter((t) => t.status === DONE_STATUS && relDate(t))
     .sort((a, b) => relDate(b).localeCompare(relDate(a)))[0];
-}
-
-// Class màu badge trạng thái (đồng bộ trang Task chi tiết).
-function statusClass(status: string): string {
-  if (status === DONE_STATUS) return 'st-done';
-  if (status.includes('Đang fix')) return 'st-fix';
-  if (status.includes('Đang')) return 'st-doing';
-  return 'st-todo';
 }
 
 // Các dòng mô tả task đã làm sạch (bỏ #, gạch đầu dòng, dòng rỗng & dòng trùng tiêu đề).
@@ -204,7 +201,7 @@ export default function BoardTasksPage() {
                       {g.running.slice(0, 2).map((t) => (
                         <span key={t.id} className="app-running-block">
                           <span className="app-running-line">
-                            <span className={`task-badge ${statusClass(t.status)}`}>
+                            <span className={`task-badge ${statusMeta(t.status).badgeClass}`}>
                               {t.status}
                             </span>
                             <span className="app-running-title">{t.title}</span>

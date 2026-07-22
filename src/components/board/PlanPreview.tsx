@@ -1,27 +1,16 @@
 import {
   catMeta,
-  releaseKeysOf,
+  isReleaseWs,
   WORKSTREAM_STATE_META,
   type PlanProject,
   type PlanWorkstream,
   type WeeklyPlan,
 } from '../../pmTypes';
-import { usePm } from '../../context/PmContext';
+import { useReleaseKeys } from '../../context/PmContext';
 
-// Class màu badge (tái dùng từ trang Task) theo loại nhánh; loại tự thêm → mặc định.
-const CAT_BADGE: Record<string, string> = {
-  release: 'st-done',
-  test: 'st-fix',
-  ads: 'type',
-  plan: 'type',
-  other: '',
-};
-
-// Dự án có ít nhất 1 nhánh release (category release hoặc milestone thuộc loại release).
+// Dự án có ít nhất 1 nhánh release.
 const hasRelease = (p: PlanProject, releaseKeys: Set<string>) =>
-  (p.workstreams ?? []).some(
-    (w) => w.category === 'release' || (!!w.milestone && releaseKeys.has(w.milestone.type)),
-  );
+  (p.workstreams ?? []).some((w) => isReleaseWs(w, releaseKeys));
 
 // Render 1 nhánh (tiêu đề + badge loại + trạng thái + milestone + list item).
 function Workstream({ w, releaseKeys }: { w: PlanWorkstream; releaseKeys: Set<string> }) {
@@ -34,7 +23,7 @@ function Workstream({ w, releaseKeys }: { w: PlanWorkstream; releaseKeys: Set<st
     <div className={`pp-ws${done ? ' pp-ws-done' : ''}`}>
       <div className="pp-ws-head">
         {w.title && <span className="pp-ws-title">{w.title}</span>}
-        <span className={`task-badge ${CAT_BADGE[w.category] ?? ''}`}>{meta.label}</span>
+        <span className={`task-badge ${meta.webBadge}`}>{meta.label}</span>
         <span className={`task-badge ${st.badgeClass}`}>
           {st.icon} {st.label}
         </span>
@@ -69,8 +58,7 @@ function ProjectCard({ p, releaseKeys }: { p: PlanProject; releaseKeys: Set<stri
 
 // Xem nhanh plan tuần: card dự án, tách 2 grid — app có release / không release.
 export default function PlanPreview({ plan }: { plan: WeeklyPlan }) {
-  const { meta } = usePm();
-  const releaseKeys = releaseKeysOf(meta.milestoneTypes);
+  const releaseKeys = useReleaseKeys();
   const projects = plan.projects ?? [];
   const timeline = (plan.timeline ?? []).filter((t) => t.day.trim() || t.release.trim());
   const releaseProjects = projects.filter((p) => hasRelease(p, releaseKeys));

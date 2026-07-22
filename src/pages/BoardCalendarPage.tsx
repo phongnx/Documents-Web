@@ -1,15 +1,14 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { usePm } from '../context/PmContext';
+import { usePm, useReleaseKeys } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import {
   catMeta,
-  DONE_STATUS,
-  releaseKeysOf,
+  isReleaseWs,
+  statusMeta,
   WORKSTREAM_STATE_META,
-  type PlanWorkstream,
-  type TaskItem,
   type WeeklyPlan,
+  type TaskItem,
 } from '../pmTypes';
 import { formatDay } from '../lib/formatDate';
 import { isoLocal } from '../lib/planLinks';
@@ -27,13 +26,10 @@ function mondayOf(iso: string): string {
   return isoLocal(d);
 }
 
-// Nhánh thuộc nhóm release (category release hoặc milestone thuộc loại release).
-const isRelease = (w: PlanWorkstream, releaseKeys: Set<string>) =>
-  w.category === 'release' || (!!w.milestone && releaseKeys.has(w.milestone.type));
 const releaseCount = (p: WeeklyPlan, releaseKeys: Set<string>) =>
   (p.projects ?? [])
     .flatMap((pr) => pr.workstreams ?? [])
-    .filter((w) => isRelease(w, releaseKeys)).length;
+    .filter((w) => isReleaseWs(w, releaseKeys)).length;
 
 // 'Thứ 2'..'Thứ 7' → 0..5, 'Chủ nhật'/'CN' → 6 (offset từ Thứ Hai). null nếu không rõ.
 function dayOffset(day: string): number | null {
@@ -48,12 +44,6 @@ function dayOffset(day: string): number | null {
 }
 
 // ---------- Data preset cũ (task.planDate) ----------
-function statusClass(status: string): string {
-  if (status === DONE_STATUS) return 'st-done';
-  if (status.includes('Đang fix')) return 'st-fix';
-  if (status.includes('Đang')) return 'st-doing';
-  return 'st-todo';
-}
 function releaseLines(t: TaskItem): string[] {
   return (t.description ?? '')
     .split('\n')
@@ -64,8 +54,8 @@ function releaseLines(t: TaskItem): string[] {
 type TaskWeek = { monday: string; sunday: string; list: TaskItem[] };
 
 export default function BoardCalendarPage() {
-  const { apps, tasks, plans, meta, loading } = usePm();
-  const releaseKeys = useMemo(() => releaseKeysOf(meta.milestoneTypes), [meta.milestoneTypes]);
+  const { apps, tasks, plans, loading } = usePm();
+  const releaseKeys = useReleaseKeys();
   const now = new Date();
   const today = isoLocal(now);
 
@@ -139,7 +129,7 @@ export default function BoardCalendarPage() {
       .sort((a, b) => (a.date && b.date ? a.date.localeCompare(b.date) : 0));
     const releases = (plan.projects ?? []).flatMap((pr) =>
       (pr.workstreams ?? [])
-        .filter((w) => isRelease(w, releaseKeys))
+        .filter((w) => isReleaseWs(w, releaseKeys))
         .map((w) => ({ project: pr.name, w })),
     );
     const releaseDone = releases.filter((r) => (r.w.state ?? 'todo') === 'done').length;
@@ -239,7 +229,9 @@ export default function BoardCalendarPage() {
                   )}
                   {t.version && <span className="task-badge ver">{t.version}</span>}
                   <span className="cal-title-text">{t.title}</span>
-                  <span className={`task-badge ${statusClass(t.status)}`}>{t.status}</span>
+                  <span className={`task-badge ${statusMeta(t.status).badgeClass}`}>
+                    {t.status}
+                  </span>
                 </span>
                 {lines.length > 0 && (
                   <ul className="cal-notes">

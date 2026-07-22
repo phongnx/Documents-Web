@@ -5,19 +5,10 @@ import BoardNav from '../components/board/BoardNav';
 import ImportDataButton from '../components/board/ImportDataButton';
 import PlanProgressCard from '../components/board/PlanProgressCard';
 import { BarChart, DonutChart, type DonutSegment } from '../components/board/charts';
-import { DONE_STATUS, type TaskItem } from '../pmTypes';
+import { DONE_STATUS, statusMeta, type TaskItem } from '../pmTypes';
 import { formatDay } from '../lib/formatDate';
 
 const RELEASE_TYPE = 'Release';
-
-// Màu cho từng trạng thái (khớp badge ở trang Task).
-const STATUS_COLOR: Record<string, string> = {
-  'Đã hoàn thành': '#16a34a',
-  'Đang thực hiện': '#2563eb',
-  'Đang fix bugs': '#ea580c',
-  'Chưa bắt đầu': '#94a3b8',
-};
-const FALLBACK_COLORS = ['#7c3aed', '#0891b2', '#db2777', '#ca8a04'];
 
 // Ngày dùng để xếp release theo thời gian: ưu tiên planDate rồi endDate.
 const relDate = (t: TaskItem) => t.planDate || t.endDate || '';
@@ -62,17 +53,12 @@ export default function BoardOverviewPage() {
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
 
-    // Tỉ lệ trạng thái (donut).
+    // Tỉ lệ trạng thái (donut) — màu lấy từ registry status tập trung.
     const statusCount = new Map<string, number>();
     for (const t of tasks) statusCount.set(t.status, (statusCount.get(t.status) ?? 0) + 1);
-    let fi = 0;
     const statusSegments: DonutSegment[] = [...statusCount.entries()]
       .sort((a, b) => b[1] - a[1])
-      .map(([label, value]) => ({
-        label,
-        value,
-        color: STATUS_COLOR[label] ?? FALLBACK_COLORS[fi++ % FALLBACK_COLORS.length],
-      }));
+      .map(([label, value]) => ({ label, value, color: statusMeta(label).color }));
 
     // App đã release: có ít nhất 1 Release đã hoàn thành + có ngày → version/ngày mới nhất.
     type Released = { app: (typeof apps)[number]; version?: string; date: string };

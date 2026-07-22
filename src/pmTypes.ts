@@ -84,6 +84,25 @@ export function msKeyFromLabel(label: string, count = 0): string {
   );
 }
 
+/**
+ * Nhánh thuộc nhóm release: category = 'release' HOẶC milestone có loại nằm trong releaseKeys.
+ * Đây là NGUỒN DUY NHẤT để nhận diện release — mọi nơi (card/lịch/preview/export) đều import hàm này.
+ */
+export function isReleaseWs(
+  w: PlanWorkstream,
+  releaseKeys: Set<string> = new Set(['release']),
+): boolean {
+  return w.category === 'release' || (!!w.milestone && releaseKeys.has(w.milestone.type));
+}
+
+/** Nhánh là "mục tiêu tuần": release HOẶC có milestone (bất kỳ loại). */
+export function isGoalWs(
+  w: PlanWorkstream,
+  releaseKeys: Set<string> = new Set(['release']),
+): boolean {
+  return isReleaseWs(w, releaseKeys) || !!w.milestone;
+}
+
 // Shape dữ liệu import (script Python sinh ra) và cũng là shape lưu ở pm/.
 export interface PmImportPayload {
   apps?: Record<string, AppItem>;
@@ -150,25 +169,34 @@ export interface WeeklyPlan {
   updatedAt: string;
 }
 
-/** Nhãn + class badge cho từng category (khớp template HTML export). */
-export const CATEGORY_META: Record<
-  WorkstreamCategory,
-  { label: string; badgeClass: string }
-> = {
-  release: { label: 'Release', badgeClass: 'release-badge' },
-  test: { label: 'Test/Fix', badgeClass: 'test-badge' },
-  ads: { label: 'Ads', badgeClass: '' },
-  plan: { label: 'Plan', badgeClass: 'research-badge' },
-  other: { label: 'Khác', badgeClass: 'research-badge' },
+/**
+ * NGUỒN DUY NHẤT cho category: nhãn + `badgeClass` (class CSS bản HTML export) +
+ * `webBadge` (class task-badge trên web UI). Thêm 1 preset chỉ cần thêm 1 dòng ở đây.
+ */
+export interface CategoryMeta {
+  label: string;
+  badgeClass: string;
+  webBadge: string;
+}
+export const CATEGORY_META: Record<WorkstreamCategory, CategoryMeta> = {
+  release: { label: 'Release', badgeClass: 'release-badge', webBadge: 'st-done' },
+  test: { label: 'Test/Fix', badgeClass: 'test-badge', webBadge: 'st-fix' },
+  ads: { label: 'Ads', badgeClass: '', webBadge: 'type' },
+  plan: { label: 'Plan', badgeClass: 'research-badge', webBadge: 'type' },
+  other: { label: 'Khác', badgeClass: 'research-badge', webBadge: '' },
 };
 
-/** Danh sách loại nhánh mặc định (preset). */
-export const DEFAULT_PLAN_CATEGORIES = ['release', 'test', 'ads', 'plan', 'other'];
+/** Danh sách loại nhánh mặc định (preset) — dẫn xuất từ CATEGORY_META. */
+export const DEFAULT_PLAN_CATEGORIES = Object.keys(CATEGORY_META);
 
-/** Nhãn + class badge cho 1 category (preset dùng CATEGORY_META, tự thêm dùng chính nó). */
-export function catMeta(c: string): { label: string; badgeClass: string } {
+/** Meta cho 1 category (preset dùng CATEGORY_META, tự thêm dùng chính nó). */
+export function catMeta(c: string): CategoryMeta {
   return (
-    CATEGORY_META[c as WorkstreamCategory] ?? { label: c, badgeClass: 'research-badge' }
+    CATEGORY_META[c as WorkstreamCategory] ?? {
+      label: c,
+      badgeClass: 'research-badge',
+      webBadge: '',
+    }
   );
 }
 
@@ -215,6 +243,35 @@ export const DEFAULT_STATUSES = [
 
 /** Trạng thái coi là "đã xong" (dùng cho thống kê app đã release). */
 export const DONE_STATUS = 'Đã hoàn thành';
+
+/** Phân loại ngữ nghĩa của 1 status (dùng cho lọc/sắp xếp/tô màu tập trung). */
+export type StatusKind = 'todo' | 'active' | 'fixing' | 'done';
+export interface StatusMeta {
+  color: string;
+  badgeClass: string;
+  kind: StatusKind;
+}
+
+/**
+ * NGUỒN DUY NHẤT suy meta cho 1 status: preset khớp chính xác, custom suy theo từ khóa
+ * (giữ đúng hành vi cũ: 'Đang fix…' → fixing, 'Đang…' → active, DONE → done, còn lại → todo).
+ */
+export function statusMeta(status: string): StatusMeta {
+  if (status === DONE_STATUS)
+    return { color: '#16a34a', badgeClass: 'st-done', kind: 'done' };
+  if (status.toLowerCase().includes('fix'))
+    return { color: '#ea580c', badgeClass: 'st-fix', kind: 'fixing' };
+  if (status.startsWith('Đang'))
+    return { color: '#2563eb', badgeClass: 'st-doing', kind: 'active' };
+  return { color: '#94a3b8', badgeClass: 'st-todo', kind: 'todo' };
+}
+/** Đang chạy = active hoặc fixing (khớp isRunning cũ: startsWith('Đang')). */
+export const isRunningStatus = (s: string): boolean => {
+  const k = statusMeta(s).kind;
+  return k === 'active' || k === 'fixing';
+};
+/** Đang chờ = chưa bắt đầu (kind todo). */
+export const isWaitingStatus = (s: string): boolean => statusMeta(s).kind === 'todo';
 
 /**
  * Khung "mẫu tuần này" cho plan mới — bám nội dung 2 file HTML mẫu để sửa nhanh.

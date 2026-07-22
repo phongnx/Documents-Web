@@ -1,5 +1,7 @@
 // Tính tiến độ tuần từ Plan tuần + gợi ý trạng thái từ Báo cáo ngày.
 import {
+  isGoalWs,
+  isReleaseWs,
   workstreamPct,
   type DailyReport,
   type PlanWorkstream,
@@ -8,18 +10,8 @@ import {
 } from '../pmTypes';
 import { parseBody } from './reportFormat';
 
-// Nhánh thuộc nhóm release: category release HOẶC milestone có loại nằm trong releaseKeys.
-export const isReleaseWs = (
-  w: PlanWorkstream,
-  releaseKeys: Set<string> = new Set(['release']),
-): boolean =>
-  w.category === 'release' || (!!w.milestone && releaseKeys.has(w.milestone.type));
-
-// Nhánh là "mục tiêu tuần": release HOẶC có milestone (bất kỳ loại).
-export const isGoalWs = (
-  w: PlanWorkstream,
-  releaseKeys: Set<string> = new Set(['release']),
-): boolean => isReleaseWs(w, releaseKeys) || !!w.milestone;
+// Re-export để các nơi đang import từ đây không phải đổi (nguồn thật ở pmTypes).
+export { isGoalWs, isReleaseWs };
 
 // Chọn plan của tuần hiện tại; không có → plan mới nhất (đánh dấu isCurrent=false).
 export function pickCurrentPlan(

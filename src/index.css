@@ -1185,7 +1185,7 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1198,14 +1198,45 @@ a:hover {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   background: none;
   border: none;
   padding: 0;
   text-align: left;
   cursor: pointer;
   color: var(--text);
+}
+/* Dòng đầu: tiêu đề + badge (giữ layout ngang như cũ). */
+.task-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+/* Preview tối đa 2 dòng nội dung task (đổi tên tránh trùng .task-desc = textarea dialog). */
+.task-preview {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.task-desc-line {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted);
+  padding-left: 14px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+}
+.task-desc-line::before {
+  content: '–';
+  position: absolute;
+  left: 2px;
 }
 .task-title {
   font-weight: 600;

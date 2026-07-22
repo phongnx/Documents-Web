@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { usePm } from '../context/PmContext';
+import { usePm, useReleaseKeys } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import {
   catMeta,
@@ -41,6 +41,7 @@ export default function BoardPlanEditPage() {
   const navigate = useNavigate();
   const { plans, apps, tasks, meta, loading, updatePlan, addMilestoneType, addPlanCategory } =
     usePm();
+  const releaseKeys = useReleaseKeys();
   const plan = plans.find((p) => p.id === id);
 
   const [form, setForm] = useState<PlanForm | null>(null);
@@ -151,7 +152,9 @@ export default function BoardPlanEditPage() {
     if (dirty) save();
     const full: WeeklyPlan = { ...plan, ...form };
     const html =
-      kind === 'detailed' ? buildDetailedHtml(full) : buildReleaseTestHtml(full);
+      kind === 'detailed'
+        ? buildDetailedHtml(full, releaseKeys)
+        : buildReleaseTestHtml(full, releaseKeys);
     const base =
       kind === 'detailed'
         ? `mobile_team_weekly_plan_${form.weekStart}_${form.weekEnd}`

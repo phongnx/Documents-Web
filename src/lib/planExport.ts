@@ -1,4 +1,4 @@
-import { catMeta, type PlanWorkstream, type WeeklyPlan } from '../pmTypes';
+import { catMeta, isReleaseWs, type PlanWorkstream, type WeeklyPlan } from '../pmTypes';
 
 // Sinh 2 file HTML tĩnh từ 1 WeeklyPlan, bám sát 2 template mẫu trong docs/plan.
 
@@ -27,11 +27,9 @@ const ROMAN = [
 ];
 const roman = (i: number) => ROMAN[i] ?? String(i + 1);
 
-// Có phải workstream thuộc nhóm release / test (theo category hoặc milestone).
-const isRelease = (w: PlanWorkstream) =>
-  w.category === 'release' || w.milestone?.type === 'release';
-const isTest = (w: PlanWorkstream) =>
-  w.category === 'test' || w.milestone?.type === 'test';
+// "Test" = không phải release nhưng có milestone (bất kỳ loại không-release) hoặc category test.
+const isTestWs = (w: PlanWorkstream, releaseKeys: Set<string>) =>
+  !isReleaseWs(w, releaseKeys) && (!!w.milestone || w.category === 'test');
 
 // ---------- Template 1: bản chi tiết (mobile_team_weekly_plan) ----------
 
@@ -146,11 +144,16 @@ const DETAILED_CSS = `
       .grid, .summary-grid { grid-template-columns: 1fr; }
     }`;
 
-export function buildDetailedHtml(plan: WeeklyPlan): string {
+export function buildDetailedHtml(
+  plan: WeeklyPlan,
+  releaseKeys: Set<string> = new Set(['release']),
+): string {
   const projects = plan.projects ?? [];
   const allWs = projects.flatMap((p) => p.workstreams ?? []);
-  const releaseCount = allWs.filter((w) => w.milestone?.type === 'release').length;
-  const testCount = allWs.filter((w) => w.milestone?.type === 'test').length;
+  const releaseCount = allWs.filter((w) => isReleaseWs(w, releaseKeys)).length;
+  const testCount = allWs.filter(
+    (w) => !!w.milestone && !isReleaseWs(w, releaseKeys),
+  ).length;
   const planCount = allWs.filter((w) => w.category === 'plan').length;
 
   const cards = projects
@@ -163,7 +166,7 @@ export function buildDetailedHtml(plan: WeeklyPlan): string {
             .map((it) => `            <li>${esc(it)}</li>`)
             .join('\n');
           const ms = w.milestone
-            ? `\n          <div class="milestone ${w.milestone.type}">→ ${esc(w.milestone.text)}</div>`
+            ? `\n          <div class="milestone ${isReleaseWs(w, releaseKeys) ? 'release' : 'test'}">→ ${esc(w.milestone.text)}</div>`
             : '';
           return `        <div class="workstream">
           <h4 class="workstream-title">${esc(w.title)} <span class="badge ${meta.badgeClass}">${esc(meta.label)}</span></h4>
@@ -187,7 +190,7 @@ ${streams}
   const releaseSummary = projects
     .flatMap((p) =>
       (p.workstreams ?? [])
-        .filter((w) => w.milestone?.type === 'release')
+        .filter((w) => !!w.milestone && isReleaseWs(w, releaseKeys))
         .map(
           (w) =>
             `            <li><strong>${esc(p.name)} ${esc(w.title)}:</strong> ${esc(w.milestone!.text)}.</li>`,
@@ -197,7 +200,7 @@ ${streams}
   const testSummary = projects
     .flatMap((p) =>
       (p.workstreams ?? [])
-        .filter((w) => w.milestone?.type === 'test')
+        .filter((w) => !!w.milestone && !isReleaseWs(w, releaseKeys))
         .map(
           (w) =>
             `            <li><strong>${esc(p.name)} ${esc(w.title)}:</strong> ${esc(w.milestone!.text)}.</li>`,
@@ -357,14 +360,19 @@ ${items}
       </article>`;
 }
 
-export function buildReleaseTestHtml(plan: WeeklyPlan): string {
+export function buildReleaseTestHtml(
+  plan: WeeklyPlan,
+  releaseKeys: Set<string> = new Set(['release']),
+): string {
   const projects = plan.projects ?? [];
   const releaseWs: string[] = [];
   const testWs: string[] = [];
   for (const p of projects) {
     for (const w of p.workstreams ?? []) {
-      if (isRelease(w)) releaseWs.push(rtWorkstream(p.name, w, releaseWs.length));
-      else if (isTest(w)) testWs.push(rtWorkstream(p.name, w, testWs.length));
+      if (isReleaseWs(w, releaseKeys))
+        releaseWs.push(rtWorkstream(p.name, w, releaseWs.length));
+      else if (isTestWs(w, releaseKeys))
+        testWs.push(rtWorkstream(p.name, w, testWs.length));
     }
   }
 

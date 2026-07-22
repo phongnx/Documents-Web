@@ -6,6 +6,7 @@ import { catMeta, DEFAULT_PLAN_CATEGORIES } from '../../pmTypes';
 export default function CategoryManagerDialog({ onClose }: { onClose: () => void }) {
   const {
     meta,
+    plans,
     addTaskType,
     updateTaskType,
     deleteTaskType,
@@ -16,6 +17,17 @@ export default function CategoryManagerDialog({ onClose }: { onClose: () => void
     updatePlanCategory,
     deletePlanCategory,
   } = usePm();
+
+  // Category đang dùng trong plan nhưng CHƯA có trong danh mục (VD data cũ 'Development').
+  const usedCats = [
+    ...new Set(
+      plans.flatMap((p) =>
+        (p.projects ?? []).flatMap((pr) =>
+          (pr.workstreams ?? []).map((w) => w.category),
+        ),
+      ),
+    ),
+  ].filter((c) => c && !meta.planCategories.includes(c));
 
   const [newType, setNewType] = useState('');
   const [newCat, setNewCat] = useState('');
@@ -140,6 +152,22 @@ export default function CategoryManagerDialog({ onClose }: { onClose: () => void
                 </li>
               );
             })}
+            {usedCats.map((c) => (
+              <li key={`used-${c}`} className="cat-row">
+                <span className="cat-name">
+                  {catMeta(c).label}
+                  <span className="muted"> · đang dùng, chưa trong danh mục</span>
+                </span>
+                <button
+                  type="button"
+                  className="doc-action"
+                  title="Thêm vào danh mục"
+                  onClick={() => addPlanCategory(c)}
+                >
+                  ＋
+                </button>
+              </li>
+            ))}
           </ul>
           <div className="cat-add">
             <input

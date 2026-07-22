@@ -7,7 +7,7 @@ import TaskEditDialog, {
   type TaskFormValues,
 } from '../components/board/TaskEditDialog';
 import AssignAppDialog from '../components/board/AssignAppDialog';
-import { DONE_STATUS, type TaskItem } from '../pmTypes';
+import { statusMeta, type TaskItem } from '../pmTypes';
 import { formatDay } from '../lib/formatDate';
 import { currentPlans, planLinks, isoLocal } from '../lib/planLinks';
 
@@ -16,11 +16,12 @@ const UNASSIGNED = '_none';
 // Ngày dùng để sắp xếp desc: ưu tiên planDate → endDate → startDate.
 const sortDate = (t: TaskItem) => t.planDate || t.endDate || t.startDate || '';
 
-function statusClass(status: string): string {
-  if (status === DONE_STATUS) return 'st-done';
-  if (status.includes('Đang fix')) return 'st-fix';
-  if (status.includes('Đang')) return 'st-doing';
-  return 'st-todo';
+// Các dòng mô tả đã làm sạch (bỏ #, gạch đầu dòng, dòng rỗng & dòng trùng tiêu đề).
+function descLines(t: TaskItem): string[] {
+  return (t.description ?? '')
+    .split('\n')
+    .map((l) => l.replace(/^\s*[#>*-]+\s*/, '').trim())
+    .filter((l) => l.length > 0 && l !== t.title);
 }
 
 export default function BoardAppTasksPage() {
@@ -176,6 +177,7 @@ export default function BoardAppTasksPage() {
           {list.map((t) => {
             const selected = sel.selectMode && sel.docs.has(t.id);
             const inPlan = planTaskIds.has(t.id);
+            const preview = descLines(t).slice(0, 2);
             return (
               <li
                 key={t.id}
@@ -190,21 +192,32 @@ export default function BoardAppTasksPage() {
                     sel.selectMode ? sel.toggleDoc(t.id) : setEditing(t)
                   }
                 >
-                  {sel.selectMode && (
-                    <span className={`sel-check sel-check-inline${selected ? ' on' : ''}`} />
-                  )}
-                  <span className="task-title">{t.title}</span>
-                  <span className="task-tags">
-                    {inPlan && <span className="plan-current-tag">📌 Plan tuần</span>}
-                    <span className="task-badge type">{t.type}</span>
-                    <span className={`task-badge ${statusClass(t.status)}`}>
-                      {t.status}
-                    </span>
-                    {t.version && <span className="task-badge ver">{t.version}</span>}
-                    {sortDate(t) && (
-                      <span className="muted task-plan">📅 {formatDay(sortDate(t))}</span>
+                  <span className="task-head">
+                    {sel.selectMode && (
+                      <span className={`sel-check sel-check-inline${selected ? ' on' : ''}`} />
                     )}
+                    <span className="task-title">{t.title}</span>
+                    <span className="task-tags">
+                      {inPlan && <span className="plan-current-tag">📌 Plan tuần</span>}
+                      <span className="task-badge type">{t.type}</span>
+                      <span className={`task-badge ${statusMeta(t.status).badgeClass}`}>
+                        {t.status}
+                      </span>
+                      {t.version && <span className="task-badge ver">{t.version}</span>}
+                      {sortDate(t) && (
+                        <span className="muted task-plan">📅 {formatDay(sortDate(t))}</span>
+                      )}
+                    </span>
                   </span>
+                  {preview.length > 0 && (
+                    <span className="task-preview">
+                      {preview.map((ln, i) => (
+                        <span key={i} className="task-desc-line">
+                          {ln}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </button>
                 {!sel.selectMode && (
                   <div className="doc-line-actions">
