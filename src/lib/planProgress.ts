@@ -9,6 +9,7 @@ import {
   type WorkstreamState,
 } from '../pmTypes';
 import { parseBody } from './reportFormat';
+import { normName as norm } from './pmText';
 
 // Re-export để các nơi đang import từ đây không phải đổi (nguồn thật ở pmTypes).
 export { isGoalWs, isReleaseWs };
@@ -80,11 +81,6 @@ export function planProgress(
   const goalTotal = goals.length;
   const overallPct = goalTotal === 0 ? 0 : Math.round((goalDone / goalTotal) * 100);
   return { total, overallPct, counts, all, goals, goalDone, goalTotal };
-}
-
-// Chuẩn hóa tên để so khớp (thường hóa, bỏ khoảng trắng & ký tự đặc biệt).
-function norm(s: string): string {
-  return (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 export interface StateSuggestion {
@@ -171,9 +167,24 @@ export function suggestFromReport(
       const consider = [...relevant, ...msLines];
       if (consider.length === 0) return;
 
+      const hasMs = !!w.milestone;
       const text = consider.map((l) => l.text).join('\n').toLowerCase();
       const pcts = [...text.matchAll(/(\d{1,3})\s*%/g)].map((m) => Number(m[1]));
-      const maxPct = pcts.length ? Math.max(...pcts) : undefined;
+
+      // Nhánh CÓ milestone: chỉ xét "đạt mốc" trên dòng nói về build/release/mốc,
+      // KHÔNG lấy tín hiệu done từ task lẻ hoàn thành. Nhánh thường: xét toàn bộ dòng liên quan.
+      const doneScope = hasMs
+        ? consider.filter(
+            (l) =>
+              /(release|build|submit|publish|store|phát hành|lên store)/.test(
+                l.text.toLowerCase(),
+              ) || looseMatch(norm(l.text), norm(w.milestone!.text)),
+          )
+        : consider;
+      const doneText = doneScope.map((l) => l.text).join('\n').toLowerCase();
+      const donePcts = [...doneText.matchAll(/(\d{1,3})\s*%/g)].map((m) => Number(m[1]));
+      const doneMaxPct = donePcts.length ? Math.max(...donePcts) : undefined;
+
       const hasBuildArrow = consider.some(
         (l) =>
           l.kind === 'arrow' &&
@@ -184,18 +195,21 @@ export function suggestFromReport(
         /(tester|đang check|đang test|đang fix|chưa|pending|review|đang chờ|waiting)/.test(
           text,
         );
-      // Tín hiệu ĐẠT rõ ràng: hoàn thành / đã release / 100% / ✅.
+      // Tín hiệu ĐẠT rõ ràng: hoàn thành / đã release / 100% / ✅ (chỉ trong phạm vi doneText).
       const doneSignal =
         /(hoàn thành|hoàn tất|đã xong|\bxong\b|\bdone\b|đã release|đã build xong|release thành công|đã lên store|đã submit|đã publish|✅)/.test(
-          text,
+          doneText,
         ) ||
-        (maxPct !== undefined && maxPct >= 100);
+        (doneMaxPct !== undefined && doneMaxPct >= 100);
 
       let state: WorkstreamState;
       if (pending) state = 'testing';
       else if (doneSignal) state = 'done';
       else if (hasBuildArrow) state = 'testing';
       else state = 'doing';
+
+      // % gợi ý: nhánh có milestone lấy theo dòng mốc; nhánh thường lấy toàn bộ.
+      const maxPct = hasMs ? doneMaxPct : pcts.length ? Math.max(...pcts) : undefined;
 
       // Luật KHÔNG hạ cấp: chỉ nhận khi tiến lên hạng; bằng hạng chỉ cập nhật % khi cao hơn.
       const from = w.state ?? 'todo';

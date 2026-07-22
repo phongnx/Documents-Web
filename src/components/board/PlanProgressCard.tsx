@@ -16,12 +16,8 @@ import {
   planProgress,
   suggestFromReport,
 } from '../../lib/planProgress';
+import { isoLocal } from '../../lib/pmDates';
 
-function isoLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate(),
-  ).padStart(2, '0')}`;
-}
 // Số ngày còn lại tính từ hôm nay tới hết weekEnd (bao gồm hôm nay).
 function daysLeft(today: string, weekEnd: string): number {
   if (today > weekEnd) return 0;

@@ -6,6 +6,7 @@ import type {
   TaskItem,
   WorkstreamCategory,
 } from '../../pmTypes';
+import { sortDate } from '../../lib/pmSort';
 
 interface Props {
   apps: AppItem[];
@@ -24,9 +25,6 @@ function taskLines(t: TaskItem): string[] {
     .filter((l) => l.length > 0);
   return lines.length ? lines : [t.title];
 }
-
-// Ngày để sắp xếp desc.
-const sortDate = (t: TaskItem) => t.planDate || t.endDate || t.startDate || '';
 
 // Loại task → category của nhánh plan.
 function mapCategory(type: string): WorkstreamCategory {

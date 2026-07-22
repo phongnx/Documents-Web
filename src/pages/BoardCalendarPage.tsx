@@ -11,20 +11,8 @@ import {
   type TaskItem,
 } from '../pmTypes';
 import { formatDay } from '../lib/formatDate';
-import { isoLocal } from '../lib/planLinks';
+import { isoLocal, addDays, mondayOf } from '../lib/pmDates';
 
-// ---------- Helper chung ----------
-function addDays(iso: string, n: number): string {
-  const d = new Date(iso + 'T00:00:00');
-  d.setDate(d.getDate() + n);
-  return isoLocal(d);
-}
-function mondayOf(iso: string): string {
-  const d = new Date(iso + 'T00:00:00');
-  const dow = (d.getDay() + 6) % 7; // 0 = Thứ Hai
-  d.setDate(d.getDate() - dow);
-  return isoLocal(d);
-}
 
 const releaseCount = (p: WeeklyPlan, releaseKeys: Set<string>) =>
   (p.projects ?? [])

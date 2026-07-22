@@ -5,23 +5,7 @@ import BoardNav from '../components/board/BoardNav';
 import { newPlanTemplate } from '../pmTypes';
 import PlanPreview from '../components/board/PlanPreview';
 import { formatDay } from '../lib/formatDate';
-
-// yyyy-mm-dd theo giờ địa phương (không lệch múi giờ như toISOString).
-function isoLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate(),
-  ).padStart(2, '0')}`;
-}
-// Thứ Hai → Thứ Sáu của tuần hiện tại.
-function currentWeek(): { start: string; end: string } {
-  const now = new Date();
-  const dow = (now.getDay() + 6) % 7; // Thứ Hai = 0
-  const mon = new Date(now);
-  mon.setDate(now.getDate() - dow);
-  const fri = new Date(mon);
-  fri.setDate(mon.getDate() + 4);
-  return { start: isoLocal(mon), end: isoLocal(fri) };
-}
+import { isoLocal, currentWeek } from '../lib/pmDates';
 
 export default function BoardPlanListPage() {
   const { plans, loading, addPlan, deletePlan } = usePm();

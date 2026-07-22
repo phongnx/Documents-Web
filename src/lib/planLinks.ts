@@ -1,12 +1,5 @@
 import type { WeeklyPlan } from '../pmTypes';
 
-// yyyy-mm-dd theo giờ địa phương.
-export function isoLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate(),
-  ).padStart(2, '0')}`;
-}
-
 // Plan của tuần hiện tại: tuần chứa hôm nay (weekStart ≤ today ≤ weekEnd).
 export function currentPlans(plans: WeeklyPlan[], today: string): WeeklyPlan[] {
   return plans.filter((p) => p.weekStart <= today && today <= p.weekEnd);

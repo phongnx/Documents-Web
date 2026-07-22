@@ -9,20 +9,12 @@ import TaskEditDialog, {
 import AssignAppDialog from '../components/board/AssignAppDialog';
 import { statusMeta, type TaskItem } from '../pmTypes';
 import { formatDay } from '../lib/formatDate';
-import { currentPlans, planLinks, isoLocal } from '../lib/planLinks';
+import { currentPlans, planLinks } from '../lib/planLinks';
+import { isoLocal } from '../lib/pmDates';
+import { sortDate } from '../lib/pmSort';
+import { descLines } from '../lib/pmText';
 
 const UNASSIGNED = '_none';
-
-// Ngày dùng để sắp xếp desc: ưu tiên planDate → endDate → startDate.
-const sortDate = (t: TaskItem) => t.planDate || t.endDate || t.startDate || '';
-
-// Các dòng mô tả đã làm sạch (bỏ #, gạch đầu dòng, dòng rỗng & dòng trùng tiêu đề).
-function descLines(t: TaskItem): string[] {
-  return (t.description ?? '')
-    .split('\n')
-    .map((l) => l.replace(/^\s*[#>*-]+\s*/, '').trim())
-    .filter((l) => l.length > 0 && l !== t.title);
-}
 
 export default function BoardAppTasksPage() {
   const { appId = '' } = useParams();

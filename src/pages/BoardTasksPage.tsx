@@ -13,12 +13,10 @@ import {
   type TaskItem,
 } from '../pmTypes';
 import { formatDay } from '../lib/formatDate';
-import { currentPlans, planLinks, isoLocal } from '../lib/planLinks';
-
-// Ngày release để tìm bản mới nhất: ưu tiên planDate rồi endDate.
-const relDate = (t: TaskItem) => t.planDate || t.endDate || '';
-// Ngày để sắp xếp task đang chạy (mới nhất trước).
-const actDate = (t: TaskItem) => t.planDate || t.endDate || t.startDate || '';
+import { currentPlans, planLinks } from '../lib/planLinks';
+import { isoLocal } from '../lib/pmDates';
+import { relDate, sortDate as actDate } from '../lib/pmSort';
+import { descLines } from '../lib/pmText';
 
 // Task "đang chạy" / "đang chờ" — dùng registry status tập trung.
 const isRunning = (t: TaskItem) => isRunningStatus(t.status);
@@ -43,14 +41,6 @@ function latest(tasks: TaskItem[]): TaskItem | undefined {
   return tasks
     .filter((t) => t.status === DONE_STATUS && relDate(t))
     .sort((a, b) => relDate(b).localeCompare(relDate(a)))[0];
-}
-
-// Các dòng mô tả task đã làm sạch (bỏ #, gạch đầu dòng, dòng rỗng & dòng trùng tiêu đề).
-function descLines(t: TaskItem): string[] {
-  return (t.description ?? '')
-    .split('\n')
-    .map((l) => l.replace(/^\s*[#>*-]+\s*/, '').trim())
-    .filter((l) => l.length > 0 && l !== t.title);
 }
 
 const UNASSIGNED = '_none';

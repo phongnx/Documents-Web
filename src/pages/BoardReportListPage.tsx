@@ -5,13 +5,7 @@ import BoardNav from '../components/board/BoardNav';
 import { newReportTemplate } from '../pmTypes';
 import ReportPreview from '../components/board/ReportPreview';
 import { formatDateVi } from '../lib/reportFormat';
-
-// yyyy-mm-dd theo giờ địa phương (không lệch múi giờ như toISOString).
-function isoLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate(),
-  ).padStart(2, '0')}`;
-}
+import { isoLocal } from '../lib/pmDates';
 
 export default function BoardReportListPage() {
   const { reports, loading, addReport, deleteReport } = usePm();

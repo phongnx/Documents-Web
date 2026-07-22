@@ -11,6 +11,7 @@ import {
 } from '../pmTypes';
 import { buildDetailedHtml, buildReleaseTestHtml } from '../lib/planExport';
 import { downloadTextFile } from '../lib/downloadHelpers';
+import { suggestAppId } from '../lib/pmText';
 import TaskPickerDialog from '../components/board/TaskPickerDialog';
 
 type PlanForm = Omit<WeeklyPlan, 'id' | 'order' | 'createdAt' | 'updatedAt'>;
@@ -29,11 +30,6 @@ function toForm(p: WeeklyPlan): PlanForm {
 // Tên file export gọn (bỏ ký tự cấm).
 function fileBase(name: string): string {
   return name.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_').slice(0, 80) || 'plan';
-}
-
-// Chuẩn hóa tên để so khớp gợi ý app (thường hóa, bỏ khoảng trắng & ký tự đặc biệt).
-function normName(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 export default function BoardPlanEditPage() {
@@ -196,18 +192,6 @@ export default function BoardPlanEditPage() {
     setWorkstream(pi, wi, { milestone: { type: key, text: ms?.text ?? '' } });
   };
 
-  // Gợi ý app khớp tên project (khớp chính xác trước, rồi chứa nhau); '' nếu không có.
-  const suggestAppId = (name: string): string => {
-    const pn = normName(name);
-    if (!pn) return '';
-    const exact = apps.find((a) => normName(a.name) === pn);
-    if (exact) return exact.id;
-    const partial = apps.find(
-      (a) => normName(a.name).includes(pn) || pn.includes(normName(a.name)),
-    );
-    return partial?.id ?? '';
-  };
-
   // App focus mặc định cho dialog chọn task: ưu tiên appId của project,
   // rồi match theo tên project ↔ tên app (không phân biệt hoa/thường); không có → dialog tự về app đầu.
   const pickerAppId = (() => {
@@ -314,7 +298,7 @@ export default function BoardPlanEditPage() {
 
           {!p.appId &&
             (() => {
-              const sug = suggestAppId(p.name);
+              const sug = suggestAppId(p.name, apps);
               const app = sug ? apps.find((a) => a.id === sug) : null;
               return app ? (
                 <button

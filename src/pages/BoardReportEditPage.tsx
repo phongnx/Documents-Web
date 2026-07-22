@@ -5,6 +5,7 @@ import BoardNav from '../components/board/BoardNav';
 import ReportPreview from '../components/board/ReportPreview';
 import { buildReportText } from '../lib/reportFormat';
 import { downloadTextFile } from '../lib/downloadHelpers';
+import { suggestAppId } from '../lib/pmText';
 import type { DailyReport, ReportProject } from '../pmTypes';
 
 type ReportForm = Omit<DailyReport, 'id' | 'order' | 'createdAt' | 'updatedAt'>;
@@ -15,11 +16,6 @@ function toForm(r: DailyReport): ReportForm {
     date: r.date,
     projects: r.projects ?? [],
   };
-}
-
-// Chuẩn hóa tên để so khớp gợi ý app (thường hóa, bỏ khoảng trắng & ký tự đặc biệt).
-function normName(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 export default function BoardReportEditPage() {
@@ -131,18 +127,6 @@ export default function BoardReportEditPage() {
     downloadTextFile(`report_${form.date}.txt`, buildReportText(full), 'text/plain');
   };
 
-  // Gợi ý app khớp tên project (khớp chính xác trước, rồi chứa nhau); '' nếu không có.
-  const suggestAppId = (name: string): string => {
-    const pn = normName(name);
-    if (!pn) return '';
-    const exact = apps.find((a) => normName(a.name) === pn);
-    if (exact) return exact.id;
-    const partial = apps.find(
-      (a) => normName(a.name).includes(pn) || pn.includes(normName(a.name)),
-    );
-    return partial?.id ?? '';
-  };
-
   return (
     <div className="container">
       <BoardNav />
@@ -244,7 +228,7 @@ export default function BoardReportEditPage() {
 
           {!p.appId &&
             (() => {
-              const sug = suggestAppId(p.name);
+              const sug = suggestAppId(p.name, apps);
               const app = sug ? apps.find((a) => a.id === sug) : null;
               return app ? (
                 <button

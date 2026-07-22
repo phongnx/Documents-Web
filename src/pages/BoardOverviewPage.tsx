@@ -5,13 +5,11 @@ import BoardNav from '../components/board/BoardNav';
 import ImportDataButton from '../components/board/ImportDataButton';
 import PlanProgressCard from '../components/board/PlanProgressCard';
 import { BarChart, DonutChart, type DonutSegment } from '../components/board/charts';
-import { DONE_STATUS, statusMeta, type TaskItem } from '../pmTypes';
+import { DONE_STATUS, statusMeta } from '../pmTypes';
 import { formatDay } from '../lib/formatDate';
+import { relDate } from '../lib/pmSort';
 
 const RELEASE_TYPE = 'Release';
-
-// Ngày dùng để xếp release theo thời gian: ưu tiên planDate rồi endDate.
-const relDate = (t: TaskItem) => t.planDate || t.endDate || '';
 
 export default function BoardOverviewPage() {
   const { apps, tasks, meta, loading } = usePm();
