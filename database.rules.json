@@ -25,6 +25,11 @@
             "$entryId": {
               ".validate": "newData.hasChildren(['delta','scoredAt']) && newData.child('delta').isNumber() && newData.parent().parent().child('entries').child($entryId).exists()"
             }
+          },
+          "leaves": {
+            "$leaveId": {
+              ".validate": "newData.hasChildren(['id','startDate','days','createdAt']) && newData.child('startDate').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('days').isNumber() && newData.child('days').val() >= 0.5 && newData.child('days').val() <= 3"
+            }
           }
         }
       },

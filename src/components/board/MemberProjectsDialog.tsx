@@ -44,8 +44,8 @@ export default function MemberProjectsDialog({ member, onClose }: Props) {
           </button>
         </div>
         <p className="muted modal-subtitle">
-          Member chỉ chọn được các project được gán khi log task. Bỏ chọn hết = nhập tự
-          do (gợi ý tất cả app).
+          Member CHỈ chọn được các project được gán khi log task. Chưa gán project nào =
+          member không log được (trang log hiện cảnh báo liên hệ leader).
         </p>
 
         <div className="kpi-projects-list">

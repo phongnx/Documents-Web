@@ -91,6 +91,7 @@ export default function KpiSharePage() {
             categories={sheet.meta?.categories ?? []}
             projectNames={sheet.meta?.projectNames ?? []}
             strictProjects={sheet.meta?.strictProjects === true}
+            leaves={sheet.leaves}
             locked={locked}
             onAdd={sheet.addEntry}
             onUpdate={sheet.updateEntry}

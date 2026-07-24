@@ -7,6 +7,7 @@ import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import KpiLogTable from '../components/board/KpiLogTable';
 import KpiScorePopover from '../components/board/KpiScorePopover';
+import KpiLeaveDialog from '../components/board/KpiLeaveDialog';
 import { useKpiSheet } from '../hooks/useKpiSheet';
 import { isoLocal } from '../lib/pmDates';
 import type { KpiEntry } from '../kpiTypes';
@@ -19,6 +20,7 @@ export default function BoardKpiMemberPage() {
   const [monthKey, setMonthKey] = useState(isoLocal(new Date()).slice(0, 7));
   const [scoring, setScoring] = useState<KpiEntry | null>(null);
   const [copied, setCopied] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const sheet = useKpiSheet(member?.token);
 
   // Đồng bộ snapshot danh mục (categories/projectNames/tên) sang sheet mỗi lần mở trang.
@@ -47,6 +49,34 @@ export default function BoardKpiMemberPage() {
     );
   }
 
+  // Accept nhanh điểm tự chấm: 1 dòng không hỏi; nhiều dòng confirm kèm tổng điểm.
+  const acceptEntries = (list: KpiEntry[]) => {
+    const pending = list.filter((e) => !sheet.scores[e.id]);
+    if (pending.length === 0) return;
+    if (pending.length > 1) {
+      const total = Number(
+        pending
+          .reduce((s, e) => s + (typeof e.selfDelta === 'number' ? e.selfDelta : 0), 0)
+          .toFixed(2),
+      );
+      if (
+        !window.confirm(
+          `Chấp nhận ${pending.length} dòng theo điểm tự chấm (tổng điểm ${total >= 0 ? '+' : ''}${total})?`,
+        )
+      )
+        return;
+    }
+    sheet.setScoresBulk(
+      pending.map((e) => ({
+        entryId: e.id,
+        score: {
+          delta: typeof e.selfDelta === 'number' ? e.selfDelta : 0,
+          reason: 'Chấp nhận điểm tự chấm',
+        },
+      })),
+    );
+  };
+
   const shareUrl = `${window.location.origin}/share/kpi/${member.token}`;
   const onCopy = async () => {
     try {
@@ -70,6 +100,9 @@ export default function BoardKpiMemberPage() {
           {member.active ? '👤' : '🔒'} {member.name}
         </strong>
         <div className="plan-toolbar">
+          <button type="button" onClick={() => setLeaveOpen(true)}>
+            🏖 Nghỉ phép{sheet.leaves.length > 0 ? ` (${sheet.leaves.length})` : ''}
+          </button>
           <button type="button" onClick={onCopy} title={shareUrl}>
             {copied ? '✓ Đã copy' : '📋 Copy link share'}
           </button>
@@ -98,8 +131,20 @@ export default function BoardKpiMemberPage() {
           onMonthChange={setMonthKey}
           categories={sheet.meta?.categories ?? []}
           projectNames={sheet.meta?.projectNames ?? []}
+          leaves={sheet.leaves}
           onScoreClick={setScoring}
+          onAcceptEntries={acceptEntries}
           onDeleteWithScore={sheet.deleteEntryWithScore}
+        />
+      )}
+
+      {leaveOpen && (
+        <KpiLeaveDialog
+          memberName={member.name}
+          leaves={sheet.leaves}
+          onAdd={sheet.addLeave}
+          onDelete={sheet.deleteLeave}
+          onClose={() => setLeaveOpen(false)}
         />
       )}
 

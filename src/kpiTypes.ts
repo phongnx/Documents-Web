@@ -1,6 +1,7 @@
 // Model cho tính năng "KPI member log": leader tạo trang log riêng cho từng member
 // (share link, member edit ẩn danh), chấm điểm KPI theo từng dòng task.
 // Dữ liệu sheet tại shared/kpi/{token}; danh sách member tại users/{uid}/pm/members.
+import { addDays } from './lib/pmDates';
 
 /** 1 dòng log của member — shared/kpi/{token}/entries/{entryId}.
  *  Duration KHÔNG lưu — luôn tính từ start/end (một nguồn sự thật). */
@@ -48,6 +49,65 @@ export interface KpiSheetMeta {
   /** true = khóa ghi (member nghỉ/lộ link) — rule chặn member ghi entries. */
   locked?: boolean;
   createdAt: string;
+}
+
+/** 1 đợt nghỉ phép — shared/kpi/{token}/leaves/{leaveId}. CHỈ leader ghi (quyền owner),
+ *  member đọc để hiển thị + validate giờ log. Min nửa ngày, max 3 ngày (rule validate). */
+export interface KpiLeave {
+  id: string;
+  /** Ngày bắt đầu nghỉ 'yyyy-mm-dd'. */
+  startDate: string;
+  /** Số ngày nghỉ: 0.5 → 3, bước 0.5. */
+  days: number;
+  /** Phần lẻ nửa ngày (khi days lẻ .5) rơi vào buổi nào của ngày cuối; mặc định 'am'. */
+  half?: 'am' | 'pm';
+  note?: string;
+  createdAt: string;
+}
+
+/** Phần nghỉ của 1 ngày: cả ngày / buổi sáng / buổi chiều. */
+export type LeavePortion = 'full' | 'am' | 'pm';
+
+/** Mốc chia buổi sáng/chiều (phút từ 0h) — 12:00. */
+export const LEAVE_NOON_MIN = 12 * 60;
+
+export const LEAVE_DAY_OPTIONS = [0.5, 1, 1.5, 2, 2.5, 3];
+
+export function leaveLabel(p: LeavePortion): string {
+  return p === 'full' ? 'cả ngày' : p === 'am' ? 'buổi sáng' : 'buổi chiều';
+}
+
+/** Expand các đợt nghỉ thành map ngày → phần nghỉ (theo ngày lịch, kể cả T7/CN).
+ *  Cùng ngày dính cả sáng lẫn chiều (2 đợt khác nhau) → gộp thành 'full'. */
+export function leavePortionsOf(leaves: KpiLeave[]): Map<string, LeavePortion> {
+  const map = new Map<string, LeavePortion>();
+  const put = (date: string, p: LeavePortion) => {
+    const cur = map.get(date);
+    map.set(date, !cur || cur === p ? p : 'full');
+  };
+  for (const l of leaves) {
+    const fullDays = Math.floor(l.days);
+    const hasHalf = l.days % 1 !== 0;
+    let d = l.startDate;
+    for (let i = 0; i < fullDays; i++) {
+      put(d, 'full');
+      d = addDays(d, 1);
+    }
+    if (hasHalf) put(d, l.half === 'pm' ? 'pm' : 'am');
+  }
+  return map;
+}
+
+/** Khoảng giờ [startMin, endMin) có đè lên thời gian nghỉ không.
+ *  Nghỉ sáng chặn phần trước 12:00, nghỉ chiều chặn từ 12:00 trở đi. */
+export function overlapsLeave(
+  portion: LeavePortion,
+  startMin: number,
+  endMin: number,
+): boolean {
+  if (portion === 'full') return true;
+  if (portion === 'am') return startMin < LEAVE_NOON_MIN;
+  return endMin > LEAVE_NOON_MIN;
 }
 
 /** Bản ghi member của leader — users/{uid}/pm/members/{memberId}. */
@@ -147,12 +207,21 @@ export function parseHm(s: string | undefined): number | null {
   return h * 60 + mi;
 }
 
-/** Số phút của 1 dòng; null nếu thiếu giờ hoặc end < start (không hỗ trợ ca qua đêm). */
+/** Giờ nghỉ trưa (phút từ 0h): 11:45 → 13:15 — task vắt qua sẽ bị trừ phần giao. */
+export const LUNCH_START_MIN = 11 * 60 + 45;
+export const LUNCH_END_MIN = 13 * 60 + 15;
+
+/** Số phút của 1 dòng; null nếu thiếu giờ hoặc end < start (không hỗ trợ ca qua đêm).
+ *  Tự trừ phần giao với giờ nghỉ trưa 11:45–13:15 (VD 08:00–15:00 = 7h − 1h30 = 5h30). */
 export function durationMin(e: Pick<KpiEntry, 'start' | 'end'>): number | null {
   const a = parseHm(e.start);
   const b = parseHm(e.end);
   if (a === null || b === null || b < a) return null;
-  return b - a;
+  const lunch = Math.max(
+    0,
+    Math.min(b, LUNCH_END_MIN) - Math.max(a, LUNCH_START_MIN),
+  );
+  return b - a - lunch;
 }
 
 /** Phút → ' 7h30' gọn (0 phút lẻ thì bỏ, VD '8h'). */

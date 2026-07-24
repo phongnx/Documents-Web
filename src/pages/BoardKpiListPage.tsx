@@ -94,7 +94,9 @@ export default function BoardKpiListPage() {
     if (members.some((m) => m.name.trim().toLowerCase() === n.toLowerCase())) {
       if (!window.confirm(`Đã có member tên "${n}". Vẫn tạo thêm?`)) return;
     }
-    addMember(n);
+    // Mở luôn dialog gán project — member chưa gán sẽ KHÔNG log được task.
+    const created = addMember(n);
+    if (created) setAssignFor(created);
   };
 
   const onRename = (id: string, current: string) => {

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { onValue, ref, set, update } from 'firebase/database';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../lib/firebase';
-import type { KpiEntry, KpiScore, KpiSheetMeta } from '../kpiTypes';
+import type { KpiEntry, KpiLeave, KpiScore, KpiSheetMeta } from '../kpiTypes';
 
 export type KpiSheetState = 'loading' | 'ready' | 'notfound';
 
@@ -15,6 +15,12 @@ export interface KpiSheet {
   meta: KpiSheetMeta | null;
   entries: KpiEntry[];
   scores: Record<string, KpiScore>;
+  /** Các đợt nghỉ phép (leader quản lý, member đọc để hiển thị + validate giờ log). */
+  leaves: KpiLeave[];
+  /** Leader: thêm 1 đợt nghỉ phép. */
+  addLeave: (input: Omit<KpiLeave, 'id' | 'createdAt'>) => void;
+  /** Leader: xóa 1 đợt nghỉ phép. */
+  deleteLeave: (id: string) => void;
   /** Thêm dòng mới; trả id (null nếu không ghi được). */
   addEntry: (input: KpiEntryInput) => string | null;
   /** Sửa 1 dòng (field undefined trong patch = xóa field). */
@@ -22,6 +28,10 @@ export interface KpiSheet {
   deleteEntry: (id: string) => void;
   /** Leader: chấm/ghi đè điểm 1 dòng. */
   setScore: (entryId: string, score: Omit<KpiScore, 'scoredAt'>) => void;
+  /** Leader: chấm nhiều dòng trong 1 lần ghi nguyên tử (accept nhanh điểm tự chấm). */
+  setScoresBulk: (
+    items: { entryId: string; score: Omit<KpiScore, 'scoredAt'> }[],
+  ) => void;
   /** Leader: xóa điểm (mở khóa dòng cho member sửa lại). */
   clearScore: (entryId: string) => void;
   /** Leader: xóa cả dòng + điểm trong 1 lần ghi. */
@@ -62,6 +72,7 @@ export function useKpiSheet(
   const [meta, setMeta] = useState<KpiSheetMeta | null>(null);
   const [entries, setEntries] = useState<KpiEntry[]>([]);
   const [scores, setScores] = useState<Record<string, KpiScore>>({});
+  const [leaves, setLeaves] = useState<KpiLeave[]>([]);
 
   useEffect(() => {
     if (!db || !token) {
@@ -76,18 +87,26 @@ export function useKpiSheet(
           meta?: KpiSheetMeta;
           entries?: Record<string, KpiEntry>;
           scores?: Record<string, KpiScore>;
+          leaves?: Record<string, KpiLeave>;
         } | null;
         if (!val?.meta) {
           // Token chưa được tạo hoặc đã bị leader thu hồi (đổi link/xóa member).
           setMeta(null);
           setEntries([]);
           setScores({});
+          setLeaves([]);
           setState('notfound');
           return;
         }
         setMeta(val.meta);
         setEntries(Object.values(val.entries ?? {}));
         setScores(val.scores ?? {});
+        // Mới nhất trước (theo ngày bắt đầu) để dialog quản lý dễ nhìn.
+        setLeaves(
+          Object.values(val.leaves ?? {}).sort((a, b) =>
+            b.startDate.localeCompare(a.startDate),
+          ),
+        );
         setState('ready');
       },
       () => setState('notfound'),
@@ -160,10 +179,53 @@ export function useKpiSheet(
     [token, failed],
   );
 
+  const setScoresBulk = useCallback(
+    (items: { entryId: string; score: Omit<KpiScore, 'scoredAt'> }[]) => {
+      if (!db || !token || items.length === 0) return;
+      const now = new Date().toISOString();
+      // Gom mọi score vào 1 multi-path update — hoặc tất cả hoặc không gì.
+      const writes: Record<string, unknown> = {};
+      for (const it of items) {
+        writes[`shared/kpi/${token}/scores/${it.entryId}`] = {
+          delta: it.score.delta,
+          scoredAt: now,
+          ...(it.score.reason ? { reason: it.score.reason } : {}),
+          ...(it.score.ruleKey ? { ruleKey: it.score.ruleKey } : {}),
+        } satisfies KpiScore;
+      }
+      update(ref(db), writes).catch(failed);
+    },
+    [token, failed],
+  );
+
   const clearScore = useCallback(
     (entryId: string) => {
       if (!db || !token) return;
       set(ref(db, `shared/kpi/${token}/scores/${entryId}`), null).catch(failed);
+    },
+    [token, failed],
+  );
+
+  const addLeave = useCallback(
+    (input: Omit<KpiLeave, 'id' | 'createdAt'>) => {
+      if (!db || !token) return;
+      const leave: KpiLeave = {
+        id: uuidv4(),
+        startDate: input.startDate,
+        days: input.days,
+        createdAt: new Date().toISOString(),
+        ...(input.half ? { half: input.half } : {}),
+        ...(input.note ? { note: input.note } : {}),
+      };
+      set(ref(db, `shared/kpi/${token}/leaves/${leave.id}`), leave).catch(failed);
+    },
+    [token, failed],
+  );
+
+  const deleteLeave = useCallback(
+    (id: string) => {
+      if (!db || !token) return;
+      set(ref(db, `shared/kpi/${token}/leaves/${id}`), null).catch(failed);
     },
     [token, failed],
   );
@@ -185,11 +247,15 @@ export function useKpiSheet(
     meta,
     entries,
     scores,
+    leaves,
     addEntry,
     updateEntry,
     deleteEntry,
     setScore,
+    setScoresBulk,
     clearScore,
     deleteEntryWithScore,
+    addLeave,
+    deleteLeave,
   };
 }

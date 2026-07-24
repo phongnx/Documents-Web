@@ -11,8 +11,13 @@ import {
   fmtHours,
   groupEntriesByDay,
   KPI_MONTH_BASE,
+  leaveLabel,
+  leavePortionsOf,
+  overlapsLeave,
+  parseHm,
   totalOf,
   type KpiEntry,
+  type KpiLeave,
   type KpiScore,
 } from '../../kpiTypes';
 import type { KpiEntryInput } from '../../hooks/useKpiSheet';
@@ -33,6 +38,8 @@ interface Props {
   projectNames: string[];
   /** true = member CHỈ chọn được project trong projectNames (đã được leader gán). */
   strictProjects?: boolean;
+  /** Các đợt nghỉ phép — hiển thị ở block ngày + validate giờ log không trùng giờ nghỉ. */
+  leaves?: KpiLeave[];
   /** Member mode: true = sheet bị khóa, ẩn mọi nút sửa. */
   locked?: boolean;
   onAdd?: (input: KpiEntryInput) => string | null;
@@ -40,6 +47,8 @@ interface Props {
   onDelete?: (id: string) => void;
   /** Leader: click ô Điểm của 1 dòng. */
   onScoreClick?: (entry: KpiEntry) => void;
+  /** Leader: chấp nhận nhanh điểm tự chấm cho các dòng chưa chấm (1 dòng / cả ngày / cả tháng). */
+  onAcceptEntries?: (entries: KpiEntry[]) => void;
   /** Leader: xóa dòng (kèm điểm nếu có). */
   onDeleteWithScore?: (id: string) => void;
 }
@@ -124,11 +133,13 @@ export default function KpiLogTable({
   categories,
   projectNames,
   strictProjects,
+  leaves,
   locked,
   onAdd,
   onUpdate,
   onDelete,
   onScoreClick,
+  onAcceptEntries,
   onDeleteWithScore,
 }: Props) {
   const [draft, setDraft] = useState<RowDraft | null>(null);
@@ -150,6 +161,9 @@ export default function KpiLogTable({
     setErrFields(new Set());
     setErrMsg('');
   };
+
+  // Map ngày → phần nghỉ phép (cả ngày / sáng / chiều) để hiển thị + validate.
+  const leaveMap = leavePortionsOf(leaves ?? []);
 
   // Bộ field tối thiểu khi lưu 1 dòng: start/end hợp lệ + giai đoạn + project + task.
   const validateDraft = (d: RowDraft): { fields: Set<string>; msg: string } => {
@@ -181,19 +195,46 @@ export default function KpiLogTable({
       fields.add('end');
       msg += `${msg ? ' ' : ''}Giờ kết thúc phải sau giờ bắt đầu.`;
     }
+    // Rule nghỉ phép: cả ngày → không log được; nửa ngày → giờ không được đè lên buổi nghỉ.
+    const portion = leaveMap.get(d.date);
+    if (portion === 'full') {
+      fields.add('start');
+      fields.add('end');
+      msg += `${msg ? ' ' : ''}Ngày này nghỉ phép cả ngày — không log được task.`;
+    } else if (portion) {
+      const s = parseHm(d.start);
+      const e = parseHm(d.end);
+      if (s !== null && e !== null && e > s && overlapsLeave(portion, s, e)) {
+        fields.add('start');
+        fields.add('end');
+        msg += `${msg ? ' ' : ''}Trùng thời gian nghỉ phép (${leaveLabel(portion)}) — ${
+          portion === 'am' ? 'chỉ log từ 12:00 trở đi' : 'chỉ log trước 12:00'
+        }.`;
+      }
+    }
     return { fields, msg };
   };
 
-  const canEdit = mode === 'member' && !locked;
+  // Member chưa được gán project nào → không log được (project là field bắt buộc).
+  const noProjects = strictProjects === true && projectNames.length === 0;
+  const canEdit = mode === 'member' && !locked && !noProjects;
   const monthEntries = entriesOfMonth(entries, monthKey);
   const byDay = groupEntriesByDay(monthEntries);
   // Dòng mới của ngày chưa có entry nào → thêm ngày đó vào danh sách nhóm.
   if (draft && !draft.id && draft.date.startsWith(monthKey) && !byDay.has(draft.date)) {
     byDay.set(draft.date, []);
   }
+  // Ngày nghỉ phép trong tháng chưa có dòng log → vẫn hiện block ngày (kèm info nghỉ).
+  for (const d of leaveMap.keys()) {
+    if (d.startsWith(monthKey) && !byDay.has(d)) byDay.set(d, []);
+  }
   const days = [...byDay.keys()].sort((a, b) => b.localeCompare(a));
   const monthTotal = totalOf(monthEntries, scores);
   const monthScore = Number((KPI_MONTH_BASE + monthTotal.delta).toFixed(2));
+  // Các dòng "chờ xác nhận" (chưa có điểm leader) — cho nút accept nhanh của leader.
+  const pendingOf = (list: KpiEntry[]) => list.filter((e) => !scores[e.id]);
+  const canAccept = mode === 'leader' && !!onAcceptEntries;
+  const pendingMonth = canAccept ? pendingOf(monthEntries) : [];
 
   const saveDraft = () => {
     if (!draft || !draft.date) return;
@@ -432,6 +473,19 @@ export default function KpiLogTable({
           ) : (
             ''
           )}
+          {!score && canAccept && (
+            <button
+              type="button"
+              className="doc-action kpi-accept-btn"
+              title="Chấp nhận điểm tự chấm cho dòng này"
+              onClick={(ev) => {
+                ev.stopPropagation();
+                onAcceptEntries!([e]);
+              }}
+            >
+              ✓
+            </button>
+          )}
           {mode === 'member' && score && ' 🔒'}
         </td>
         <td className="kpi-actions" onClick={(ev) => ev.stopPropagation()}>
@@ -477,6 +531,12 @@ export default function KpiLogTable({
 
   return (
     <div className="kpi-log">
+      {mode === 'member' && !locked && noProjects && (
+        <p className="warn kpi-locked-banner">
+          ⚠ Bạn chưa được gán project nào — liên hệ leader để được gán trước khi log
+          task.
+        </p>
+      )}
       {/* Header tháng: điều hướng + KPI tháng + tổng giờ */}
       <div className="kpi-month-bar">
         <div className="kpi-month-nav">
@@ -513,6 +573,16 @@ export default function KpiLogTable({
             ＋ Thêm dòng hôm nay
           </button>
         )}
+        {canAccept && pendingMonth.length > 0 && (
+          <button
+            type="button"
+            className="primary kpi-add-today"
+            title="Chấp nhận điểm tự chấm cho mọi dòng chưa chấm trong tháng"
+            onClick={() => onAcceptEntries!(pendingMonth)}
+          >
+            ✓ Chấp nhận tất cả ({pendingMonth.length})
+          </button>
+        )}
       </div>
 
       {/* Datalist gợi ý project dùng chung cho mọi dòng đang sửa */}
@@ -547,14 +617,20 @@ export default function KpiLogTable({
             {days.map((date) => {
               const list = byDay.get(date) ?? [];
               const dayTotal = totalOf(list, scores);
+              const leave = leaveMap.get(date);
               return (
                 <tbody key={date}>
                   <tr className="kpi-day-row">
                     <td colSpan={8}>
                       {weekdayVN(date)} · {formatDateVi(date)}
+                      {leave && (
+                        <span className="kpi-leave-badge">
+                          🏖 Nghỉ phép: {leaveLabel(leave)}
+                        </span>
+                      )}
                     </td>
                     <td colSpan={2} className="kpi-day-add">
-                      {canEdit && (
+                      {canEdit && leave !== 'full' && (
                         <button
                           type="button"
                           className="doc-action"
@@ -564,26 +640,38 @@ export default function KpiLogTable({
                           ＋
                         </button>
                       )}
+                      {canAccept && pendingOf(list).length > 0 && (
+                        <button
+                          type="button"
+                          className="doc-action"
+                          title="Chấp nhận điểm tự chấm cho các dòng chưa chấm của ngày này"
+                          onClick={() => onAcceptEntries!(pendingOf(list))}
+                        >
+                          ✓ Ngày ({pendingOf(list).length})
+                        </button>
+                      )}
                     </td>
                   </tr>
                   {list.map(renderRow)}
                   {draft && !draft.id && draft.date === date && renderEditRow(draft, 'new')}
-                  <tr className="kpi-sum-row">
-                    <td colSpan={2}>Tổng</td>
-                    <td className="kpi-dur">{fmtHours(dayTotal.minutes)}</td>
-                    <td colSpan={5} />
-                    <td className="kpi-score-cell">
-                      {(dayTotal.scoredCount > 0 ||
-                        list.some((e) => typeof e.selfDelta === 'number')) && (
-                        <span
-                          className={`kpi-score ${dayTotal.delta > 0 ? 'pos' : dayTotal.delta < 0 ? 'neg' : 'zero'}`}
-                        >
-                          {fmtDelta(dayTotal.delta)}
-                        </span>
-                      )}
-                    </td>
-                    <td />
-                  </tr>
+                  {(list.length > 0 || (draft && !draft.id && draft.date === date)) && (
+                    <tr className="kpi-sum-row">
+                      <td colSpan={2}>Tổng</td>
+                      <td className="kpi-dur">{fmtHours(dayTotal.minutes)}</td>
+                      <td colSpan={5} />
+                      <td className="kpi-score-cell">
+                        {(dayTotal.scoredCount > 0 ||
+                          list.some((e) => typeof e.selfDelta === 'number')) && (
+                          <span
+                            className={`kpi-score ${dayTotal.delta > 0 ? 'pos' : dayTotal.delta < 0 ? 'neg' : 'zero'}`}
+                          >
+                            {fmtDelta(dayTotal.delta)}
+                          </span>
+                        )}
+                      </td>
+                      <td />
+                    </tr>
+                  )}
                 </tbody>
               );
             })}

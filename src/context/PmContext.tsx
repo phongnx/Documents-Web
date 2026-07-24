@@ -696,8 +696,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
   // ---------- KPI member log ----------
 
   // Snapshot meta cho sheet member (member ẩn danh không đọc được users/{uid}/pm/meta).
-  // Member đã gán project → projectNames CHỈ gồm các project gán + strictProjects=true;
-  // chưa gán (hoặc app gán đã bị xóa hết) → gợi ý tất cả app, nhập tự do.
+  // STRICT tuyệt đối: projectNames CHỈ gồm các project được gán (có thể rỗng — member
+  // chưa gán thì KHÔNG log được, không fallback "tất cả app").
   const kpiSnapshot = useCallback(
     (
       member?: KpiMember,
@@ -709,13 +709,10 @@ export function PmProvider({ children }: { children: ReactNode }) {
       const assigned = (member?.projectIds ?? [])
         .map((id) => apps.find((a) => a.id === id))
         .filter((a): a is AppItem => !!a);
-      const strict = assigned.length > 0;
       return {
         categories: stateRef.current.meta.kpiRules.map((g) => g.label),
-        projectNames: strict
-          ? assigned.map((a) => a.name)
-          : apps.filter((a) => !a.archived).map((a) => a.name),
-        strictProjects: strict,
+        projectNames: assigned.map((a) => a.name),
+        strictProjects: true,
         // Snapshot quy chế để member xem preview (ẩn danh không đọc được meta của leader).
         rules: stateRef.current.meta.kpiRules,
       };

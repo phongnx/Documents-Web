@@ -1957,6 +1957,12 @@ a:hover {
 .kpi-score-click {
   cursor: pointer;
 }
+/* Nút ✓ chấp nhận nhanh điểm tự chấm (leader). */
+.kpi-accept-btn {
+  margin-left: 4px;
+  color: #16a34a;
+  font-weight: 700;
+}
 .kpi-score-click:hover {
   background: var(--hover-bg);
 }
@@ -2048,6 +2054,46 @@ a:hover {
 .kpi-score-form {
   grid-template-columns: 120px 1fr;
 }
+/* Nghỉ phép: badge ở block ngày + dialog quản lý */
+.kpi-leave-badge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(234, 179, 8, 0.16);
+  color: #b45309;
+}
+.kpi-leave-dialog {
+  max-width: 560px;
+}
+.kpi-leave-form {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+.kpi-leave-add {
+  margin: 10px 0 14px;
+  align-self: flex-start;
+}
+.kpi-leave-list {
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kpi-leave-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--subtle);
+}
+
 /* Dialog gán project cho member */
 .kpi-projects-dialog {
   max-width: 480px;
