@@ -15,13 +15,15 @@ export default function BoardReportListPage() {
   // Id báo cáo vừa copy (hiện "✓ Đã copy" 1.5s).
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Tập id đang mở preview. Mặc định mở báo cáo mới nhất (seed 1 lần).
+  // Tập id đang mở preview. Chỉ tự mở báo cáo của HÔM NAY (seed 1 lần);
+  // toàn báo cáo quá khứ → mặc định collapse hết.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const seeded = useRef(false);
   useEffect(() => {
     if (seeded.current || reports.length === 0) return;
     seeded.current = true;
-    setExpanded(new Set([reports[0].id]));
+    const todayIso = isoLocal(new Date());
+    setExpanded(new Set(reports.filter((r) => r.date === todayIso).map((r) => r.id)));
   }, [reports]);
 
   const toggle = (id: string) =>

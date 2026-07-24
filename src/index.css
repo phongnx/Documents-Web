@@ -1804,6 +1804,17 @@ a:hover {
 .report-project-expanded {
   border-color: var(--primary);
 }
+/* Tiêu đề "Dự án (N)" + nút mở/thu tất cả (editor Plan tuần). */
+.plan-projects-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Tóm tắt nhánh khi dự án đang thu gọn. */
+.plan-proj-summary {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+}
 .report-preview-panel {
   background: var(--card);
 }

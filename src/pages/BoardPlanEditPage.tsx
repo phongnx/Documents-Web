@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePm, useReleaseKeys } from '../context/PmContext';
 import { useSeededForm } from '../hooks/useSeededForm';
@@ -51,6 +51,17 @@ export default function BoardPlanEditPage() {
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   // Giá trị select "thêm dự án từ app" (reset về '' sau mỗi lần chọn).
   const [addAppSel, setAddAppSel] = useState('');
+  // Chỉ số dự án đang MỞ thân (nhánh/milestone); mặc định thu gọn hết (như Báo cáo ngày).
+  // Reset khi chuyển sang plan khác.
+  const [openProjects, setOpenProjects] = useState<Set<number>>(new Set());
+  useEffect(() => setOpenProjects(new Set()), [id]);
+  const toggleOpen = (pi: number) =>
+    setOpenProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(pi)) next.delete(pi);
+      else next.add(pi);
+      return next;
+    });
 
   if (loading && !form) {
     return (
@@ -84,16 +95,38 @@ export default function BoardPlanEditPage() {
       ),
     });
 
-  const addProject = () =>
+  // Dự án mới append cuối → tự MỞ để nhập được ngay.
+  const openNewProject = () =>
+    setOpenProjects((prev) => new Set([...prev, form.projects.length]));
+  const addProject = () => {
     patchProjects([...form.projects, { name: 'Dự án mới', workstreams: [] }]);
+    openNewProject();
+  };
   // Thêm dự án gắn với 1 app có sẵn (để chọn task khi thêm nhánh).
   const addProjectFromApp = (appId: string) => {
     const app = apps.find((a) => a.id === appId);
     if (!app) return;
     patchProjects([...form.projects, { name: app.name, appId: app.id, workstreams: [] }]);
+    openNewProject();
   };
-  const removeProject = (pi: number) =>
+  const removeProject = (pi: number) => {
     patchProjects(form.projects.filter((_, i) => i !== pi));
+    // Dồn chỉ số mở phía sau xuống 1 để không lệch sang dự án khác.
+    setOpenProjects(
+      (prev) => new Set([...prev].filter((i) => i !== pi).map((i) => (i > pi ? i - 1 : i))),
+    );
+  };
+  // Đổi chỗ 2 dự án (kéo lên/xuống) — trạng thái mở đi theo dự án.
+  const moveProject = (pi: number, dir: -1 | 1) => {
+    const to = pi + dir;
+    if (to < 0 || to >= form.projects.length) return;
+    const next = [...form.projects];
+    [next[pi], next[to]] = [next[to], next[pi]];
+    patchProjects(next);
+    setOpenProjects(
+      (prev) => new Set([...prev].map((i) => (i === pi ? to : i === to ? pi : i))),
+    );
+  };
 
   const addWorkstream = (pi: number) =>
     setProject(pi, {
@@ -240,9 +273,33 @@ export default function BoardPlanEditPage() {
       </section>
 
       {/* Danh sách project */}
-      <h2 className="chart-title">Dự án ({form.projects.length})</h2>
-      {form.projects.map((p, pi) => (
-        <section key={pi} className="plan-block plan-project">
+      <h2 className="chart-title plan-projects-head">
+        Dự án ({form.projects.length})
+        {form.projects.length > 0 && (
+          <button
+            type="button"
+            className="doc-action"
+            onClick={() =>
+              setOpenProjects(
+                openProjects.size >= form.projects.length
+                  ? new Set()
+                  : new Set(form.projects.map((_, i) => i)),
+              )
+            }
+          >
+            {openProjects.size >= form.projects.length
+              ? '🗕 Thu gọn tất cả'
+              : '⛶ Mở tất cả'}
+          </button>
+        )}
+      </h2>
+      {form.projects.map((p, pi) => {
+        const open = openProjects.has(pi);
+        return (
+        <section
+          key={pi}
+          className={`plan-block plan-project${open ? ' report-project-expanded' : ''}`}
+        >
           <div className="plan-row">
             <input
               className="plan-project-name"
@@ -268,6 +325,32 @@ export default function BoardPlanEditPage() {
             </select>
             <button
               type="button"
+              className="doc-action"
+              title={open ? 'Thu gọn dự án' : 'Mở rộng dự án'}
+              onClick={() => toggleOpen(pi)}
+            >
+              {open ? '🗕' : '⛶'}
+            </button>
+            <button
+              type="button"
+              className="doc-action"
+              title="Lên"
+              disabled={pi === 0}
+              onClick={() => moveProject(pi, -1)}
+            >
+              ▲
+            </button>
+            <button
+              type="button"
+              className="doc-action"
+              title="Xuống"
+              disabled={pi === form.projects.length - 1}
+              onClick={() => moveProject(pi, 1)}
+            >
+              ▼
+            </button>
+            <button
+              type="button"
               className="doc-action danger"
               title="Xóa dự án"
               onClick={() => removeProject(pi)}
@@ -276,7 +359,17 @@ export default function BoardPlanEditPage() {
             </button>
           </div>
 
-          {!p.appId &&
+          {/* Thu gọn: chỉ hiện tóm tắt các nhánh bên trong. */}
+          {!open && (
+            <p className="muted plan-proj-summary">
+              {p.workstreams.length} nhánh
+              {p.workstreams.length > 0 &&
+                ': ' +
+                  p.workstreams.map((w) => w.title || '(chưa đặt tên)').join(' · ')}
+            </p>
+          )}
+
+          {open && !p.appId &&
             (() => {
               const sug = suggestAppId(p.name, apps);
               const app = sug ? apps.find((a) => a.id === sug) : null;
@@ -291,7 +384,7 @@ export default function BoardPlanEditPage() {
               ) : null;
             })()}
 
-          {p.workstreams.map((w, wi) => (
+          {open && p.workstreams.map((w, wi) => (
             <div key={wi} className="plan-workstream">
               <div className="plan-row">
                 <input
@@ -389,20 +482,27 @@ export default function BoardPlanEditPage() {
             </div>
           ))}
 
-          <div className="plan-add-actions">
-            <button
-              type="button"
-              className="plan-add-btn primary"
-              onClick={() => setPickerFor(pi)}
-            >
-              ＋ Thêm nhánh từ task
-            </button>
-            <button type="button" className="plan-add-btn" onClick={() => addWorkstream(pi)}>
-              ＋ Thêm nhánh trắng
-            </button>
-          </div>
+          {open && (
+            <div className="plan-add-actions">
+              <button
+                type="button"
+                className="plan-add-btn primary"
+                onClick={() => setPickerFor(pi)}
+              >
+                ＋ Thêm nhánh từ task
+              </button>
+              <button
+                type="button"
+                className="plan-add-btn"
+                onClick={() => addWorkstream(pi)}
+              >
+                ＋ Thêm nhánh trắng
+              </button>
+            </div>
+          )}
         </section>
-      ))}
+        );
+      })}
 
       <div className="plan-add-project">
         <select

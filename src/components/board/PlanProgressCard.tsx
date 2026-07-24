@@ -11,10 +11,10 @@ import {
 import { formatDay } from '../../lib/formatDate';
 import { formatDateVi } from '../../lib/reportFormat';
 import {
-  latestReportInWeek,
   pickCurrentPlan,
   planProgress,
-  suggestFromReport,
+  reportsInWeek,
+  suggestFromReports,
 } from '../../lib/planProgress';
 import { isoLocal } from '../../lib/pmDates';
 
@@ -69,7 +69,8 @@ export default function PlanProgressCard() {
 
   const { plan, isCurrent } = picked;
   const prog = planProgress(plan, releaseKeys);
-  const report = latestReportInWeek(reports, plan);
+  // Đồng bộ tổng hợp từ MỌI báo cáo trong tuần (không chỉ báo cáo mới nhất).
+  const weekReports = reportsInWeek(reports, plan);
   const left = daysLeft(today, plan.weekEnd);
 
   // Cập nhật trạng thái 1 nhánh (ghi kèm % ngầm định để thanh tiến độ khớp).
@@ -78,24 +79,25 @@ export default function PlanProgressCard() {
       { pi, wi, state, progress: WORKSTREAM_STATE_META[state].pct },
     ]);
 
-  // Đồng bộ gợi ý từ báo cáo ngày.
+  // Đồng bộ gợi ý tổng hợp từ các báo cáo ngày trong tuần.
   const onSync = () => {
-    if (!report) return;
-    const sugs = suggestFromReport(plan, report);
+    if (weekReports.length === 0) return;
+    const sugs = suggestFromReports(plan, weekReports);
     if (sugs.length === 0) {
-      window.alert('Không có gợi ý mới từ báo cáo ngày.');
+      window.alert('Không có gợi ý mới từ các báo cáo ngày trong tuần.');
       return;
     }
     const lines = sugs
       .map(
         (s) =>
           `• ${s.project} / ${s.wsTitle}: ${WORKSTREAM_STATE_META[s.state].label}` +
-          (typeof s.progress === 'number' ? ` (${s.progress}%)` : ''),
+          (typeof s.progress === 'number' ? ` (${s.progress}%)` : '') +
+          (s.date ? ` — theo báo cáo ${formatDateVi(s.date)}` : ''),
       )
       .join('\n');
     if (
       !window.confirm(
-        `Cập nhật ${sugs.length} nhánh theo báo cáo ngày ${formatDateVi(report.date)}?\n\n${lines}`,
+        `Cập nhật ${sugs.length} nhánh theo ${weekReports.length} báo cáo ngày trong tuần?\n\n${lines}`,
       )
     )
       return;
@@ -129,14 +131,17 @@ export default function PlanProgressCard() {
           type="button"
           className="pp-sync-btn"
           onClick={onSync}
-          disabled={!report}
+          disabled={weekReports.length === 0}
           title={
-            report
-              ? `Đồng bộ từ báo cáo ${formatDateVi(report.date)}`
+            weekReports.length > 0
+              ? `Đồng bộ tổng hợp từ ${weekReports.length} báo cáo (${formatDateVi(
+                  weekReports[0].date,
+                )} → ${formatDateVi(weekReports[weekReports.length - 1].date)})`
               : 'Chưa có báo cáo ngày trong tuần này'
           }
         >
-          🔄 Đồng bộ từ báo cáo{report ? ` (${formatDateVi(report.date)})` : ''}
+          🔄 Đồng bộ từ báo cáo
+          {weekReports.length > 0 ? ` (${weekReports.length} ngày)` : ''}
         </button>
       </div>
 
