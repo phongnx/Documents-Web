@@ -6,9 +6,10 @@ import { newPlanTemplate } from '../pmTypes';
 import PlanPreview from '../components/board/PlanPreview';
 import { formatDay } from '../lib/formatDate';
 import { isoLocal, currentWeek } from '../lib/pmDates';
+import { buildAutoPlan } from '../lib/planAutofill';
 
 export default function BoardPlanListPage() {
-  const { plans, loading, addPlan, deletePlan } = usePm();
+  const { plans, loading, addPlan, deletePlan, apps, tasks } = usePm();
   const navigate = useNavigate();
 
   // Tập id đang mở preview. Mặc định mở plan của tuần hiện tại (seed 1 lần).
@@ -33,7 +34,10 @@ export default function BoardPlanListPage() {
 
   const onCreate = () => {
     const { start, end } = currentWeek();
-    const created = addPlan(newPlanTemplate(start, end));
+    // Tự sinh từ dữ liệu thật (plan tuần trước + task đang chạy + lịch release);
+    // không có gì để fill → fallback template mẫu như cũ.
+    const auto = buildAutoPlan({ weekStart: start, weekEnd: end, plans, apps, tasks });
+    const created = addPlan(auto ?? newPlanTemplate(start, end));
     if (created) navigate(`/board/plan/${created.id}`);
   };
 
@@ -49,7 +53,7 @@ export default function BoardPlanListPage() {
 
       <div className="board-add-row">
         <button type="button" className="primary" onClick={onCreate}>
-          ＋ Tạo plan tuần (từ mẫu)
+          ＋ Tạo plan tuần (tự động)
         </button>
       </div>
 

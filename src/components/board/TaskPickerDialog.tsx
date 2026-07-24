@@ -1,12 +1,8 @@
 import { useMemo, useState } from 'react';
 import { DONE_STATUS } from '../../pmTypes';
-import type {
-  AppItem,
-  PlanWorkstream,
-  TaskItem,
-  WorkstreamCategory,
-} from '../../pmTypes';
+import type { AppItem, PlanWorkstream, TaskItem } from '../../pmTypes';
 import { sortDate } from '../../lib/pmSort';
+import { taskLines, taskToWorkstream } from '../../lib/planAutofill';
 
 interface Props {
   apps: AppItem[];
@@ -15,23 +11,6 @@ interface Props {
   initialAppId?: string;
   onConfirm: (workstreams: PlanWorkstream[]) => void;
   onClose: () => void;
-}
-
-// Tách mô tả task thành các dòng "item" đã làm sạch (bỏ #, gạch đầu dòng, dòng rỗng).
-function taskLines(t: TaskItem): string[] {
-  const raw = (t.description ?? '').split('\n');
-  const lines = raw
-    .map((l) => l.replace(/^\s*[#>-]+\s*/, '').trim())
-    .filter((l) => l.length > 0);
-  return lines.length ? lines : [t.title];
-}
-
-// Loại task → category của nhánh plan.
-function mapCategory(type: string): WorkstreamCategory {
-  const low = type.toLowerCase();
-  if (low.includes('release')) return 'release';
-  if (low.includes('bug') || low.includes('test')) return 'test';
-  return 'other';
 }
 
 export default function TaskPickerDialog({
@@ -84,20 +63,7 @@ export default function TaskPickerDialog({
         .sort((a, b) => a - b)
         .map((i) => lines[i])
         .filter(Boolean);
-      const category = mapCategory(t.type);
-      const milestone =
-        category === 'release'
-          ? { type: 'release' as const, text: `Build release ${t.version ?? ''}`.trim() }
-          : category === 'test'
-            ? { type: 'test' as const, text: 'Build test & fix bugs' }
-            : undefined;
-      return {
-        title: app?.platform || t.type || 'Nhánh',
-        category,
-        items,
-        sourceTaskIds: [t.id],
-        ...(milestone ? { milestone } : {}),
-      };
+      return taskToWorkstream(t, app, items);
     });
     onConfirm(result);
   };

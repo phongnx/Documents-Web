@@ -4,12 +4,16 @@ import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import { newReportTemplate } from '../pmTypes';
 import ReportPreview from '../components/board/ReportPreview';
-import { formatDateVi } from '../lib/reportFormat';
+import { buildReportText, formatDateVi } from '../lib/reportFormat';
+import { downloadTextFile } from '../lib/downloadHelpers';
 import { isoLocal } from '../lib/pmDates';
+import type { DailyReport } from '../pmTypes';
 
 export default function BoardReportListPage() {
   const { reports, loading, addReport, deleteReport } = usePm();
   const navigate = useNavigate();
+  // Id báo cáo vừa copy (hiện "✓ Đã copy" 1.5s).
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Tập id đang mở preview. Mặc định mở báo cáo mới nhất (seed 1 lần).
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -55,6 +59,18 @@ export default function BoardReportListPage() {
   const onDelete = (id: string, date: string) => {
     if (window.confirm(`Xóa báo cáo ngày ${formatDateVi(date)}? Không thể hoàn tác.`))
       deleteReport(id);
+  };
+
+  // Copy text báo cáo (bản đã lưu); clipboard bị chặn → fallback export .txt như editor.
+  const onCopy = async (r: DailyReport) => {
+    const text = buildReportText(r);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(r.id);
+      window.setTimeout(() => setCopiedId((cur) => (cur === r.id ? null : cur)), 1500);
+    } catch {
+      downloadTextFile(`report_${r.date}.txt`, text, 'text/plain');
+    }
   };
 
   return (
@@ -105,6 +121,14 @@ export default function BoardReportListPage() {
                     </span>
                   </div>
                   <div className="doc-line-actions" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="doc-action"
+                      title="Copy text báo cáo"
+                      onClick={() => onCopy(r)}
+                    >
+                      {copiedId === r.id ? '✓ Đã copy' : '📋 Copy'}
+                    </button>
                     <button
                       type="button"
                       className="doc-action"

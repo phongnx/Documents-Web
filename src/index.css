@@ -1303,6 +1303,36 @@ a:hover {
 .task-dialog {
   max-width: 640px;
   width: 100%;
+  max-height: 88vh;
+}
+/* Chế độ mở rộng vùng mô tả: phóng to dialog, ẩn field phụ, textarea/preview chiếm hết chỗ. */
+.task-dialog-expanded {
+  max-width: min(960px, 96vw);
+  height: 92vh;
+  max-height: 92vh;
+}
+.task-dialog-expanded .task-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.task-dialog-expanded .task-field:not(.task-field-wide) {
+  display: none;
+}
+.task-dialog-expanded .task-field-desc {
+  flex: 1;
+  min-height: 0;
+}
+.task-dialog-expanded .task-field-desc .task-desc {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+}
+.task-dialog-expanded .task-field-desc .task-desc-preview {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .task-form {
   display: grid;
@@ -1348,7 +1378,7 @@ a:hover {
   justify-content: space-between;
 }
 .task-desc {
-  min-height: 140px;
+  min-height: 220px;
   resize: vertical;
   font-family: monospace;
 }
@@ -1356,7 +1386,7 @@ a:hover {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
-  min-height: 140px;
+  min-height: 220px;
   background: var(--subtle);
 }
 @media (max-width: 560px) {
@@ -1766,6 +1796,13 @@ a:hover {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.5;
+}
+/* Expand nội dung dự án: ô tự cao theo nội dung (height set bằng JS), không cuộn trong ô. */
+.report-body-expanded {
+  overflow: hidden;
+}
+.report-project-expanded {
+  border-color: var(--primary);
 }
 .report-preview-panel {
   background: var(--card);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePm } from '../context/PmContext';
 import { useSeededForm } from '../hooks/useSeededForm';
@@ -20,6 +20,41 @@ function toForm(r: DailyReport): ReportForm {
   };
 }
 
+// Textarea nội dung dự án: khi expand tự cao theo nội dung (không cuộn trong ô).
+function ReportBodyInput({
+  value,
+  expanded,
+  placeholder,
+  onChange,
+}: {
+  value: string;
+  expanded: boolean;
+  placeholder: string;
+  onChange: (v: string) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (expanded) {
+      // Reset về auto trước để scrollHeight co lại được khi xóa bớt nội dung.
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight + 2}px`; // +2 bù border trên/dưới
+    } else {
+      el.style.height = '';
+    }
+  }, [value, expanded]);
+  return (
+    <textarea
+      ref={ref}
+      className={`md-textarea report-body${expanded ? ' report-body-expanded' : ''}`}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+    />
+  );
+}
+
 export default function BoardReportEditPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
@@ -32,6 +67,16 @@ export default function BoardReportEditPage() {
   );
   useUnsavedGuard(dirty);
   const [copied, setCopied] = useState(false);
+  // Chỉ số các dự án đang expand nội dung; reset khi chuyển sang report khác.
+  const [expandedBodies, setExpandedBodies] = useState<Set<number>>(new Set());
+  useEffect(() => setExpandedBodies(new Set()), [id]);
+  const toggleBody = (pi: number) =>
+    setExpandedBodies((prev) => {
+      const next = new Set(prev);
+      if (next.has(pi)) next.delete(pi);
+      else next.add(pi);
+      return next;
+    });
 
   if (loading && !form) {
     return (
@@ -65,8 +110,13 @@ export default function BoardReportEditPage() {
     if (!app) return;
     patchProjects([...form.projects, { name: app.name, appId: app.id, body: '' }]);
   };
-  const removeProject = (pi: number) =>
+  const removeProject = (pi: number) => {
     patchProjects(form.projects.filter((_, i) => i !== pi));
+    // Dồn chỉ số expand phía sau xuống 1 để không lệch sang dự án khác.
+    setExpandedBodies(
+      (prev) => new Set([...prev].filter((i) => i !== pi).map((i) => (i > pi ? i - 1 : i))),
+    );
+  };
   // Đổi chỗ 2 dự án (kéo lên/xuống).
   const moveProject = (pi: number, dir: -1 | 1) => {
     const to = pi + dir;
@@ -74,6 +124,10 @@ export default function BoardReportEditPage() {
     const next = [...form.projects];
     [next[pi], next[to]] = [next[to], next[pi]];
     patchProjects(next);
+    // Trạng thái expand đi theo dự án (swap 2 chỉ số).
+    setExpandedBodies(
+      (prev) => new Set([...prev].map((i) => (i === pi ? to : i === to ? pi : i))),
+    );
   };
 
   // ----- Lưu / Back / Copy / Export -----
@@ -154,8 +208,13 @@ export default function BoardReportEditPage() {
 
       {/* Danh sách dự án */}
       <h2 className="chart-title">Dự án ({form.projects.length})</h2>
-      {form.projects.map((p, pi) => (
-        <section key={pi} className="plan-block plan-project">
+      {form.projects.map((p, pi) => {
+        const bodyOpen = expandedBodies.has(pi);
+        return (
+        <section
+          key={pi}
+          className={`plan-block plan-project${bodyOpen ? ' report-project-expanded' : ''}`}
+        >
           <div className="plan-row">
             <input
               className="plan-project-name"
@@ -179,6 +238,14 @@ export default function BoardReportEditPage() {
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              className="doc-action"
+              title={bodyOpen ? 'Thu gọn nội dung' : 'Mở rộng nội dung (tự cao theo nội dung)'}
+              onClick={() => toggleBody(pi)}
+            >
+              {bodyOpen ? '🗕' : '⛶'}
+            </button>
             <button
               type="button"
               className="doc-action"
@@ -222,14 +289,15 @@ export default function BoardReportEditPage() {
               ) : null;
             })()}
 
-          <textarea
-            className="md-textarea report-body"
+          <ReportBodyInput
             value={p.body}
-            onChange={(e) => setProject(pi, { body: e.target.value })}
+            expanded={bodyOpen}
+            onChange={(v) => setProject(pi, { body: v })}
             placeholder={'# Android:\n- Nội dung công việc\n-> Kết quả / mốc\n+ Mục con'}
           />
         </section>
-      ))}
+        );
+      })}
 
       <div className="plan-add-project">
         <select

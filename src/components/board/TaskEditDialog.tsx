@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import MarkdownPreview from '../MarkdownPreview';
 import type { AppItem, PmMeta, TaskItem } from '../../pmTypes';
 
@@ -61,6 +61,14 @@ export default function TaskEditDialog({
   const [assignee, setAssignee] = useState(task?.assignee ?? '');
   const [description, setDescription] = useState(task?.description ?? '');
   const [showPreview, setShowPreview] = useState(false);
+  // Chế độ mở rộng vùng mô tả: phóng to dialog, tạm ẩn các field phụ (chỉ giữ Tiêu đề).
+  const [expanded, setExpanded] = useState(false);
+  const descRef = useRef<HTMLTextAreaElement>(null);
+
+  // Khi bật mở rộng (và đang ở chế độ sửa) → focus vào textarea mô tả.
+  useEffect(() => {
+    if (expanded && !showPreview) descRef.current?.focus();
+  }, [expanded, showPreview]);
 
   const onAddNewType = () => {
     const v = window.prompt('Tên loại task mới:');
@@ -103,7 +111,11 @@ export default function TaskEditDialog({
 
   return (
     <div className="modal-overlay">
-      <div className="modal-dialog task-dialog" role="dialog" aria-modal="true">
+      <div
+        className={`modal-dialog task-dialog${expanded ? ' task-dialog-expanded' : ''}`}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="modal-header">
           <strong>{task ? 'Sửa task' : 'Thêm task'}</strong>
           <button
@@ -128,6 +140,7 @@ export default function TaskEditDialog({
             />
           </label>
 
+          {/* Các field phụ — tạm ẩn bằng CSS khi mở rộng mô tả (state vẫn giữ nguyên). */}
           <label className="task-field">
             <span>App</span>
             <div className="task-inline">
@@ -213,16 +226,26 @@ export default function TaskEditDialog({
             <input value={assignee} onChange={(e) => setAssignee(e.target.value)} />
           </label>
 
-          <div className="task-field task-field-wide">
+          <div className="task-field task-field-wide task-field-desc">
             <div className="task-desc-head">
               <span>Mô tả (Markdown)</span>
-              <button
-                type="button"
-                className="doc-action"
-                onClick={() => setShowPreview((v) => !v)}
-              >
-                {showPreview ? 'Sửa' : 'Xem trước'}
-              </button>
+              <div className="task-inline">
+                <button
+                  type="button"
+                  className="doc-action"
+                  onClick={() => setShowPreview((v) => !v)}
+                >
+                  {showPreview ? 'Sửa' : 'Xem trước'}
+                </button>
+                <button
+                  type="button"
+                  className="doc-action"
+                  title={expanded ? 'Thu gọn vùng mô tả' : 'Mở rộng vùng mô tả'}
+                  onClick={() => setExpanded((v) => !v)}
+                >
+                  {expanded ? '🗕 Thu gọn' : '⛶ Mở rộng'}
+                </button>
+              </div>
             </div>
             {showPreview ? (
               <div className="task-desc-preview">
@@ -230,6 +253,7 @@ export default function TaskEditDialog({
               </div>
             ) : (
               <textarea
+                ref={descRef}
                 className="md-textarea task-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}

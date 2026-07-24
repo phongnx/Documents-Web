@@ -22,6 +22,14 @@ export function mondayOf(iso: string): string {
   return isoLocal(d);
 }
 
+// Tên thứ tiếng Việt của 1 ngày iso ('Thứ 2'…'Thứ 7', 'Chủ nhật'); '' nếu không parse được.
+export function weekdayVN(iso: string): string {
+  const d = new Date(iso + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return '';
+  const dow = d.getDay();
+  return dow === 0 ? 'Chủ nhật' : `Thứ ${dow + 1}`;
+}
+
 // Thứ Hai → Thứ Sáu của tuần hiện tại.
 export function currentWeek(): { start: string; end: string } {
   const now = new Date();
