@@ -1,5 +1,6 @@
 // Model cho mục "Bảng dự án" (quản lý app + task/release của team).
 // Dữ liệu riêng tư, lưu tại users/{uid}/pm/{apps,tasks,meta}.
+import type { KpiRuleGroup } from './kpiTypes';
 
 export interface AppItem {
   id: string;
@@ -55,6 +56,8 @@ export interface PmMeta {
   milestoneTypes: MilestoneType[];
   /** Danh mục "loại nhánh" của plan tuần (preset DEFAULT_PLAN_CATEGORIES + tự thêm). */
   planCategories: string[];
+  /** Quy chế chấm điểm KPI theo giai đoạn (seed DEFAULT_KPI_RULES — xem kpiTypes). */
+  kpiRules: KpiRuleGroup[];
 }
 
 /** Loại milestone mặc định (không cho xóa 2 loại gốc này). */

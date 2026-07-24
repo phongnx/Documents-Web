@@ -29,6 +29,9 @@ export default function BoardNav() {
           <NavLink to="/board/apps" className={({ isActive }) => (isActive ? 'active' : '')}>
             App
           </NavLink>
+          <NavLink to="/board/kpi" className={({ isActive }) => (isActive ? 'active' : '')}>
+            KPI
+          </NavLink>
         </nav>
       </div>
       <div className="board-nav-right">

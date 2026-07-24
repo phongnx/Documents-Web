@@ -20,6 +20,9 @@ import BoardPlanListPage from './pages/BoardPlanListPage';
 import BoardPlanEditPage from './pages/BoardPlanEditPage';
 import BoardReportListPage from './pages/BoardReportListPage';
 import BoardReportEditPage from './pages/BoardReportEditPage';
+import BoardKpiListPage from './pages/BoardKpiListPage';
+import BoardKpiMemberPage from './pages/BoardKpiMemberPage';
+import KpiSharePage from './pages/KpiSharePage';
 
 // Layout bọc các trang tài liệu bằng DocumentsProvider.
 function DocsLayout() {
@@ -84,6 +87,8 @@ function AppShell() {
         <Route path="/board/plan/:id" element={<BoardPlanEditPage />} />
         <Route path="/board/report" element={<BoardReportListPage />} />
         <Route path="/board/report/:id" element={<BoardReportEditPage />} />
+        <Route path="/board/kpi" element={<BoardKpiListPage />} />
+        <Route path="/board/kpi/:memberId" element={<BoardKpiMemberPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/docs" replace />} />
     </Routes>
@@ -100,6 +105,8 @@ export default function App() {
           {/* Chia sẻ cả folder: danh sách tài liệu + xem từng tài liệu */}
           <Route path="/share/f/:id" element={<SharedFolderPage />} />
           <Route path="/share/f/:id/:docId" element={<SharedFolderPage />} />
+          {/* Trang log KPI của member — link riêng, member edit ẩn danh */}
+          <Route path="/share/kpi/:token" element={<KpiSharePage />} />
           {/* Mọi route còn lại đi qua lớp đăng nhập */}
           <Route path="/*" element={<AppShell />} />
         </Routes>

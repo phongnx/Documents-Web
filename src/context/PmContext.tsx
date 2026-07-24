@@ -8,11 +8,17 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { ref, onValue, set, update } from 'firebase/database';
+import { ref, onValue, set, update, get } from 'firebase/database';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../lib/firebase';
 import { useAuth } from '../auth/useAuth';
 import { computeSplit, keyOfTask } from '../lib/flavorSplit';
+import {
+  DEFAULT_KPI_RULES,
+  type KpiMember,
+  type KpiRuleGroup,
+  type KpiSheetMeta,
+} from '../kpiTypes';
 import {
   DEFAULT_MILESTONE_TYPES,
   DEFAULT_PLAN_CATEGORIES,
@@ -37,6 +43,7 @@ function defaultMeta(): PmMeta {
     statuses: DEFAULT_STATUSES,
     milestoneTypes: DEFAULT_MILESTONE_TYPES,
     planCategories: DEFAULT_PLAN_CATEGORIES,
+    kpiRules: DEFAULT_KPI_RULES,
   };
 }
 
@@ -125,6 +132,24 @@ interface PmState {
   /** Ghi đè toàn bộ báo cáo ngày (trình sửa lưu cả object). */
   updateReport: (id: string, data: ReportInput) => void;
   deleteReport: (id: string) => void;
+  // ---------- KPI member log ----------
+  members: KpiMember[];
+  /** Tạo member + sheet KPI tại shared/kpi/{token} (1 lần ghi nguyên tử). */
+  addMember: (name: string) => KpiMember | null;
+  /** Sửa member (đổi tên thì đồng bộ memberName sang sheet). */
+  updateMember: (id: string, patch: Partial<Omit<KpiMember, 'id' | 'token'>>) => void;
+  /** Xóa member + TOÀN BỘ sheet KPI của member đó. */
+  deleteMember: (id: string) => void;
+  /** Đổi link (token mới): chuyển dữ liệu sheet sang node mới, link cũ chết ngay. */
+  rotateMemberToken: (id: string) => Promise<void>;
+  /** Khóa/mở sheet (member nghỉ/lộ link): chặn member ghi, giữ log để đọc. */
+  setMemberLocked: (id: string, locked: boolean) => void;
+  /** Gán list project (app id) cho member — member chỉ chọn được các project này khi log. */
+  setMemberProjects: (id: string, projectIds: string[]) => void;
+  /** Ghi đè quy chế chấm điểm KPI. */
+  updateKpiRules: (rules: KpiRuleGroup[]) => void;
+  /** Đồng bộ snapshot categories/projectNames/memberName sang sheet của member. */
+  syncKpiSheetMeta: (memberId: string) => void;
 }
 
 // RTDB bỏ mảng rỗng → chuẩn hóa để mọi mảng lồng nhau luôn tồn tại khi đọc về.
@@ -171,6 +196,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
   const [meta, setMeta] = useState<PmMeta>(defaultMeta());
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [reports, setReports] = useState<DailyReport[]>([]);
+  const [members, setMembers] = useState<KpiMember[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Đọc state mới nhất trong mutator (không đọc closure) — như DocumentsContext.
@@ -180,18 +206,21 @@ export function PmProvider({ children }: { children: ReactNode }) {
     meta: PmMeta;
     plans: WeeklyPlan[];
     reports: DailyReport[];
+    members: KpiMember[];
   }>({
     apps: [],
     tasks: [],
     meta: defaultMeta(),
     plans: [],
     reports: [],
+    members: [],
   });
   stateRef.current.apps = apps;
   stateRef.current.tasks = tasks;
   stateRef.current.meta = meta;
   stateRef.current.plans = plans;
   stateRef.current.reports = reports;
+  stateRef.current.members = members;
 
   useEffect(() => {
     if (!db || !uid) {
@@ -200,6 +229,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
       setMeta(defaultMeta());
       setPlans([]);
       setReports([]);
+      setMembers([]);
       setLoading(false);
       return;
     }
@@ -246,7 +276,17 @@ export function PmProvider({ children }: { children: ReactNode }) {
           val?.planCategories && val.planCategories.length
             ? val.planCategories
             : DEFAULT_PLAN_CATEGORIES,
+        kpiRules:
+          val?.kpiRules && val.kpiRules.length ? val.kpiRules : DEFAULT_KPI_RULES,
       });
+    });
+
+    const membersRef = ref(db, `users/${uid}/pm/members`);
+    const unsubMembers = onValue(membersRef, (snap) => {
+      const val = snap.val() as Record<string, KpiMember> | null;
+      const list = val ? Object.values(val) : [];
+      list.sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
+      setMembers(list);
     });
 
     const plansRef = ref(db, `users/${uid}/pm/plans`);
@@ -283,6 +323,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
       unsubMeta();
       unsubPlans();
       unsubReports();
+      unsubMembers();
     };
   }, [uid]);
 
@@ -634,14 +675,195 @@ export function PmProvider({ children }: { children: ReactNode }) {
   const importData = useCallback(
     async (payload: PmImportPayload) => {
       if (!db || !uid) return;
-      // Ghi đè apps/tasks/meta nhưng GIỮ NGUYÊN plans (không đụng node plans).
+      // Ghi đè apps/tasks/meta nhưng GIỮ NGUYÊN plans/members (không đụng 2 node đó).
+      // meta bị ghi đè cả node → giữ lại kpiRules hiện tại nếu payload không mang theo.
+      const meta = payload.meta ?? defaultMeta();
       await update(ref(db, `users/${uid}/pm`), {
         apps: payload.apps ?? {},
         tasks: payload.tasks ?? {},
-        meta: payload.meta ?? defaultMeta(),
+        meta: {
+          ...meta,
+          kpiRules:
+            meta.kpiRules && meta.kpiRules.length
+              ? meta.kpiRules
+              : stateRef.current.meta.kpiRules,
+        },
       });
     },
     [uid],
+  );
+
+  // ---------- KPI member log ----------
+
+  // Snapshot meta cho sheet member (member ẩn danh không đọc được users/{uid}/pm/meta).
+  // Member đã gán project → projectNames CHỈ gồm các project gán + strictProjects=true;
+  // chưa gán (hoặc app gán đã bị xóa hết) → gợi ý tất cả app, nhập tự do.
+  const kpiSnapshot = useCallback(
+    (
+      member?: KpiMember,
+    ): Pick<KpiSheetMeta, 'categories' | 'projectNames' | 'strictProjects'> => {
+      const apps = stateRef.current.apps;
+      const assigned = (member?.projectIds ?? [])
+        .map((id) => apps.find((a) => a.id === id))
+        .filter((a): a is AppItem => !!a);
+      const strict = assigned.length > 0;
+      return {
+        categories: stateRef.current.meta.kpiRules.map((g) => g.label),
+        projectNames: strict
+          ? assigned.map((a) => a.name)
+          : apps.filter((a) => !a.archived).map((a) => a.name),
+        strictProjects: strict,
+      };
+    },
+    [],
+  );
+
+  const addMember = useCallback(
+    (name: string): KpiMember | null => {
+      if (!db || !uid) return null;
+      const n = name.trim();
+      if (!n) return null;
+      const now = new Date().toISOString();
+      const member: KpiMember = {
+        id: uuidv4(),
+        name: n,
+        token: uuidv4(),
+        active: true,
+        order: stateRef.current.members.length,
+        createdAt: now,
+      };
+      const sheetMeta: KpiSheetMeta = {
+        ownerId: uid,
+        memberName: n,
+        ...kpiSnapshot(),
+        createdAt: now,
+      };
+      // 1 lần ghi nguyên tử: bản ghi member riêng tư + meta sheet công khai.
+      update(ref(db), {
+        [`users/${uid}/pm/members/${member.id}`]: member,
+        [`shared/kpi/${member.token}/meta`]: sheetMeta,
+      });
+      return member;
+    },
+    [uid, kpiSnapshot],
+  );
+
+  const updateMember = useCallback(
+    (id: string, patch: Partial<Omit<KpiMember, 'id' | 'token'>>) => {
+      if (!db || !uid) return;
+      const cur = stateRef.current.members.find((m) => m.id === id);
+      if (!cur) return;
+      const writes: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(patch)) {
+        if (v !== undefined) writes[`users/${uid}/pm/members/${id}/${k}`] = v;
+      }
+      // Đổi tên → đồng bộ memberName sang sheet công khai.
+      if (patch.name && patch.name.trim() && patch.name.trim() !== cur.name) {
+        writes[`users/${uid}/pm/members/${id}/name`] = patch.name.trim();
+        writes[`shared/kpi/${cur.token}/meta/memberName`] = patch.name.trim();
+      }
+      if (Object.keys(writes).length > 0) update(ref(db), writes);
+    },
+    [uid],
+  );
+
+  const deleteMember = useCallback(
+    (id: string) => {
+      if (!db || !uid) return;
+      const cur = stateRef.current.members.find((m) => m.id === id);
+      if (!cur) return;
+      update(ref(db), {
+        [`users/${uid}/pm/members/${id}`]: null,
+        [`shared/kpi/${cur.token}`]: null,
+      });
+    },
+    [uid],
+  );
+
+  const rotateMemberToken = useCallback(
+    async (id: string) => {
+      if (!db || !uid) return;
+      const cur = stateRef.current.members.find((m) => m.id === id);
+      if (!cur) return;
+      // Đọc toàn bộ sheet cũ → ghi sang token mới + xóa node cũ trong 1 lần (nguyên tử).
+      const snap = await get(ref(db, `shared/kpi/${cur.token}`));
+      const data = snap.val() as { meta?: KpiSheetMeta } | null;
+      const newToken = uuidv4();
+      const sheet = data?.meta
+        ? data
+        : {
+            meta: {
+              ownerId: uid,
+              memberName: cur.name,
+              ...kpiSnapshot(cur),
+              createdAt: new Date().toISOString(),
+            } satisfies KpiSheetMeta,
+          };
+      await update(ref(db), {
+        [`shared/kpi/${newToken}`]: sheet,
+        [`shared/kpi/${cur.token}`]: null,
+        [`users/${uid}/pm/members/${id}/token`]: newToken,
+      });
+    },
+    [uid, kpiSnapshot],
+  );
+
+  const setMemberLocked = useCallback(
+    (id: string, locked: boolean) => {
+      if (!db || !uid) return;
+      const cur = stateRef.current.members.find((m) => m.id === id);
+      if (!cur) return;
+      update(ref(db), {
+        [`users/${uid}/pm/members/${id}/active`]: !locked,
+        [`shared/kpi/${cur.token}/meta/locked`]: locked,
+      });
+    },
+    [uid],
+  );
+
+  const updateKpiRules = useCallback(
+    (rules: KpiRuleGroup[]) => {
+      if (!db || !uid) return;
+      set(ref(db, `users/${uid}/pm/meta/kpiRules`), rules);
+    },
+    [uid],
+  );
+
+  // Đồng bộ snapshot danh mục sang sheet (gọi khi leader mở trang member) —
+  // ghi các field con của meta (không đụng ownerId).
+  const syncKpiSheetMeta = useCallback(
+    (memberId: string) => {
+      if (!db || !uid) return;
+      const cur = stateRef.current.members.find((m) => m.id === memberId);
+      if (!cur) return;
+      update(ref(db, `shared/kpi/${cur.token}/meta`), {
+        memberName: cur.name,
+        ...kpiSnapshot(cur),
+      });
+    },
+    [uid, kpiSnapshot],
+  );
+
+  // Gán danh sách project cho member + đồng bộ ngay sang sheet (1 lần ghi).
+  const setMemberProjects = useCallback(
+    (memberId: string, projectIds: string[]) => {
+      if (!db || !uid) return;
+      const cur = stateRef.current.members.find((m) => m.id === memberId);
+      if (!cur) return;
+      // Chỉ giữ id app còn tồn tại; rỗng = bỏ gán (member nhập tự do trở lại).
+      const cleanIds = projectIds.filter((id) =>
+        stateRef.current.apps.some((a) => a.id === id),
+      );
+      const snapshot = kpiSnapshot({ ...cur, projectIds: cleanIds });
+      update(ref(db), {
+        [`users/${uid}/pm/members/${memberId}/projectIds`]: cleanIds.length
+          ? cleanIds
+          : null,
+        [`shared/kpi/${cur.token}/meta/projectNames`]: snapshot.projectNames,
+        [`shared/kpi/${cur.token}/meta/strictProjects`]: snapshot.strictProjects,
+      });
+    },
+    [uid, kpiSnapshot],
   );
 
   const addPlan = useCallback(
@@ -798,6 +1020,15 @@ export function PmProvider({ children }: { children: ReactNode }) {
         addReport,
         updateReport,
         deleteReport,
+        members,
+        addMember,
+        updateMember,
+        deleteMember,
+        rotateMemberToken,
+        setMemberLocked,
+        setMemberProjects,
+        updateKpiRules,
+        syncKpiSheetMeta,
       }}
     >
       {children}
