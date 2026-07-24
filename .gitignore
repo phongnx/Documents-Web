@@ -25,3 +25,6 @@ dist-ssr
 # Firebase
 .firebase/
 firebase-debug.log
+
+# Tài liệu làm việc cục bộ (Excel/export DB…) — không commit
+docs/
