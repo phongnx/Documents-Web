@@ -45,6 +45,7 @@ function normalizeEntry(e: KpiEntry): KpiEntry {
     ...(e.feature ? { feature: e.feature } : {}),
     ...(e.task ? { task: e.task } : {}),
     ...(e.note ? { note: e.note } : {}),
+    ...(typeof e.selfDelta === 'number' ? { selfDelta: e.selfDelta } : {}),
   };
 }
 

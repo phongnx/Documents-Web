@@ -1880,6 +1880,18 @@ a:hover {
 .kpi-row-edit td {
   background: var(--subtle);
 }
+/* Ô đang lỗi validate + dòng thông báo lỗi dưới hàng nhập. */
+.kpi-row-edit input.kpi-input-err,
+.kpi-row-edit select.kpi-input-err {
+  border-color: #dc2626;
+  outline: none;
+}
+.kpi-error-row td {
+  color: #dc2626;
+  font-size: 12.5px;
+  background: rgba(220, 38, 38, 0.07);
+  padding: 5px 10px;
+}
 .kpi-row-edit input,
 .kpi-row-edit select {
   width: 100%;
@@ -1928,6 +1940,16 @@ a:hover {
 .kpi-score.zero {
   background: var(--subtle);
   color: var(--muted);
+}
+/* Điểm TỰ CHẤM (chưa được leader xác nhận): viền đứt, nhạt hơn. */
+.kpi-score.self {
+  background: transparent;
+  border: 1px dashed currentColor;
+  opacity: 0.75;
+}
+/* Ô nhập điểm tự chấm trong hàng đang sửa. */
+.kpi-self-input {
+  width: 64px;
 }
 .kpi-score-cell {
   white-space: nowrap;

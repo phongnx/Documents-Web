@@ -33,7 +33,14 @@ export default function KpiScorePopover({
     rules[0]?.key ??
     '';
   const [groupKey, setGroupKey] = useState(initialKey);
-  const [delta, setDelta] = useState(current ? String(current.delta) : '0');
+  // Seed điểm: đã chấm → điểm leader; chưa → điểm TỰ CHẤM của member (tick Lưu = xác nhận).
+  const [delta, setDelta] = useState(
+    current
+      ? String(current.delta)
+      : typeof entry.selfDelta === 'number'
+        ? String(entry.selfDelta)
+        : '0',
+  );
   const [reason, setReason] = useState(current?.reason ?? '');
 
   const group = rules.find((g) => g.key === groupKey);
@@ -67,6 +74,9 @@ export default function KpiScorePopover({
 
         <p className="muted kpi-score-task">
           {entry.date} · {entry.task || entry.feature || entry.project || '(không mô tả)'}
+          {typeof entry.selfDelta === 'number' && !current && (
+            <> · member tự chấm: <strong>{entry.selfDelta}</strong></>
+          )}
         </p>
 
         {/* Chọn nhóm quy chế + nút mức điểm chấm nhanh */}

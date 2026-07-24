@@ -18,6 +18,8 @@ export interface KpiEntry {
   /** Mô tả task. */
   task?: string;
   note?: string;
+  /** Điểm TỰ CHẤM của member (mặc định 0 khi log) — hết sửa được khi leader đã chấm (scores tồn tại). */
+  selfDelta?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -194,7 +196,9 @@ export interface KpiTotal {
   scoredCount: number;
 }
 
-/** Tổng giờ + tổng điểm của 1 danh sách dòng (bỏ qua dòng giờ lỗi khi cộng phút). */
+/** Tổng giờ + tổng điểm của 1 danh sách dòng (bỏ qua dòng giờ lỗi khi cộng phút).
+ *  Điểm hiệu dụng mỗi dòng: điểm leader chấm nếu có, fallback điểm TỰ CHẤM của member;
+ *  `scoredCount` chỉ đếm dòng đã được leader chấm. */
 export function totalOf(
   entries: KpiEntry[],
   scores: Record<string, KpiScore>,
@@ -209,6 +213,8 @@ export function totalOf(
     if (s) {
       delta += s.delta;
       scoredCount += 1;
+    } else if (typeof e.selfDelta === 'number') {
+      delta += e.selfDelta;
     }
   }
   // Tránh sai số float khi cộng nhiều 0.1/0.2.

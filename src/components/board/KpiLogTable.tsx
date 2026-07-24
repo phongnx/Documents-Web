@@ -3,7 +3,7 @@
 // - mode 'leader': đọc nội dung, click cột Điểm để chấm, xóa dòng (kèm điểm).
 // Cấu trúc theo file Excel: nhóm theo ngày (mới nhất trước) + dòng Tổng giờ/điểm mỗi ngày,
 // header hiện "KPI Tháng = 100 + Σ" + tổng giờ của tháng đang chọn.
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import {
   durationMin,
   entriesOfMonth,
@@ -55,6 +55,8 @@ interface RowDraft {
   feature: string;
   task: string;
   note: string;
+  /** Điểm tự chấm (chuỗi từ input number; rỗng = 0). */
+  selfDelta: string;
 }
 
 const emptyDraft = (date: string, start = ''): RowDraft => ({
@@ -67,6 +69,7 @@ const emptyDraft = (date: string, start = ''): RowDraft => ({
   feature: '',
   task: '',
   note: '',
+  selfDelta: '0',
 });
 
 const draftOf = (e: KpiEntry): RowDraft => ({
@@ -79,6 +82,7 @@ const draftOf = (e: KpiEntry): RowDraft => ({
   feature: e.feature ?? '',
   task: e.task ?? '',
   note: e.note ?? '',
+  selfDelta: typeof e.selfDelta === 'number' ? String(e.selfDelta) : '0',
 });
 
 // 'yyyy-mm' ± n tháng.
@@ -94,6 +98,19 @@ function ScoreBadge({ score }: { score: KpiScore }) {
   return (
     <span className={`kpi-score ${cls}`} title={score.reason || undefined}>
       {fmtDelta(score.delta)}
+    </span>
+  );
+}
+
+// Badge điểm TỰ CHẤM (viền đứt, nhạt) — chưa được leader xác nhận.
+function SelfScoreBadge({ delta }: { delta: number }) {
+  const cls = delta > 0 ? 'pos' : delta < 0 ? 'neg' : 'zero';
+  return (
+    <span
+      className={`kpi-score self ${cls}`}
+      title="Điểm tự chấm — chờ leader xác nhận"
+    >
+      {fmtDelta(delta)}
     </span>
   );
 }
@@ -115,9 +132,57 @@ export default function KpiLogTable({
   onDeleteWithScore,
 }: Props) {
   const [draft, setDraft] = useState<RowDraft | null>(null);
+  // Field đang lỗi validate + thông báo (chỉ set khi bấm Lưu, gõ vào ô nào thì bỏ lỗi ô đó).
+  const [errFields, setErrFields] = useState<Set<string>>(new Set());
+  const [errMsg, setErrMsg] = useState('');
   useUnsavedGuard(!!draft);
-  const patchDraft = (u: Partial<RowDraft>) =>
+  const patchDraft = (u: Partial<RowDraft>) => {
     setDraft((d) => (d ? { ...d, ...u } : d));
+    if (errFields.size > 0)
+      setErrFields((prev) => {
+        const next = new Set(prev);
+        for (const k of Object.keys(u)) next.delete(k);
+        return next;
+      });
+  };
+  const openDraft = (d: RowDraft | null) => {
+    setDraft(d);
+    setErrFields(new Set());
+    setErrMsg('');
+  };
+
+  // Bộ field tối thiểu khi lưu 1 dòng: start/end hợp lệ + giai đoạn + project + task.
+  const validateDraft = (d: RowDraft): { fields: Set<string>; msg: string } => {
+    const fields = new Set<string>();
+    const missing: string[] = [];
+    if (!d.start) {
+      fields.add('start');
+      missing.push('Giờ bắt đầu');
+    }
+    if (!d.end) {
+      fields.add('end');
+      missing.push('Giờ kết thúc');
+    }
+    if (!d.category) {
+      fields.add('category');
+      missing.push('Giai đoạn');
+    }
+    if (!d.project.trim()) {
+      fields.add('project');
+      missing.push('Project');
+    }
+    if (!d.task.trim()) {
+      fields.add('task');
+      missing.push('Task');
+    }
+    let msg = missing.length > 0 ? `Thiếu: ${missing.join(', ')}.` : '';
+    if (d.start && d.end && durationMin({ start: d.start, end: d.end }) === null) {
+      fields.add('start');
+      fields.add('end');
+      msg += `${msg ? ' ' : ''}Giờ kết thúc phải sau giờ bắt đầu.`;
+    }
+    return { fields, msg };
+  };
 
   const canEdit = mode === 'member' && !locked;
   const monthEntries = entriesOfMonth(entries, monthKey);
@@ -132,6 +197,13 @@ export default function KpiLogTable({
 
   const saveDraft = () => {
     if (!draft || !draft.date) return;
+    // Không cho hoàn thành khi thiếu field tối thiểu — highlight ô lỗi + thông báo.
+    const v = validateDraft(draft);
+    if (v.fields.size > 0) {
+      setErrFields(v.fields);
+      setErrMsg(v.msg);
+      return;
+    }
     const input: KpiEntryInput = {
       date: draft.date,
       start: draft.start || undefined,
@@ -141,30 +213,45 @@ export default function KpiLogTable({
       feature: draft.feature || undefined,
       task: draft.task || undefined,
       note: draft.note || undefined,
+      // Điểm tự chấm: rỗng/không hợp lệ → 0 (mặc định khi log done).
+      selfDelta: Number(draft.selfDelta) || 0,
     };
     if (draft.id) onUpdate?.(draft.id, input);
     else onAdd?.(input);
-    setDraft(null);
+    openDraft(null);
   };
 
   // Thêm dòng cho 1 ngày: seed start = end của dòng cuối ngày (nối ca làm việc).
   const startAdd = (date: string) => {
     const list = byDay.get(date) ?? [];
     const last = list[list.length - 1];
-    setDraft(emptyDraft(date, last?.end ?? ''));
+    openDraft(emptyDraft(date, last?.end ?? ''));
+  };
+
+  // Nhân bản 1 dòng thành dòng MỚI cùng ngày: copy nội dung, giờ seed nối ca,
+  // điểm tự chấm về 0 (điểm là theo kết quả từng lần làm, không copy).
+  const startDuplicate = (src: KpiEntry) => {
+    const list = byDay.get(src.date) ?? [];
+    const last = list[list.length - 1];
+    openDraft({ ...draftOf(src), id: '', start: last?.end ?? '', end: '', selfDelta: '0' });
   };
 
   const onRowKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') saveDraft();
-    if (e.key === 'Escape') setDraft(null);
+    if (e.key === 'Escape') openDraft(null);
   };
 
-  // Ô nhập của dòng đang sửa (dùng chung cho dòng mới & dòng sửa).
-  const renderEditRow = (d: RowDraft) => (
+  // Class đánh dấu ô đang lỗi validate.
+  const errCls = (k: string) => (errFields.has(k) ? 'kpi-input-err' : undefined);
+
+  // Ô nhập của dòng đang sửa (dùng chung cho dòng mới & dòng sửa) + dòng báo lỗi validate.
+  const renderEditRow = (d: RowDraft, key: string) => (
+    <Fragment key={key}>
     <tr className="kpi-row kpi-row-edit" onKeyDown={onRowKeyDown}>
       <td>
         <input
           type="time"
+          className={errCls('start')}
           value={d.start}
           onChange={(e) => patchDraft({ start: e.target.value })}
           autoFocus={!d.start}
@@ -173,6 +260,7 @@ export default function KpiLogTable({
       <td>
         <input
           type="time"
+          className={errCls('end')}
           value={d.end}
           onChange={(e) => patchDraft({ end: e.target.value })}
         />
@@ -185,6 +273,7 @@ export default function KpiLogTable({
       </td>
       <td>
         <select
+          className={errCls('category')}
           value={d.category}
           onChange={(e) => patchDraft({ category: e.target.value })}
         >
@@ -203,6 +292,7 @@ export default function KpiLogTable({
         {strictProjects ? (
           // Đã gán project → chỉ chọn trong danh sách (giữ option giá trị cũ nếu ngoài danh sách).
           <select
+            className={errCls('project')}
             value={d.project}
             onChange={(e) => patchDraft({ project: e.target.value })}
           >
@@ -219,6 +309,7 @@ export default function KpiLogTable({
         ) : (
           <input
             list="kpi-projects"
+            className={errCls('project')}
             value={d.project}
             onChange={(e) => patchDraft({ project: e.target.value })}
             placeholder="Project"
@@ -234,6 +325,7 @@ export default function KpiLogTable({
       </td>
       <td className="kpi-task-cell">
         <input
+          className={errCls('task')}
           value={d.task}
           onChange={(e) => patchDraft({ task: e.target.value })}
           placeholder="Mô tả task…"
@@ -246,7 +338,16 @@ export default function KpiLogTable({
           placeholder="Note"
         />
       </td>
-      <td className="kpi-score-cell" />
+      <td className="kpi-score-cell">
+        <input
+          type="number"
+          step="0.1"
+          className="kpi-self-input"
+          title="Điểm tự chấm (mặc định 0) — leader sẽ xác nhận/chỉnh khi chấm"
+          value={d.selfDelta}
+          onChange={(e) => patchDraft({ selfDelta: e.target.value })}
+        />
+      </td>
       <td className="kpi-actions">
         <button type="button" className="doc-action" title="Lưu (Enter)" onClick={saveDraft}>
           ✓
@@ -255,16 +356,22 @@ export default function KpiLogTable({
           type="button"
           className="doc-action"
           title="Hủy (Esc)"
-          onClick={() => setDraft(null)}
+          onClick={() => openDraft(null)}
         >
           ✕
         </button>
       </td>
     </tr>
+    {errMsg && (
+      <tr className="kpi-error-row">
+        <td colSpan={10}>⚠ {errMsg}</td>
+      </tr>
+    )}
+    </Fragment>
   );
 
   const renderRow = (e: KpiEntry) => {
-    if (draft && draft.id === e.id) return renderEditRow(draft);
+    if (draft && draft.id === e.id) return renderEditRow(draft, e.id);
     const score = scores[e.id];
     const dur = durationMin(e);
     const editable = canEdit && !score;
@@ -272,7 +379,7 @@ export default function KpiLogTable({
       <tr
         key={e.id}
         className={`kpi-row${editable ? ' kpi-row-editable' : ''}`}
-        onClick={editable ? () => setDraft(draftOf(e)) : undefined}
+        onClick={editable ? () => openDraft(draftOf(e)) : undefined}
         title={
           mode === 'member' && score
             ? 'Dòng đã chấm điểm — liên hệ leader nếu cần sửa'
@@ -313,10 +420,31 @@ export default function KpiLogTable({
           }
           title={mode === 'leader' ? 'Chấm điểm dòng này' : undefined}
         >
-          {score ? <ScoreBadge score={score} /> : mode === 'leader' ? '✎' : ''}
+          {score ? (
+            <ScoreBadge score={score} />
+          ) : typeof e.selfDelta === 'number' ? (
+            <>
+              <SelfScoreBadge delta={e.selfDelta} />
+              {mode === 'leader' && ' ✎'}
+            </>
+          ) : mode === 'leader' ? (
+            '✎'
+          ) : (
+            ''
+          )}
           {mode === 'member' && score && ' 🔒'}
         </td>
         <td className="kpi-actions" onClick={(ev) => ev.stopPropagation()}>
+          {canEdit && (
+            <button
+              type="button"
+              className="doc-action"
+              title="Nhân bản thành dòng mới (copy nội dung, đỡ nhập lại)"
+              onClick={() => startDuplicate(e)}
+            >
+              ⧉
+            </button>
+          )}
           {editable && (
             <button
               type="button"
@@ -439,13 +567,14 @@ export default function KpiLogTable({
                     </td>
                   </tr>
                   {list.map(renderRow)}
-                  {draft && !draft.id && draft.date === date && renderEditRow(draft)}
+                  {draft && !draft.id && draft.date === date && renderEditRow(draft, 'new')}
                   <tr className="kpi-sum-row">
                     <td colSpan={2}>Tổng</td>
                     <td className="kpi-dur">{fmtHours(dayTotal.minutes)}</td>
                     <td colSpan={5} />
                     <td className="kpi-score-cell">
-                      {dayTotal.scoredCount > 0 && (
+                      {(dayTotal.scoredCount > 0 ||
+                        list.some((e) => typeof e.selfDelta === 'number')) && (
                         <span
                           className={`kpi-score ${dayTotal.delta > 0 ? 'pos' : dayTotal.delta < 0 ? 'neg' : 'zero'}`}
                         >

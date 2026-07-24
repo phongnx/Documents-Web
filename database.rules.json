@@ -18,7 +18,7 @@
             ".indexOn": ["date"],
             "$entryId": {
               ".write": "data.parent().parent().child('meta').exists() && !data.parent().parent().child('scores').child($entryId).exists() && data.parent().parent().child('meta/locked').val() !== true",
-              ".validate": "newData.hasChildren(['id','date','createdAt','updatedAt']) && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (!newData.child('start').exists() || newData.child('start').val().matches(/^[0-9]{2}:[0-9]{2}$/)) && (!newData.child('end').exists() || newData.child('end').val().matches(/^[0-9]{2}:[0-9]{2}$/)) && (!newData.child('task').exists() || (newData.child('task').isString() && newData.child('task').val().length <= 2000)) && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 2000))"
+              ".validate": "newData.hasChildren(['id','date','createdAt','updatedAt']) && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (!newData.child('start').exists() || newData.child('start').val().matches(/^[0-9]{2}:[0-9]{2}$/)) && (!newData.child('end').exists() || newData.child('end').val().matches(/^[0-9]{2}:[0-9]{2}$/)) && (!newData.child('task').exists() || (newData.child('task').isString() && newData.child('task').val().length <= 2000)) && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 2000)) && (!newData.child('selfDelta').exists() || newData.child('selfDelta').isNumber())"
             }
           },
           "scores": {
