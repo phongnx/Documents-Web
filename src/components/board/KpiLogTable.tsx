@@ -236,6 +236,24 @@ export default function KpiLogTable({
   const canAccept = mode === 'leader' && !!onAcceptEntries;
   const pendingMonth = canAccept ? pendingOf(monthEntries) : [];
 
+  // Ghi 1 draft ĐÃ pass validate xuống DB (dùng chung cho nút ✓ và auto-lưu).
+  const persistDraft = (d: RowDraft) => {
+    const input: KpiEntryInput = {
+      date: d.date,
+      start: d.start || undefined,
+      end: d.end || undefined,
+      category: d.category || undefined,
+      project: d.project || undefined,
+      feature: d.feature || undefined,
+      task: d.task || undefined,
+      note: d.note || undefined,
+      // Điểm tự chấm: rỗng/không hợp lệ → 0 (mặc định khi log done).
+      selfDelta: Number(d.selfDelta) || 0,
+    };
+    if (d.id) onUpdate?.(d.id, input);
+    else onAdd?.(input);
+  };
+
   const saveDraft = () => {
     if (!draft || !draft.date) return;
     // Không cho hoàn thành khi thiếu field tối thiểu — highlight ô lỗi + thông báo.
@@ -245,36 +263,60 @@ export default function KpiLogTable({
       setErrMsg(v.msg);
       return;
     }
-    const input: KpiEntryInput = {
-      date: draft.date,
-      start: draft.start || undefined,
-      end: draft.end || undefined,
-      category: draft.category || undefined,
-      project: draft.project || undefined,
-      feature: draft.feature || undefined,
-      task: draft.task || undefined,
-      note: draft.note || undefined,
-      // Điểm tự chấm: rỗng/không hợp lệ → 0 (mặc định khi log done).
-      selfDelta: Number(draft.selfDelta) || 0,
-    };
-    if (draft.id) onUpdate?.(draft.id, input);
-    else onAdd?.(input);
+    persistDraft(draft);
     openDraft(null);
+  };
+
+  // Tự lưu dòng đang sửa dở trước khi mở draft khác (bấm ＋ / ⧉ / click dòng khác):
+  // đủ điều kiện → lưu luôn và cho action tiếp tục; thiếu field → báo lỗi như khi
+  // bấm ✓ và CHẶN action (giữ nguyên dòng đang sửa, không mất dữ liệu).
+  const commitDraftIfAny = (): { ok: boolean; saved: RowDraft | null } => {
+    if (!draft) return { ok: true, saved: null };
+    const v = validateDraft(draft);
+    if (v.fields.size > 0) {
+      setErrFields(v.fields);
+      setErrMsg(`${v.msg} — dòng đang sửa chưa được lưu, hoàn thiện trước khi thêm dòng khác.`);
+      return { ok: false, saved: null };
+    }
+    persistDraft(draft);
+    return { ok: true, saved: draft };
+  };
+
+  // Giờ "nối ca" cho dòng mới của 1 ngày: end của dòng cuối ngày; ưu tiên draft
+  // vừa auto-lưu (entry chưa kịp dội về qua onValue) nếu nó là dòng mới/dòng cuối cùng ngày.
+  const nextStartOf = (date: string, saved: RowDraft | null): string => {
+    const list = byDay.get(date) ?? [];
+    const last = list[list.length - 1];
+    if (saved && saved.date === date && (!saved.id || saved.id === last?.id) && saved.end)
+      return saved.end;
+    return last?.end ?? '';
   };
 
   // Thêm dòng cho 1 ngày: seed start = end của dòng cuối ngày (nối ca làm việc).
   const startAdd = (date: string) => {
-    const list = byDay.get(date) ?? [];
-    const last = list[list.length - 1];
-    openDraft(emptyDraft(date, last?.end ?? ''));
+    const { ok, saved } = commitDraftIfAny();
+    if (!ok) return;
+    openDraft(emptyDraft(date, nextStartOf(date, saved)));
   };
 
   // Nhân bản 1 dòng thành dòng MỚI cùng ngày: copy nội dung, giờ seed nối ca,
   // điểm tự chấm về 0 (điểm là theo kết quả từng lần làm, không copy).
   const startDuplicate = (src: KpiEntry) => {
-    const list = byDay.get(src.date) ?? [];
-    const last = list[list.length - 1];
-    openDraft({ ...draftOf(src), id: '', start: last?.end ?? '', end: '', selfDelta: '0' });
+    const { ok, saved } = commitDraftIfAny();
+    if (!ok) return;
+    openDraft({
+      ...draftOf(src),
+      id: '',
+      start: nextStartOf(src.date, saved),
+      end: '',
+      selfDelta: '0',
+    });
+  };
+
+  // Click 1 dòng để sửa: nếu đang sửa dở dòng khác → auto-lưu (hoặc chặn nếu thiếu field).
+  const startEdit = (e: KpiEntry) => {
+    if (!commitDraftIfAny().ok) return;
+    openDraft(draftOf(e));
   };
 
   const onRowKeyDown = (e: React.KeyboardEvent) => {
@@ -420,7 +462,7 @@ export default function KpiLogTable({
       <tr
         key={e.id}
         className={`kpi-row${editable ? ' kpi-row-editable' : ''}`}
-        onClick={editable ? () => openDraft(draftOf(e)) : undefined}
+        onClick={editable ? () => startEdit(e) : undefined}
         title={
           mode === 'member' && score
             ? 'Dòng đã chấm điểm — liên hệ leader nếu cần sửa'
