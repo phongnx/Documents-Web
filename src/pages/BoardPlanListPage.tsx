@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePm } from '../context/PmContext';
+import { usePm, useReleaseKeys } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
-import { newPlanTemplate } from '../pmTypes';
+import { newPlanTemplate, type WeeklyPlan } from '../pmTypes';
 import PlanPreview from '../components/board/PlanPreview';
 import { formatDay } from '../lib/formatDate';
 import { isoLocal, currentWeek } from '../lib/pmDates';
 import { buildAutoPlan } from '../lib/planAutofill';
+import { buildReleaseDoneText } from '../lib/planProgress';
 
 export default function BoardPlanListPage() {
-  const { plans, loading, addPlan, deletePlan, apps, tasks } = usePm();
+  const { plans, loading, addPlan, deletePlan, apps, tasks, reports } = usePm();
+  const releaseKeys = useReleaseKeys();
   const navigate = useNavigate();
+  // Plan vừa copy danh sách release (hiện "✓ Đã copy" 1.5s).
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Tập id đang mở preview. Mặc định mở plan của tuần hiện tại (seed 1 lần).
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -43,6 +47,22 @@ export default function BoardPlanListPage() {
 
   const onDelete = (id: string, title: string) => {
     if (window.confirm(`Xóa plan "${title}"? Không thể hoàn tác.`)) deletePlan(id);
+  };
+
+  // Copy danh sách app đã đạt mốc release trong tuần (theo thứ tự Timeline, kèm ngày done).
+  const onCopyRelease = async (p: WeeklyPlan) => {
+    const text = buildReleaseDoneText(p, reports, releaseKeys);
+    if (!text) {
+      window.alert('Chưa có app nào đạt mốc release trong tuần này.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(p.id);
+      window.setTimeout(() => setCopiedId((cur) => (cur === p.id ? null : cur)), 1500);
+    } catch {
+      window.prompt('Copy thủ công:', text);
+    }
   };
 
   const today = isoLocal(new Date());
@@ -92,6 +112,14 @@ export default function BoardPlanListPage() {
                     </span>
                   </div>
                   <div className="doc-line-actions" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="doc-action"
+                      title="Copy danh sách app đã đạt mốc release trong tuần (kèm ngày done)"
+                      onClick={() => onCopyRelease(p)}
+                    >
+                      {copiedId === p.id ? '✓ Đã copy' : '📋 Release'}
+                    </button>
                     <button
                       type="button"
                       className="doc-action"
