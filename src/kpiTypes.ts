@@ -41,6 +41,8 @@ export interface KpiSheetMeta {
   projectNames?: string[];
   /** true = member CHỈ được chọn project trong projectNames (đã gán); false/thiếu = nhập tự do. */
   strictProjects?: boolean;
+  /** Snapshot quy chế chấm điểm (member xem preview — thiếu thì fallback DEFAULT_KPI_RULES). */
+  rules?: KpiRuleGroup[];
   /** true = khóa ghi (member nghỉ/lộ link) — rule chặn member ghi entries. */
   locked?: boolean;
   createdAt: string;

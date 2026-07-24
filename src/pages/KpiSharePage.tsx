@@ -5,9 +5,11 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import KpiLogTable from '../components/board/KpiLogTable';
+import KpiRulesPreviewDialog from '../components/board/KpiRulesPreviewDialog';
 import { useKpiSheet } from '../hooks/useKpiSheet';
 import { db } from '../lib/firebase';
 import { isoLocal } from '../lib/pmDates';
+import { DEFAULT_KPI_RULES } from '../kpiTypes';
 
 export default function KpiSharePage() {
   const { token } = useParams();
@@ -22,6 +24,12 @@ export default function KpiSharePage() {
 
   const sheet = useKpiSheet(token, setWriteError);
   const locked = sheet.meta?.locked === true;
+  // Dialog xem quy chế (chỉ đọc) — sheet cũ chưa có snapshot thì fallback quy chế gốc.
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const rules =
+    sheet.meta?.rules && sheet.meta.rules.length > 0
+      ? sheet.meta.rules
+      : DEFAULT_KPI_RULES;
 
   // Tiêu đề tab theo tên member.
   useEffect(() => {
@@ -45,6 +53,16 @@ export default function KpiSharePage() {
       <header className="share-header">
         <span className="brand">📝 KPI log{sheet.meta ? ` · ${sheet.meta.memberName}` : ''}</span>
         <div className="share-header-actions">
+          {sheet.state === 'ready' && (
+            <button
+              type="button"
+              className="doc-action"
+              title="Xem quy chế chấm điểm KPI"
+              onClick={() => setRulesOpen(true)}
+            >
+              ℹ️ Quy chế
+            </button>
+          )}
           <ThemeToggle />
           <span className="badge badge-shared">Link riêng — không chia sẻ cho người khác</span>
         </div>
@@ -80,9 +98,13 @@ export default function KpiSharePage() {
           />
           <p className="muted kpi-share-hint">
             Dòng có badge điểm là đã được leader chấm — bị khóa sửa. Điểm tháng = 100 +
-            tổng điểm cộng/trừ trong tháng.
+            tổng điểm cộng/trừ trong tháng (xem chi tiết ở nút "ℹ️ Quy chế").
           </p>
         </>
+      )}
+
+      {rulesOpen && (
+        <KpiRulesPreviewDialog rules={rules} onClose={() => setRulesOpen(false)} />
       )}
     </div>
   );

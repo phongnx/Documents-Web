@@ -701,7 +701,10 @@ export function PmProvider({ children }: { children: ReactNode }) {
   const kpiSnapshot = useCallback(
     (
       member?: KpiMember,
-    ): Pick<KpiSheetMeta, 'categories' | 'projectNames' | 'strictProjects'> => {
+    ): Pick<
+      KpiSheetMeta,
+      'categories' | 'projectNames' | 'strictProjects' | 'rules'
+    > => {
       const apps = stateRef.current.apps;
       const assigned = (member?.projectIds ?? [])
         .map((id) => apps.find((a) => a.id === id))
@@ -713,6 +716,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
           ? assigned.map((a) => a.name)
           : apps.filter((a) => !a.archived).map((a) => a.name),
         strictProjects: strict,
+        // Snapshot quy chế để member xem preview (ẩn danh không đọc được meta của leader).
+        rules: stateRef.current.meta.kpiRules,
       };
     },
     [],

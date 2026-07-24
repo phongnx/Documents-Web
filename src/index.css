@@ -2074,6 +2074,34 @@ a:hover {
 .kpi-rule-level-row {
   margin-top: 6px;
 }
+/* Preview quy chế (chỉ đọc — trang share member) */
+.kpi-rules-group-title {
+  display: block;
+  margin-bottom: 6px;
+}
+.kpi-rules-preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.kpi-rules-preview-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.kpi-rules-preview-list .kpi-score {
+  flex: 0 0 auto;
+  min-width: 44px;
+  text-align: center;
+}
+.kpi-rules-empty {
+  margin: 0;
+  font-size: 12.5px;
+}
 .kpi-delta-input {
   width: 80px;
   flex: 0 0 auto;
