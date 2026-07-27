@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePm, useReleaseKeys } from '../context/PmContext';
+import { useDocuments } from '../context/DocumentsContext';
+import { useUploadDocuments } from '../hooks/useUploadDocuments';
 import { useSeededForm } from '../hooks/useSeededForm';
 import { useUnsavedGuard } from '../hooks/useUnsavedGuard';
 import BoardNav from '../components/board/BoardNav';
@@ -13,7 +15,6 @@ import {
   type WeeklyPlan,
 } from '../pmTypes';
 import { buildDetailedHtml, buildReleaseTestHtml } from '../lib/planExport';
-import { downloadTextFile } from '../lib/downloadHelpers';
 import { normName, suggestAppId } from '../lib/pmText';
 import { weekdayVN } from '../lib/pmDates';
 import TaskPickerDialog from '../components/board/TaskPickerDialog';
@@ -64,6 +65,14 @@ export default function BoardPlanEditPage() {
       else next.add(pi);
       return next;
     });
+
+  // ----- Hook cho upload file export vào quản lý tài liệu -----
+  // LƯU Ý: phải đặt TRƯỚC mọi early return bên dưới (Rules of Hooks — bài học 27/07).
+  const { folders, addFolder } = useDocuments();
+  const { commitItems } = useUploadDocuments();
+  // Cache id folder vừa tạo trong phiên: export 2 bản liên tiếp trước khi onValue
+  // dội folder mới về sẽ không tạo folder trùng.
+  const createdFolders = useRef<Record<string, string>>({});
 
   if (loading && !form) {
     return (
@@ -194,6 +203,35 @@ export default function BoardPlanEditPage() {
     updatePlan(id, form);
     setDirty(false);
   };
+
+  // ----- Upload file export vào quản lý tài liệu (hook đã khai báo ở đầu component) -----
+  const PLAN_FOLDER = 'THSOFT - Weekly Plan';
+  const TESTER_SUBFOLDER = 'Tester';
+  // Tìm-hoặc-tạo folder theo tên (không phân biệt hoa/thường) trong đúng cấp cha.
+  const ensureFolder = (name: string, parentId?: string): string | null => {
+    const key = `${parentId ?? ''}:${name.toLowerCase()}`;
+    const cached = createdFolders.current[key];
+    if (cached) return cached;
+    const found = folders.find(
+      (f) =>
+        f.name.trim().toLowerCase() === name.toLowerCase() &&
+        (f.parentId ?? '') === (parentId ?? ''),
+    );
+    if (found) return found.id;
+    const created = addFolder(name, parentId);
+    if (created) createdFolders.current[key] = created.id;
+    return created?.id ?? null;
+  };
+
+  // 'yyyy-mm-dd' → 'MM-DD' / 'MM-DD-YYYY' (format tên file export).
+  const mmdd = (iso: string) => iso.slice(5);
+  const mmddyyyy = (iso: string) => `${iso.slice(5)}-${iso.slice(0, 4)}`;
+
+  // Export = upload thẳng vào quản lý tài liệu (KHÔNG tải file — cần file .html
+  // thì dùng nút download bên trang documents): bản chi tiết → folder
+  // "THSOFT - Weekly Plan", bản release/test → sub-folder "Tester". Trùng tên
+  // (re-export cùng tuần) → commitItems hỏi thay thế: OK = ghi đè giữ id
+  // (share link cũ vẫn sống).
   const exportHtml = (kind: 'detailed' | 'release') => {
     if (dirty) save();
     const full: WeeklyPlan = { ...plan, ...form };
@@ -201,11 +239,24 @@ export default function BoardPlanEditPage() {
       kind === 'detailed'
         ? buildDetailedHtml(full, releaseKeys)
         : buildReleaseTestHtml(full, releaseKeys);
-    const base =
+    const base = fileBase(
       kind === 'detailed'
-        ? `mobile_team_weekly_plan_${form.weekStart}_${form.weekEnd}`
-        : `plan_team_mobile_release_test_${form.weekStart}_${form.weekEnd}`;
-    downloadTextFile(`${fileBase(base)}.html`, html, 'text/html');
+        ? `mobile_team_weekly_plan_${mmdd(form.weekStart)}_to_${mmddyyyy(form.weekEnd)}`
+        : `plan_team_mobile_release_test_${mmdd(form.weekStart)}_to_${mmddyyyy(form.weekEnd)}`,
+    );
+    const rootId = ensureFolder(PLAN_FOLDER);
+    const folderId =
+      rootId && kind === 'release' ? ensureFolder(TESTER_SUBFOLDER, rootId) : rootId;
+    if (!folderId) {
+      window.alert('Không upload được tài liệu (thiếu cấu hình Firebase hoặc lỗi tạo folder).');
+      return;
+    }
+    const res = commitItems([{ type: 'html', title: base, content: html }], folderId);
+    const dest = kind === 'release' ? `${PLAN_FOLDER} / ${TESTER_SUBFOLDER}` : PLAN_FOLDER;
+    if (res.created > 0) window.alert(`Đã upload tài liệu "${base}" vào "${dest}".`);
+    else if (res.replaced > 0)
+      window.alert(`Đã cập nhật tài liệu "${base}" trong "${dest}".`);
+    else window.alert('Bỏ qua — giữ nguyên tài liệu cũ, không ghi đè.');
   };
 
   // Back về danh sách: nếu còn thay đổi chưa lưu thì hỏi lưu hay không.

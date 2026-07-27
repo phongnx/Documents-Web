@@ -47,6 +47,8 @@ function setFavicon(href: string, title: string) {
 }
 
 // Layout bọc các trang "Bảng dự án" bằng PmProvider (giữ 1 provider xuyên các route).
+// Bọc thêm DocumentsProvider để plan editor upload file export vào quản lý tài liệu
+// (mọi mutation tài liệu vẫn đi qua DocumentsContext — giữ pattern shared mirror).
 function BoardLayout() {
   // Khi vào khu Bảng dự án: đổi icon/tiêu đề tab; rời đi thì trả lại mặc định.
   useEffect(() => {
@@ -55,9 +57,11 @@ function BoardLayout() {
   }, []);
 
   return (
-    <PmProvider>
-      <Outlet />
-    </PmProvider>
+    <DocumentsProvider>
+      <PmProvider>
+        <Outlet />
+      </PmProvider>
+    </DocumentsProvider>
   );
 }
 

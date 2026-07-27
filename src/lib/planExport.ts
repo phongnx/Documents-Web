@@ -208,7 +208,6 @@ ${streams}
     )
     .join('\n');
 
-  const range = `${dm(plan.weekStart)} – ${dmy(plan.weekEnd)}`;
   const rangeFull = `${dmy(plan.weekStart)} – ${dmy(plan.weekEnd)}`;
 
   return `<!DOCTYPE html>
@@ -224,7 +223,7 @@ ${streams}
   <main class="page">
     <section class="hero">
       <div class="label">Mobile Team Weekly Plan</div>
-      <h1>${esc(plan.title || `Kế hoạch tuần ${range}`)}</h1>
+      <h1>Kế hoạch tuần ${esc(rangeFull)}</h1>
       <p>${esc(plan.description)}</p>
     </section>
 

@@ -128,6 +128,7 @@ Claude Code sẽ chạy đúng các lệnh (`npm install`, `npm run dev`, `npm r
 - Nhánh sinh từ task **seed `state` theo status task** (`taskStatusToWsState`: done→done, fix→testing, đang làm→doing).
 - Project trong plan sort cùng luật 3 hạng với card Tiến độ tuần.
 - **Editor**: mỗi project gắn app (dropdown + gợi ý theo tên) để dialog Chọn task trỏ đúng app; nút ⛶/🗕 mở/thu gọn từng dự án (mặc định thu gọn) + ▲▼ di chuyển; thêm nhánh từ dialog Chọn task mà task release có `planDate` trong tuần → **tự thêm dòng Timeline** "Thứ x — App vX" (đúng thứ tự thứ, chống trùng).
+- **Export**: 2 nút **upload thẳng vào quản lý tài liệu** (type `html`, xem bằng iframe; không tải file — cần file `.html` thì download bên trang documents) — bản chi tiết vào folder `THSOFT - Weekly Plan` (tên `mobile_team_weekly_plan_MM-DD_to_MM-DD-YYYY`), bản release/test vào sub-folder `Tester` (`plan_team_mobile_release_test_…`); folder tự tạo nếu chưa có, re-export cùng tuần hỏi thay thế (ghi đè giữ id → share link cũ vẫn sống).
 - Nút **📋 Release** trên card plan: copy app đã đạt mốc release trong tuần, phân mục đánh số — tiêu đề ưu tiên text mục Timeline (match token, không phụ thuộc thứ tự từ) + **ngày done** suy từ báo cáo ngày (done tay → "không rõ ngày"), content là items của nhánh; sắp theo Timeline, không match → theo ngày done.
 
 ### Báo cáo ngày & luật sync
