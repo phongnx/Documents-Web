@@ -8,12 +8,14 @@ import {
   catMeta,
   msKeyFromLabel,
   type PlanProject,
+  type PlanTimelineItem,
   type PlanWorkstream,
   type WeeklyPlan,
 } from '../pmTypes';
 import { buildDetailedHtml, buildReleaseTestHtml } from '../lib/planExport';
 import { downloadTextFile } from '../lib/downloadHelpers';
-import { suggestAppId } from '../lib/pmText';
+import { normName, suggestAppId } from '../lib/pmText';
+import { weekdayVN } from '../lib/pmDates';
 import TaskPickerDialog from '../components/board/TaskPickerDialog';
 
 type PlanForm = Omit<WeeklyPlan, 'id' | 'order' | 'createdAt' | 'updatedAt'>;
@@ -151,6 +153,41 @@ export default function BoardPlanEditPage() {
     });
 
   const setTimeline = (list: PlanForm['timeline']) => patch({ timeline: list });
+
+  // Thứ tự thứ trong tuần để chèn dòng timeline đúng vị trí (nhãn từ weekdayVN).
+  const DAY_ORDER = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+  const dayRank = (d: string): number => {
+    const i = DAY_ORDER.findIndex((x) => d.trim().startsWith(x));
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i; // day lạ/rỗng → coi như cuối
+  };
+  // Nhánh release vừa thêm từ dialog chọn task mà task nguồn có planDate trong tuần
+  // → tự thêm dòng timeline "Thứ x — App vX" (bỏ qua nếu đã có mục cùng release).
+  const addTimelineFromTasks = (ws: PlanWorkstream[]) => {
+    const additions: PlanTimelineItem[] = [];
+    for (const w of ws) {
+      if (w.category !== 'release' && w.milestone?.type !== 'release') continue;
+      for (const tid of w.sourceTaskIds ?? []) {
+        const t = tasks.find((x) => x.id === tid);
+        if (!t?.planDate || t.planDate < form.weekStart || t.planDate > form.weekEnd)
+          continue;
+        const app = apps.find((a) => a.id === t.appId);
+        const release = `${app?.name ?? ''} ${t.version ?? ''}`.trim();
+        if (!release) continue;
+        const dup = [...form.timeline, ...additions].some(
+          (x) => normName(x.release) === normName(release),
+        );
+        if (!dup) additions.push({ day: weekdayVN(t.planDate), release });
+      }
+    }
+    if (additions.length === 0) return;
+    // Chèn từng dòng trước mục đầu tiên có thứ LỚN HƠN — giữ nguyên thứ tự dòng sẵn có.
+    let next = [...form.timeline];
+    for (const a of additions.sort((x, y) => dayRank(x.day) - dayRank(y.day))) {
+      const at = next.findIndex((x) => dayRank(x.day) > dayRank(a.day));
+      next = at === -1 ? [...next, a] : [...next.slice(0, at), a, ...next.slice(at)];
+    }
+    setTimeline(next);
+  };
 
   // ----- Lưu / Export -----
   const save = () => {
@@ -581,6 +618,8 @@ export default function BoardPlanEditPage() {
           initialAppId={pickerAppId}
           onConfirm={(ws) => {
             addWorkstreamsFromTasks(pickerFor, ws);
+            // Task release có lịch trong tuần → tự cập nhật timeline release.
+            addTimelineFromTasks(ws);
             setPickerFor(null);
           }}
           onClose={() => setPickerFor(null)}

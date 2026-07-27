@@ -28,7 +28,7 @@ function Workstream({ w, releaseKeys }: { w: PlanWorkstream; releaseKeys: Set<st
           {st.icon} {st.label}
         </span>
         {w.milestone && (
-          <span className={`task-badge ${msIsRelease ? 'st-done' : 'st-fix'}`}>
+          <span className={`task-badge pp-ws-ms ${msIsRelease ? 'st-done' : 'st-fix'}`}>
             → {w.milestone.text}
           </span>
         )}

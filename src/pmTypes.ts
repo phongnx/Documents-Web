@@ -280,6 +280,15 @@ export const isRunningStatus = (s: string): boolean => {
 /** Đang chờ = chưa bắt đầu (kind todo). */
 export const isWaitingStatus = (s: string): boolean => statusMeta(s).kind === 'todo';
 
+/** Status task → state nhánh plan (đồng bộ plan tuần ↔ page Task, theo statusMeta). */
+export function taskStatusToWsState(status: string): WorkstreamState {
+  const kind = statusMeta(status).kind;
+  if (kind === 'done') return 'done';
+  if (kind === 'fixing') return 'testing';
+  if (kind === 'active') return 'doing';
+  return 'todo';
+}
+
 /**
  * Khung "mẫu tuần này" cho plan mới — bám nội dung 2 file HTML mẫu để sửa nhanh.
  * (id/order/createdAt/updatedAt do context điền khi tạo.)

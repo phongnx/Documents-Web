@@ -24,9 +24,12 @@ import {
   DEFAULT_PLAN_CATEGORIES,
   DEFAULT_STATUSES,
   DEFAULT_TASK_TYPES,
+  DONE_STATUS,
   isPresetMilestoneType,
   msKeyFromLabel,
   releaseKeysOf,
+  taskStatusToWsState,
+  WORKSTREAM_STATE_META,
   type AppItem,
   type DailyReport,
   type PmImportPayload,
@@ -35,6 +38,7 @@ import {
   type WeeklyPlan,
   type WorkstreamState,
 } from '../pmTypes';
+import { isoLocal } from '../lib/pmDates';
 
 // Meta mặc định (dùng chung cho init state, reset khi đăng xuất, fallback import).
 function defaultMeta(): PmMeta {
@@ -476,6 +480,32 @@ export function PmProvider({ children }: { children: ReactNode }) {
       for (const [k, v] of Object.entries(updates)) {
         // v === undefined ⇒ xóa trường (ghi null); còn lại ghi giá trị.
         writes[`users/${uid}/pm/tasks/${id}/${k}`] = v === undefined ? null : v;
+      }
+      // Status đổi → sync state (+ % ngầm định) cho các nhánh plan chứa task này
+      // ở plan tuần hiện tại/tương lai (plan quá khứ giữ nguyên lịch sử).
+      // Ghi trực tiếp path plan nên không loop với setWorkstreamProgress (chiều plan → task).
+      const curTask = stateRef.current.tasks.find((t) => t.id === id);
+      if (updates.status !== undefined && curTask && updates.status !== curTask.status) {
+        const state = taskStatusToWsState(updates.status);
+        const todayIso = isoLocal(new Date());
+        for (const p of stateRef.current.plans) {
+          if (p.weekEnd < todayIso) continue;
+          let touched = false;
+          const projects = (p.projects ?? []).map((pr) => ({
+            ...pr,
+            workstreams: (pr.workstreams ?? []).map((w) => {
+              if (!w.sourceTaskIds?.includes(id) || (w.state ?? 'todo') === state) return w;
+              touched = true;
+              return { ...w, state, progress: WORKSTREAM_STATE_META[state].pct };
+            }),
+          }));
+          if (touched)
+            writes[`users/${uid}/pm/plans/${p.id}`] = normalizePlan({
+              ...p,
+              projects,
+              updatedAt: now,
+            });
+        }
       }
       update(ref(db), writes);
     },
@@ -920,11 +950,12 @@ export function PmProvider({ children }: { children: ReactNode }) {
       if (!db || !uid || updates.length === 0) return;
       const prev = stateRef.current.plans.find((p) => p.id === planId);
       if (!prev) return;
+      const now = new Date().toISOString();
       // Gom patch theo (pi,wi) để tra nhanh.
       const byKey = new Map(updates.map((u) => [`${u.pi}:${u.wi}`, u]));
       const next: WeeklyPlan = {
         ...prev,
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
         projects: (prev.projects ?? []).map((pr, pi) => ({
           ...pr,
           workstreams: (pr.workstreams ?? []).map((w, wi) => {
@@ -937,8 +968,26 @@ export function PmProvider({ children }: { children: ReactNode }) {
           }),
         })),
       };
-      // Chuẩn hóa để loại key undefined trước khi ghi.
-      set(ref(db, `users/${uid}/pm/plans/${planId}`), normalizePlan(next));
+      // Nhánh vừa chuyển DONE → sync luôn status các task nguồn (sourceTaskIds)
+      // sang "Đã hoàn thành" để page Task không phải update thủ công.
+      // Chỉ 1 chiều done: hạ cấp nhánh không revert task.
+      const writes: Record<string, unknown> = {
+        // Chuẩn hóa để loại key undefined trước khi ghi.
+        [`users/${uid}/pm/plans/${planId}`]: normalizePlan(next),
+      };
+      const taskById = new Map(stateRef.current.tasks.map((t) => [t.id, t]));
+      for (const u of updates) {
+        if (u.state !== 'done') continue;
+        const w = prev.projects?.[u.pi]?.workstreams?.[u.wi];
+        for (const tid of w?.sourceTaskIds ?? []) {
+          const t = taskById.get(tid);
+          if (!t || t.status === DONE_STATUS) continue; // task đã xóa / đã done → bỏ qua
+          writes[`users/${uid}/pm/tasks/${tid}/status`] = DONE_STATUS;
+          writes[`users/${uid}/pm/tasks/${tid}/updatedAt`] = now;
+        }
+      }
+      // Ghi plan + tasks trong 1 lần update nguyên tử.
+      update(ref(db), writes);
     },
     [uid],
   );

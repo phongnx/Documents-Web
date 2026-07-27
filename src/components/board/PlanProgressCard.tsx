@@ -208,14 +208,19 @@ export default function PlanProgressCard() {
           </div>
 
           {/* Chi tiết theo project + dropdown cập nhật.
-              App CÓ milestone lên trên, app KHÔNG milestone xuống cuối (stable trong nhóm). */}
+              Sort 3 hạng: app có nhánh RELEASE → app có milestone khác → app không
+              milestone (stable trong nhóm). */}
           <div className="pp-projects">
             {(plan.projects ?? [])
               .map((pr, pi) => ({ pr, pi }))
               .sort((a, b) => {
-                const am = (a.pr.workstreams ?? []).some((w) => !!w.milestone) ? 0 : 1;
-                const bm = (b.pr.workstreams ?? []).some((w) => !!w.milestone) ? 0 : 1;
-                return am - bm;
+                const rank = (wss: typeof a.pr.workstreams) =>
+                  (wss ?? []).some((w) => isReleaseWs(w, releaseKeys))
+                    ? 0
+                    : (wss ?? []).some((w) => !!w.milestone)
+                      ? 1
+                      : 2;
+                return rank(a.pr.workstreams) - rank(b.pr.workstreams);
               })
               .map(({ pr, pi }) => {
               const wss = pr.workstreams ?? [];

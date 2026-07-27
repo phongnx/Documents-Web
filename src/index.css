@@ -2643,6 +2643,13 @@ a:hover {
 .pp-items li {
   margin: 3px 0;
   font-size: 14px;
+  /* Link/chuỗi dài không có khoảng trắng tự xuống dòng, không tràn card */
+  overflow-wrap: anywhere;
+}
+/* Badge milestone có thể chứa text dài → cho wrap trong card */
+.pp-ws-head .pp-ws-ms {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .pp-timeline .pp-items li {
   list-style: none;

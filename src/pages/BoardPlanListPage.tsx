@@ -40,7 +40,7 @@ export default function BoardPlanListPage() {
     const { start, end } = currentWeek();
     // Tự sinh từ dữ liệu thật (plan tuần trước + task đang chạy + lịch release);
     // không có gì để fill → fallback template mẫu như cũ.
-    const auto = buildAutoPlan({ weekStart: start, weekEnd: end, plans, apps, tasks });
+    const auto = buildAutoPlan({ weekStart: start, weekEnd: end, plans, apps, tasks, releaseKeys });
     const created = addPlan(auto ?? newPlanTemplate(start, end));
     if (created) navigate(`/board/plan/${created.id}`);
   };
