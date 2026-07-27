@@ -4,13 +4,13 @@ import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import { newReportTemplate } from '../pmTypes';
 import ReportPreview from '../components/board/ReportPreview';
-import { buildReportText, formatDateVi } from '../lib/reportFormat';
+import { buildReportText, formatDateVi, reportProjectsFromPlan } from '../lib/reportFormat';
 import { downloadTextFile } from '../lib/downloadHelpers';
 import { isoLocal } from '../lib/pmDates';
 import type { DailyReport } from '../pmTypes';
 
 export default function BoardReportListPage() {
-  const { reports, loading, addReport, deleteReport } = usePm();
+  const { reports, plans, loading, addReport, deleteReport } = usePm();
   const navigate = useNavigate();
   // Id báo cáo vừa copy (hiện "✓ Đã copy" 1.5s).
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -58,6 +58,22 @@ export default function BoardReportListPage() {
     if (created) navigate(`/board/report/${created.id}`);
   };
 
+  // Plan của tuần chứa hôm nay (nếu có) — nguồn cho nút "Tạo từ plan tuần".
+  const currentPlan = plans.find((p) => p.weekStart <= today && today <= p.weekEnd);
+
+  // Tạo báo cáo hôm nay từ plan tuần hiện tại: mỗi project 1 mục, body theo nhánh
+  // chưa done ("# nhánh" + "- item" + "-> milestone" — đúng marker bộ sync đọc).
+  const onCreateFromPlan = () => {
+    if (!currentPlan) return;
+    const projects = reportProjectsFromPlan(currentPlan);
+    if (projects.length === 0) {
+      window.alert('Mọi nhánh trong plan tuần này đã DONE — không còn gì để tạo báo cáo.');
+      return;
+    }
+    const created = addReport({ title: 'Report Mobile Team', date: today, projects });
+    if (created) navigate(`/board/report/${created.id}`);
+  };
+
   const onDelete = (id: string, date: string) => {
     if (window.confirm(`Xóa báo cáo ngày ${formatDateVi(date)}? Không thể hoàn tác.`))
       deleteReport(id);
@@ -86,6 +102,15 @@ export default function BoardReportListPage() {
         {reports.length > 0 && (
           <button type="button" onClick={onCreateFromLatest}>
             ⧉ Tạo từ báo cáo gần nhất
+          </button>
+        )}
+        {currentPlan && (
+          <button
+            type="button"
+            title="Tạo báo cáo hôm nay từ các nhánh chưa done của plan tuần này"
+            onClick={onCreateFromPlan}
+          >
+            📅 Tạo từ plan tuần
           </button>
         )}
       </div>

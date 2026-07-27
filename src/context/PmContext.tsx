@@ -38,7 +38,24 @@ import {
   type WeeklyPlan,
   type WorkstreamState,
 } from '../pmTypes';
-import { isoLocal } from '../lib/pmDates';
+import { isoLocal, weekdayVN } from '../lib/pmDates';
+import { normName } from '../lib/pmText';
+import { tokensOf } from '../lib/planProgress';
+import { taskLines } from '../lib/planAutofill';
+
+// Thay version cũ bằng version mới trong 1 chuỗi (không phân biệt hoa thường);
+// không thấy version cũ → thay token vX.Y đầu tiên; không có token nào → nối cuối.
+function replaceVersion(text: string, oldV: string, newV: string): string {
+  if (!newV) return text;
+  if (oldV) {
+    const i = text.toLowerCase().indexOf(oldV.toLowerCase());
+    if (i >= 0) return text.slice(0, i) + newV + text.slice(i + oldV.length);
+  }
+  const m = text.match(/v[0-9][\w.]*/i);
+  if (m && m.index !== undefined)
+    return text.slice(0, m.index) + newV + text.slice(m.index + m[0].length);
+  return `${text} ${newV}`.trim();
+}
 
 // Meta mặc định (dùng chung cho init state, reset khi đăng xuất, fallback import).
 function defaultMeta(): PmMeta {
@@ -481,28 +498,110 @@ export function PmProvider({ children }: { children: ReactNode }) {
         // v === undefined ⇒ xóa trường (ghi null); còn lại ghi giá trị.
         writes[`users/${uid}/pm/tasks/${id}/${k}`] = v === undefined ? null : v;
       }
-      // Status đổi → sync state (+ % ngầm định) cho các nhánh plan chứa task này
-      // ở plan tuần hiện tại/tương lai (plan quá khứ giữ nguyên lịch sử).
+      // Task đổi status/version/planDate → sync các plan tuần hiện tại/tương lai
+      // có nhánh chứa task này (plan quá khứ giữ nguyên lịch sử): state nhánh,
+      // text milestone và dòng timeline release tương ứng.
       // Ghi trực tiếp path plan nên không loop với setWorkstreamProgress (chiều plan → task).
       const curTask = stateRef.current.tasks.find((t) => t.id === id);
-      if (updates.status !== undefined && curTask && updates.status !== curTask.status) {
-        const state = taskStatusToWsState(updates.status);
+      const statusChanged =
+        !!curTask && updates.status !== undefined && updates.status !== curTask.status;
+      const versionChanged =
+        !!curTask &&
+        'version' in updates &&
+        (updates.version ?? '') !== (curTask.version ?? '');
+      const planDateChanged =
+        !!curTask &&
+        'planDate' in updates &&
+        (updates.planDate ?? '') !== (curTask.planDate ?? '');
+      // Nội dung (mô tả/tiêu đề) đổi → items nhánh dựng lại theo task (task = nguồn chân lý).
+      const contentChanged =
+        !!curTask &&
+        (('description' in updates &&
+          (updates.description ?? '') !== (curTask.description ?? '')) ||
+          ('title' in updates &&
+            updates.title !== undefined &&
+            updates.title !== curTask.title));
+      if (curTask && (statusChanged || versionChanged || planDateChanged || contentChanged)) {
+        const state = statusChanged ? taskStatusToWsState(updates.status!) : null;
+        const oldVersion = curTask.version ?? '';
+        // Version bị xóa trống → không sửa nhãn (giữ nhãn cũ, tránh ghi rỗng).
+        const newVersion = versionChanged ? (updates.version ?? '') : oldVersion;
+        const newPlanDate = planDateChanged ? updates.planDate : curTask.planDate;
+        const appName =
+          stateRef.current.apps.find((a) => a.id === curTask.appId)?.name ?? '';
         const todayIso = isoLocal(new Date());
         for (const p of stateRef.current.plans) {
           if (p.weekEnd < todayIso) continue;
           let touched = false;
+          let hasBranch = false;
           const projects = (p.projects ?? []).map((pr) => ({
             ...pr,
             workstreams: (pr.workstreams ?? []).map((w) => {
-              if (!w.sourceTaskIds?.includes(id) || (w.state ?? 'todo') === state) return w;
-              touched = true;
-              return { ...w, state, progress: WORKSTREAM_STATE_META[state].pct };
+              if (!w.sourceTaskIds?.includes(id)) return w;
+              hasBranch = true;
+              let next = w;
+              // 1) status → state nhánh (+ % ngầm định)
+              if (state && (next.state ?? 'todo') !== state) {
+                next = { ...next, state, progress: WORKSTREAM_STATE_META[state].pct };
+                touched = true;
+              }
+              // 2) version đổi → thay version trong text milestone của nhánh
+              if (versionChanged && newVersion && next.milestone) {
+                const text = replaceVersion(next.milestone.text, oldVersion, newVersion);
+                if (text !== next.milestone.text) {
+                  next = { ...next, milestone: { ...next.milestone, text } };
+                  touched = true;
+                }
+              }
+              // 3) nội dung task đổi → items nhánh dựng lại từ mô tả các task nguồn
+              // (task đang sửa dùng dữ liệu MỚI; state/milestone/% giữ nguyên).
+              if (contentChanged) {
+                const items = (next.sourceTaskIds ?? []).flatMap((tid) => {
+                  const src =
+                    tid === id
+                      ? { ...curTask, ...updates }
+                      : stateRef.current.tasks.find((x) => x.id === tid);
+                  return src ? taskLines(src) : [];
+                });
+                if (items.length > 0 && JSON.stringify(items) !== JSON.stringify(next.items ?? [])) {
+                  next = { ...next, items };
+                  touched = true;
+                }
+              }
+              return next;
             }),
           }));
+          // 4) dòng timeline match app (+ version cũ) → cập nhật nhãn release / thứ.
+          let timeline = p.timeline ?? [];
+          if (hasBranch && appName && (versionChanged || planDateChanged)) {
+            timeline = timeline.map((tl) => {
+              const rel = normName(tl.release);
+              if (!tokensOf(appName).every((k) => rel.includes(k))) return tl;
+              // Dòng có version → phải đúng version cũ (app nhiều release không dính
+              // nhầm dòng); dòng chưa có version → nhận luôn.
+              const hasVer = /v[0-9]/i.test(tl.release);
+              if (hasVer && (!oldVersion || !rel.includes(normName(oldVersion)))) return tl;
+              let release = tl.release;
+              if (versionChanged && newVersion)
+                release = hasVer
+                  ? replaceVersion(release, oldVersion, newVersion)
+                  : `${release} ${newVersion}`.trim();
+              let day = tl.day;
+              if (planDateChanged) {
+                // Dời trong tuần → thứ mới; dời ra ngoài tuần → thứ trống (không tự xóa dòng).
+                const inWeek =
+                  !!newPlanDate && p.weekStart <= newPlanDate && newPlanDate <= p.weekEnd;
+                day = inWeek ? weekdayVN(newPlanDate!) : '';
+              }
+              if (release !== tl.release || day !== tl.day) touched = true;
+              return { ...tl, day, release };
+            });
+          }
           if (touched)
             writes[`users/${uid}/pm/plans/${p.id}`] = normalizePlan({
               ...p,
               projects,
+              timeline,
               updatedAt: now,
             });
         }

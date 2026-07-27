@@ -12,6 +12,8 @@ import {
 } from '../pmTypes';
 import { formatDay } from '../lib/formatDate';
 import { isoLocal, addDays, mondayOf } from '../lib/pmDates';
+import { normName } from '../lib/pmText';
+import { tokensOf } from '../lib/planProgress';
 
 
 const releaseCount = (p: WeeklyPlan, releaseKeys: Set<string>) =>
@@ -115,11 +117,36 @@ export default function BoardCalendarPage() {
         return { ...t, date: off === null ? '' : addDays(plan.weekStart, off) };
       })
       .sort((a, b) => (a.date && b.date ? a.date.localeCompare(b.date) : 0));
-    const releases = (plan.projects ?? []).flatMap((pr) =>
-      (pr.workstreams ?? [])
-        .filter((w) => isReleaseWs(w, releaseKeys))
-        .map((w) => ({ project: pr.name, w })),
-    );
+    // Match nhánh release ↔ mục timeline (token tên project + version từ milestone)
+    // → chi tiết release sort theo đúng thứ tự timeline, kèm nhãn ngày;
+    // nhánh không match xếp cuối, giữ thứ tự trong plan.
+    const versionOf = (text: string): string =>
+      (text.match(/v[0-9][\w.]*/i)?.[0] ?? '').replace(/\.$/, '');
+    const usedTl = new Set<number>();
+    const releases = (plan.projects ?? [])
+      .flatMap((pr) =>
+        (pr.workstreams ?? [])
+          .filter((w) => isReleaseWs(w, releaseKeys))
+          .map((w) => ({ project: pr.name, w })),
+      )
+      .map((r, orig) => {
+        const ver = normName(versionOf(r.w.milestone?.text ?? ''));
+        const ti = timeline.findIndex((t, i) => {
+          if (usedTl.has(i)) return false; // mỗi mục timeline gắn 1 nhánh
+          const rel = normName(t.release);
+          if (!tokensOf(r.project).every((k) => rel.includes(k))) return false;
+          return ver ? rel.includes(ver) : true;
+        });
+        if (ti >= 0) usedTl.add(ti);
+        return { ...r, orig, ti, tl: ti >= 0 ? timeline[ti] : null };
+      })
+      .sort((a, b) => {
+        if (a.ti === -1 || b.ti === -1) {
+          if (a.ti !== b.ti) return a.ti === -1 ? 1 : -1;
+          return a.orig - b.orig;
+        }
+        return a.ti - b.ti || a.orig - b.orig;
+      });
     const releaseDone = releases.filter((r) => (r.w.state ?? 'todo') === 'done').length;
     return (
       <section key={plan.id} className="cal-week">
@@ -154,7 +181,7 @@ export default function BoardCalendarPage() {
           <p className="muted">Chưa có nhánh Release trong plan này.</p>
         ) : (
           <ul className="cal-list">
-            {releases.map(({ project, w }, i) => {
+            {releases.map(({ project, w, tl }, i) => {
               const meta = catMeta(w.category);
               const items = (w.items ?? []).filter((it) => it.trim());
               const st = WORKSTREAM_STATE_META[w.state ?? 'todo'];
@@ -162,6 +189,13 @@ export default function BoardCalendarPage() {
               return (
                 <li key={i} className={`cal-item${done ? ' cal-item-done' : ''}`}>
                   <div className="cal-main">
+                    {/* Nhãn ngày đặt TRÊN nội dung (đặt cột trái sẽ làm thụt dòng, xấu UI) */}
+                    {tl && (
+                      <span className="cal-date cal-date-top">
+                        📅 {tl.day.trim()}
+                        {tl.date && (tl.day.trim() ? ' · ' : '') + formatDay(tl.date)}
+                      </span>
+                    )}
                     <span className="cal-body">
                       <span className="task-badge app">{project}</span>
                       {w.title && <span className="cal-title-text">{w.title}</span>}

@@ -1598,6 +1598,12 @@ a:hover {
   min-width: 0;
   flex: 1;
 }
+/* Nhãn ngày dạng dòng đầu trong cal-main (không phải cột trái) */
+.cal-date.cal-date-top {
+  min-width: 0;
+  padding-top: 0;
+  font-weight: 600;
+}
 .cal-notes {
   margin: 0;
   padding-left: 20px;

@@ -312,7 +312,8 @@ export interface ReleasedWs {
 
 // Tách chuỗi thành token chữ/số (≥2 ký tự) — match tên app với text Timeline
 // KHÔNG phụ thuộc thứ tự từ ("CalcAI iOS" khớp được "iOS CalcAI v1.0").
-function tokensOf(s: string): string[] {
+// (Export để PmContext dùng chung khi sync timeline theo thay đổi của task.)
+export function tokensOf(s: string): string[] {
   return (s ?? '')
     .toLowerCase()
     .split(/[^a-z0-9]+/)

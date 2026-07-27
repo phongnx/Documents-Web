@@ -8,18 +8,82 @@ import { useUnsavedGuard } from '../hooks/useUnsavedGuard';
 import BoardNav from '../components/board/BoardNav';
 import {
   catMeta,
+  isReleaseWs,
   msKeyFromLabel,
+  type AppItem,
   type PlanProject,
   type PlanTimelineItem,
   type PlanWorkstream,
+  type TaskItem,
   type WeeklyPlan,
 } from '../pmTypes';
 import { buildDetailedHtml, buildReleaseTestHtml } from '../lib/planExport';
 import { normName, suggestAppId } from '../lib/pmText';
-import { weekdayVN } from '../lib/pmDates';
+import { isoLocal, weekdayVN } from '../lib/pmDates';
+import { tokensOf } from '../lib/planProgress';
 import TaskPickerDialog from '../components/board/TaskPickerDialog';
 
 type PlanForm = Omit<WeeklyPlan, 'id' | 'order' | 'createdAt' | 'updatedAt'>;
+
+// Thứ tự thứ trong tuần để chèn dòng timeline đúng vị trí (nhãn từ weekdayVN).
+const DAY_ORDER = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+const dayRank = (d: string): number => {
+  const i = DAY_ORDER.findIndex((x) => d.trim().startsWith(x));
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i; // day lạ/rỗng → coi như cuối
+};
+
+// Đối chiếu timeline với TASK NGUỒN của các nhánh release (task = nguồn chân lý):
+// - dòng match (token app + version; task không version chỉ match dòng không version)
+//   nhưng sai thứ so với planDate → sửa (trong tuần → đúng thứ, ngoài tuần → trống);
+// - nhánh release có task nguồn mà chưa có dòng → thêm (chèn đúng thứ tự thứ);
+// - dòng gõ tay không match nhánh nào / task đã xóa → giữ nguyên.
+// Trả về timeline mới nếu có thay đổi, null nếu đã khớp.
+function reconcileTimeline(
+  form: PlanForm,
+  tasks: TaskItem[],
+  apps: AppItem[],
+  releaseKeys: Set<string>,
+): PlanTimelineItem[] | null {
+  let timeline = [...form.timeline];
+  let changed = false;
+  const matchRow = (appName: string, version: string): number =>
+    timeline.findIndex((x) => {
+      const t = normName(x.release);
+      if (!tokensOf(appName).every((k) => t.includes(k))) return false;
+      return version ? t.includes(normName(version)) : !/v[0-9]/i.test(x.release);
+    });
+  for (const pr of form.projects) {
+    for (const w of pr.workstreams ?? []) {
+      if (!isReleaseWs(w, releaseKeys)) continue;
+      for (const tid of w.sourceTaskIds ?? []) {
+        const t = tasks.find((x) => x.id === tid);
+        if (!t) continue;
+        const appName = (apps.find((a) => a.id === t.appId)?.name ?? pr.name).trim();
+        if (!appName) continue;
+        const version = t.version ?? '';
+        const inWeek =
+          !!t.planDate && form.weekStart <= t.planDate && t.planDate <= form.weekEnd;
+        const day = inWeek ? weekdayVN(t.planDate!) : '';
+        const i = matchRow(appName, version);
+        if (i >= 0) {
+          if (timeline[i].day !== day) {
+            timeline[i] = { ...timeline[i], day };
+            changed = true;
+          }
+        } else {
+          const row = { day, release: `${appName} ${version}`.trim() };
+          const at = timeline.findIndex((x) => dayRank(x.day) > dayRank(row.day));
+          timeline =
+            at === -1
+              ? [...timeline, row]
+              : [...timeline.slice(0, at), row, ...timeline.slice(at)];
+          changed = true;
+        }
+      }
+    }
+  }
+  return changed ? timeline : null;
+}
 
 function toForm(p: WeeklyPlan): PlanForm {
   return {
@@ -73,6 +137,18 @@ export default function BoardPlanEditPage() {
   // Cache id folder vừa tạo trong phiên: export 2 bản liên tiếp trước khi onValue
   // dội folder mới về sẽ không tạo folder trùng.
   const createdFolders = useRef<Record<string, string>>({});
+
+  // Reconcile timeline theo task nguồn 1 LẦN mỗi khi mở plan (data cũ có thể lệch
+  // từ trước khi có sync task→timeline). Chỉ plan tuần hiện tại/tương lai; kết quả
+  // chỉ đổi form + đánh dấu "chưa lưu" — bấm Lưu mới ghi DB.
+  const reconciled = useRef<string | null>(null);
+  useEffect(() => {
+    if (!form || loading || reconciled.current === id) return;
+    reconciled.current = id;
+    if (form.weekEnd < isoLocal(new Date())) return; // plan quá khứ: giữ lịch sử
+    const fixed = reconcileTimeline(form, tasks, apps, releaseKeys);
+    if (fixed) patch({ timeline: fixed });
+  }, [form, loading, id, tasks, apps, releaseKeys, patch]);
 
   if (loading && !form) {
     return (
@@ -156,46 +232,85 @@ export default function BoardPlanEditPage() {
       workstreams: form.projects[pi].workstreams.filter((_, i) => i !== wi),
     });
 
-  const toggleMilestone = (pi: number, wi: number, on: boolean) =>
-    setWorkstream(pi, wi, {
-      milestone: on ? { type: 'release', text: 'Build release v…' } : undefined,
-    });
-
   const setTimeline = (list: PlanForm['timeline']) => patch({ timeline: list });
 
-  // Thứ tự thứ trong tuần để chèn dòng timeline đúng vị trí (nhãn từ weekdayVN).
-  const DAY_ORDER = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
-  const dayRank = (d: string): number => {
-    const i = DAY_ORDER.findIndex((x) => d.trim().startsWith(x));
-    return i === -1 ? Number.MAX_SAFE_INTEGER : i; // day lạ/rỗng → coi như cuối
-  };
-  // Nhánh release vừa thêm từ dialog chọn task mà task nguồn có planDate trong tuần
-  // → tự thêm dòng timeline "Thứ x — App vX" (bỏ qua nếu đã có mục cùng release).
-  const addTimelineFromTasks = (ws: PlanWorkstream[]) => {
-    const additions: PlanTimelineItem[] = [];
-    for (const w of ws) {
-      if (w.category !== 'release' && w.milestone?.type !== 'release') continue;
-      for (const tid of w.sourceTaskIds ?? []) {
-        const t = tasks.find((x) => x.id === tid);
-        if (!t?.planDate || t.planDate < form.weekStart || t.planDate > form.weekEnd)
-          continue;
-        const app = apps.find((a) => a.id === t.appId);
-        const release = `${app?.name ?? ''} ${t.version ?? ''}`.trim();
-        if (!release) continue;
-        const dup = [...form.timeline, ...additions].some(
-          (x) => normName(x.release) === normName(release),
-        );
-        if (!dup) additions.push({ day: weekdayVN(t.planDate), release });
-      }
-    }
+  // ----- Tự cập nhật Timeline khi nhánh trở thành release -----
+  // Timeline đã có dòng nói về app này chưa (kèm version nếu biết — app có nhiều
+  // release khác version vẫn được thêm dòng riêng)?
+  const hasTimelineFor = (
+    list: PlanTimelineItem[],
+    appName: string,
+    version: string,
+  ): boolean =>
+    list.some((x) => {
+      const t = normName(x.release);
+      if (!tokensOf(appName).every((k) => t.includes(k))) return false;
+      return version ? t.includes(normName(version)) : true;
+    });
+  // Parse version từ text milestone ("Build release v1.60" → "v1.60").
+  const versionOf = (text: string): string =>
+    (text.match(/v[0-9][\w.]*/i)?.[0] ?? '').replace(/\.$/, '');
+  // Chèn các dòng mới trước mục đầu tiên có thứ LỚN HƠN — giữ nguyên thứ tự dòng sẵn có.
+  const pushTimeline = (additions: PlanTimelineItem[]) => {
     if (additions.length === 0) return;
-    // Chèn từng dòng trước mục đầu tiên có thứ LỚN HƠN — giữ nguyên thứ tự dòng sẵn có.
     let next = [...form.timeline];
     for (const a of additions.sort((x, y) => dayRank(x.day) - dayRank(y.day))) {
       const at = next.findIndex((x) => dayRank(x.day) > dayRank(a.day));
       next = at === -1 ? [...next, a] : [...next.slice(0, at), a, ...next.slice(at)];
     }
     setTimeline(next);
+  };
+
+  // Nhánh release thêm từ dialog chọn task → thêm dòng timeline "Thứ x — App vX";
+  // task có planDate trong tuần → điền đúng thứ, ngoài tuần/chưa có lịch → thứ để trống.
+  const addTimelineFromTasks = (ws: PlanWorkstream[]) => {
+    const additions: PlanTimelineItem[] = [];
+    for (const w of ws) {
+      if (!isReleaseWs(w, releaseKeys)) continue;
+      for (const tid of w.sourceTaskIds ?? []) {
+        const t = tasks.find((x) => x.id === tid);
+        if (!t) continue;
+        const appName = apps.find((a) => a.id === t.appId)?.name ?? '';
+        const release = `${appName} ${t.version ?? ''}`.trim();
+        if (!release) continue;
+        if (
+          hasTimelineFor(
+            [...form.timeline, ...additions],
+            appName || release,
+            t.version ?? '',
+          )
+        )
+          continue;
+        const inWeek =
+          !!t.planDate && form.weekStart <= t.planDate && t.planDate <= form.weekEnd;
+        additions.push({ day: inWeek ? weekdayVN(t.planDate!) : '', release });
+      }
+    }
+    pushTimeline(additions);
+  };
+
+  // Nhánh vừa TRỞ THÀNH release trong editor (bật milestone / đổi loại milestone)
+  // → đảm bảo timeline có dòng của app đó (thứ để trống cho user điền; đã có thì thôi).
+  // forceRelease: loại milestone mới thêm inline chưa kịp có trong releaseKeys.
+  const ensureTimelineForRelease = (
+    pi: number,
+    ms: { type: string; text: string },
+    forceRelease = false,
+  ) => {
+    if (!forceRelease && !releaseKeys.has(ms.type)) return;
+    const pr = form.projects[pi];
+    const appName = (apps.find((a) => a.id === pr.appId)?.name ?? pr.name).trim();
+    if (!appName) return;
+    const version = versionOf(ms.text);
+    if (hasTimelineFor(form.timeline, appName, version)) return;
+    pushTimeline([{ day: '', release: `${appName} ${version}`.trim() }]);
+  };
+
+  const toggleMilestone = (pi: number, wi: number, on: boolean) => {
+    const ms = { type: 'release', text: 'Build release v…' };
+    setWorkstream(pi, wi, { milestone: on ? ms : undefined });
+    // Bật milestone (mặc định loại release) → tự thêm dòng timeline cho app.
+    if (on) ensureTimelineForRelease(pi, ms);
   };
 
   // ----- Lưu / Export -----
@@ -289,8 +404,13 @@ export default function BoardPlanEditPage() {
     const isRelease = window.confirm('Loại này có tính là RELEASE không? (OK = có, Cancel = không)');
     const key = msKeyFromLabel(label, meta.milestoneTypes.length);
     addMilestoneType(label, isRelease);
-    const ms = form.projects[pi].workstreams[wi].milestone;
-    setWorkstream(pi, wi, { milestone: { type: key, text: ms?.text ?? '' } });
+    const ms = {
+      type: key,
+      text: form.projects[pi].workstreams[wi].milestone?.text ?? '',
+    };
+    setWorkstream(pi, wi, { milestone: ms });
+    // Loại mới là release (meta chưa kịp dội về releaseKeys) → thêm dòng timeline luôn.
+    if (isRelease) ensureTimelineForRelease(pi, ms, true);
   };
 
   // App focus mặc định cho dialog chọn task: ưu tiên appId của project,
@@ -530,11 +650,12 @@ export default function BoardPlanEditPage() {
                 <div className="plan-row">
                   <select
                     value={w.milestone.type}
-                    onChange={(e) =>
-                      setWorkstream(pi, wi, {
-                        milestone: { type: e.target.value, text: w.milestone!.text },
-                      })
-                    }
+                    onChange={(e) => {
+                      const ms = { type: e.target.value, text: w.milestone!.text };
+                      setWorkstream(pi, wi, { milestone: ms });
+                      // Đổi sang loại release → tự thêm dòng timeline cho app.
+                      ensureTimelineForRelease(pi, ms);
+                    }}
                   >
                     {meta.milestoneTypes.map((mt) => (
                       <option key={mt.key} value={mt.key}>

@@ -1,6 +1,27 @@
 // Tiện ích cho "Báo cáo ngày": số La Mã, định dạng ngày, tách dòng theo marker,
 // và dựng lại đúng text báo cáo để copy/paste ra ngoài.
-import type { DailyReport } from '../pmTypes';
+import type { DailyReport, ReportProject, WeeklyPlan } from '../pmTypes';
+
+// Sinh khung project báo cáo từ plan tuần: mỗi nhánh CHƯA done → "# tiêu đề:" +
+// "- item" + "-> milestone" (đúng marker bộ sync đọc); nhánh done bị bỏ (không cần
+// báo lại); project hết nhánh → bỏ. Trả [] nếu plan không còn gì để báo.
+export function reportProjectsFromPlan(plan: WeeklyPlan): ReportProject[] {
+  const out: ReportProject[] = [];
+  for (const pr of plan.projects ?? []) {
+    const wss = (pr.workstreams ?? []).filter((w) => (w.state ?? 'todo') !== 'done');
+    if (wss.length === 0) continue;
+    const body = wss
+      .map((w) => {
+        const lines = [`# ${w.title}:`];
+        for (const it of w.items ?? []) if (it.trim()) lines.push(`- ${it.trim()}`);
+        if (w.milestone?.text) lines.push(`-> ${w.milestone.text}`);
+        return lines.join('\n');
+      })
+      .join('\n\n');
+    out.push({ name: pr.name, ...(pr.appId ? { appId: pr.appId } : {}), body });
+  }
+  return out;
+}
 
 const ROMAN: [number, string][] = [
   [1000, 'M'],
