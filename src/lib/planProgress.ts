@@ -105,6 +105,20 @@ function looseMatch(a: string, b: string): boolean {
   return i >= 6;
 }
 
+// Các token version trong chuỗi ('Build release v14.2' → ['v142'], đã normalize).
+function versionsOf(t: string): string[] {
+  return [...t.toLowerCase().matchAll(/v[0-9][\w.]*/g)].map((m) => norm(m[0]));
+}
+
+// Dòng và milestone ĐỀU có version mà không trùng cái nào → là mốc KHÁC.
+// (Chặn looseMatch chung tiền tố gán nhầm "Build release v14.2" cho milestone v14.3.)
+function versionConflict(lineText: string, msText: string): boolean {
+  const a = versionsOf(lineText);
+  const b = versionsOf(msText);
+  if (a.length === 0 || b.length === 0) return false;
+  return !a.some((v) => b.includes(v));
+}
+
 // Hạng trạng thái để áp dụng luật "không hạ cấp" (blocked coi như thấp nhất, có thể được gỡ).
 const STATE_RANK: Record<WorkstreamState, number> = {
   blocked: 0,
@@ -184,11 +198,17 @@ function inferWorkstream(
   }
 
   // Bổ sung các dòng '->' toàn project khớp milestone.text (nếu nhánh có milestone).
+  // Khác version với milestone → là mốc của nhánh khác, không lấy.
   const msLines: { kind: string; text: string }[] = [];
   if (w.milestone) {
     const mKey = norm(w.milestone.text);
     for (const a of allArrows) {
-      if (looseMatch(norm(a.text), mKey) && !relevant.includes(a)) msLines.push(a);
+      if (
+        looseMatch(norm(a.text), mKey) &&
+        !versionConflict(a.text, w.milestone.text) &&
+        !relevant.includes(a)
+      )
+        msLines.push(a);
     }
   }
   const consider = [...relevant, ...msLines];
@@ -198,13 +218,15 @@ function inferWorkstream(
   const text = consider.map((l) => l.text).join('\n').toLowerCase();
 
   // "Dòng mốc": nhánh có milestone → CHỈ dòng '->' (không lấy done từ % trên bullet
-  // task lẻ kiểu "- Build test cases (100%)"); nhánh thường → mọi dòng liên quan.
+  // task lẻ kiểu "- Build test cases (100%)") và KHÔNG khác version với milestone
+  // (dòng "v14.2" không được làm mốc cho milestone v14.3); nhánh thường → mọi dòng.
   const goalLines = hasMs
     ? consider.filter(
         (l) =>
           l.kind === 'arrow' &&
           (RELEASE_KW_RE.test(l.text.toLowerCase()) ||
-            looseMatch(norm(l.text), norm(w.milestone!.text))),
+            looseMatch(norm(l.text), norm(w.milestone!.text))) &&
+          !versionConflict(l.text, w.milestone!.text),
       )
     : consider;
   const lineDone = goalLines.some((l) => {
