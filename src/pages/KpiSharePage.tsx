@@ -5,11 +5,13 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import KpiLogTable from '../components/board/KpiLogTable';
+import KpiReleaseInfoDialog from '../components/board/KpiReleaseInfoDialog';
 import KpiRulesPreviewDialog from '../components/board/KpiRulesPreviewDialog';
 import { useKpiSheet } from '../hooks/useKpiSheet';
 import { db } from '../lib/firebase';
-import { isoLocal } from '../lib/pmDates';
-import { DEFAULT_KPI_RULES } from '../kpiTypes';
+import { addDays, isoLocal, mondayOf, weekdayVN } from '../lib/pmDates';
+import { formatDateVi } from '../lib/reportFormat';
+import { DEFAULT_KPI_RULES, type KpiRelease } from '../kpiTypes';
 
 export default function KpiSharePage() {
   const { token } = useParams();
@@ -30,6 +32,17 @@ export default function KpiSharePage() {
     sheet.meta?.rules && sheet.meta.rules.length > 0
       ? sheet.meta.rules
       : DEFAULT_KPI_RULES;
+
+  // Mốc release sắp tới của các app được gán (snapshot trong meta.releases):
+  // lọc lại từ hôm nay lúc render (snapshot có thể cũ), mặc định hiện 2 mốc gần nhất.
+  const [relOpen, setRelOpen] = useState(false);
+  // Mốc đang xem chi tiết trong dialog (null = đóng).
+  const [relDetail, setRelDetail] = useState<KpiRelease | null>(null);
+  const today = isoLocal(new Date());
+  const weekStart = mondayOf(today);
+  const weekEnd = addDays(weekStart, 6);
+  const releases = (sheet.meta?.releases ?? []).filter((r) => r.date >= today);
+  const visibleReleases = relOpen ? releases : releases.slice(0, 2);
 
   // Tiêu đề tab theo tên member.
   useEffect(() => {
@@ -76,6 +89,37 @@ export default function KpiSharePage() {
       )}
       {sheet.state === 'ready' && (
         <>
+          {releases.length > 0 && (
+            <div className="kpi-releases">
+              <span className="muted">🚀 Release sắp tới:</span>
+              {visibleReleases.map((r, i) => (
+                <button
+                  type="button"
+                  key={`${r.app}-${r.date}-${i}`}
+                  className={
+                    // Mốc nằm trong tuần hiện tại → highlight khác biệt.
+                    r.date >= weekStart && r.date <= weekEnd
+                      ? 'kpi-rel-chip kpi-rel-week'
+                      : 'kpi-rel-chip'
+                  }
+                  title="Xem chi tiết các task trong release"
+                  onClick={() => setRelDetail(r)}
+                >
+                  {r.app}
+                  {r.version ? ` ${r.version}` : ''} · {weekdayVN(r.date)} {formatDateVi(r.date)}
+                </button>
+              ))}
+              {releases.length > 2 && (
+                <button
+                  type="button"
+                  className="doc-action kpi-rel-toggle"
+                  onClick={() => setRelOpen((v) => !v)}
+                >
+                  {relOpen ? '▴ Thu gọn' : `+${releases.length - 2} ▾`}
+                </button>
+              )}
+            </div>
+          )}
           {locked && (
             <p className="warn kpi-locked-banner">
               🔒 Trang đã bị khóa — chỉ xem, không sửa được. Liên hệ leader nếu cần mở lại.
@@ -106,6 +150,9 @@ export default function KpiSharePage() {
 
       {rulesOpen && (
         <KpiRulesPreviewDialog rules={rules} onClose={() => setRulesOpen(false)} />
+      )}
+      {relDetail && (
+        <KpiReleaseInfoDialog release={relDetail} onClose={() => setRelDetail(null)} />
       )}
     </div>
   );

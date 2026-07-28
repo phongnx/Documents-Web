@@ -1289,10 +1289,11 @@ a:hover {
   background: var(--subtle);
   color: var(--muted);
 }
+/* State nhánh 'blocked' — hiển thị là Pending (đang chờ) → tông vàng amber, không dùng đỏ. */
 .task-badge.st-block {
-  background: rgba(220, 38, 38, 0.15);
+  background: rgba(217, 119, 6, 0.15);
   border-color: transparent;
-  color: #dc2626;
+  color: #d97706;
 }
 .task-plan {
   font-size: 12px;
@@ -1985,6 +1986,73 @@ a:hover {
 .kpi-share-hint {
   margin-top: 10px;
   font-size: 12.5px;
+}
+/* Dải mốc release sắp tới ở header trang log KPI của member. */
+.kpi-releases {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  font-size: 12.5px;
+}
+.kpi-rel-chip {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--subtle);
+  white-space: nowrap;
+}
+.kpi-rel-chip:hover {
+  border-color: var(--primary);
+}
+/* Mốc release nằm trong tuần hiện tại — highlight khác biệt. */
+.kpi-rel-chip.kpi-rel-week {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.12);
+  font-weight: 600;
+}
+.kpi-rel-chip.kpi-rel-week:hover {
+  background: rgba(37, 99, 235, 0.2);
+}
+.kpi-rel-toggle {
+  font-size: 12px;
+}
+/* Dialog chi tiết task trong 1 mốc release (trang member). */
+.kpi-rel-dialog {
+  max-width: 560px;
+}
+.kpi-rel-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.kpi-rel-task-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.kpi-rel-task-title {
+  font-size: 13.5px;
+}
+.kpi-rel-task-type {
+  font-size: 12px;
+}
+.kpi-rel-task-items {
+  margin: 6px 0 0;
+  padding-left: 22px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.kpi-rel-task-items li {
+  overflow-wrap: anywhere;
+}
+.kpi-rel-dialog-empty {
+  padding: 8px 0;
 }
 .kpi-month-input {
   padding: 6px 10px;

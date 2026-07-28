@@ -34,6 +34,28 @@ export interface KpiScore {
   scoredAt: string;
 }
 
+/** 1 task thuộc mốc release (snapshot để member xem chi tiết trong dialog). */
+export interface KpiReleaseTask {
+  title: string;
+  /** Chuỗi trạng thái chuẩn của leader ('Đang thực hiện'…) — tô màu qua statusMeta. */
+  status: string;
+  /** Loại task (Release/Feature/Bugfix…). */
+  type?: string;
+  /** Các dòng mô tả chi tiết (từ description, đã cắt bớt nếu quá dài). */
+  items?: string[];
+}
+
+/** 1 mốc release sắp tới của app được gán cho member (snapshot từ task.planDate của leader). */
+export interface KpiRelease {
+  /** Tên app. */
+  app: string;
+  version?: string;
+  /** ISO 'yyyy-mm-dd' (task.planDate). */
+  date: string;
+  /** Các task cùng app + cùng version với mốc (snapshot — sheet cũ có thể thiếu). */
+  tasks?: KpiReleaseTask[];
+}
+
 /** Meta của sheet — shared/kpi/{token}/meta. Chỉ owner ghi; ownerId bất biến (rule validate). */
 export interface KpiSheetMeta {
   ownerId: string;
@@ -46,6 +68,8 @@ export interface KpiSheetMeta {
   strictProjects?: boolean;
   /** Snapshot quy chế chấm điểm (member xem preview — thiếu thì fallback DEFAULT_KPI_RULES). */
   rules?: KpiRuleGroup[];
+  /** Snapshot các mốc release SẮP TỚI của app được gán (member xem lịch ở header). */
+  releases?: KpiRelease[];
   /** true = khóa ghi (member nghỉ/lộ link) — rule chặn member ghi entries. */
   locked?: boolean;
   createdAt: string;

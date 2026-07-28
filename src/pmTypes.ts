@@ -216,7 +216,8 @@ export const WORKSTREAM_STATE_META: Record<
   doing: { label: 'Đang làm', icon: '🔵', pct: 50, badgeClass: 'st-doing' },
   testing: { label: 'Test', icon: '🧪', pct: 80, badgeClass: 'st-fix' },
   done: { label: 'Xong', icon: '✅', pct: 100, badgeClass: 'st-done' },
-  blocked: { label: 'Blocked', icon: '⛔', pct: 0, badgeClass: 'st-block' },
+  // Key giữ 'blocked' (data cũ trong DB) nhưng nhãn hiển thị là Pending — nghĩa "đang chờ".
+  blocked: { label: 'Pending', icon: '⏳', pct: 0, badgeClass: 'st-block' },
 };
 
 /** Thứ tự trạng thái cho dropdown. */

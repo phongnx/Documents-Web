@@ -16,6 +16,8 @@ import { computeSplit, keyOfTask } from '../lib/flavorSplit';
 import {
   DEFAULT_KPI_RULES,
   type KpiMember,
+  type KpiRelease,
+  type KpiReleaseTask,
   type KpiRuleGroup,
   type KpiSheetMeta,
 } from '../kpiTypes';
@@ -42,6 +44,66 @@ import { isoLocal, weekdayVN } from '../lib/pmDates';
 import { normName } from '../lib/pmText';
 import { tokensOf } from '../lib/planProgress';
 import { taskLines } from '../lib/planAutofill';
+
+// Danh sách task thuộc 1 mốc release (snapshot cho dialog chi tiết ở trang member):
+// task cùng app + cùng version với task nguồn (gồm cả task đã done — để member thấy
+// tiến độ tổng thể); mốc không có version → chỉ có task nguồn. Cap 15 task/mốc,
+// 10 dòng mô tả/task để payload snapshot gọn.
+const REL_TASK_CAP = 15;
+const REL_ITEM_CAP = 10;
+function releaseTasksOf(source: TaskItem, tasks: TaskItem[]): KpiReleaseTask[] {
+  const matched = source.version
+    ? tasks
+        .filter(
+          (t) =>
+            t.appId === source.appId &&
+            !!t.version &&
+            normName(t.version) === normName(source.version!),
+        )
+        .sort((a, b) => a.order - b.order)
+    : [source];
+  const out: KpiReleaseTask[] = matched.slice(0, REL_TASK_CAP).map((t) => {
+    const lines = t.description?.trim() ? taskLines(t) : [];
+    const items =
+      lines.length > REL_ITEM_CAP ? [...lines.slice(0, REL_ITEM_CAP), '…'] : lines;
+    return {
+      title: t.title,
+      status: t.status,
+      ...(t.type ? { type: t.type } : {}),
+      ...(items.length ? { items } : {}),
+    };
+  });
+  // Bị cắt bớt → thêm dòng đánh dấu (dialog ẩn badge khi status rỗng).
+  if (matched.length > REL_TASK_CAP)
+    out.push({ title: `… còn ${matched.length - REL_TASK_CAP} task khác`, status: '' });
+  return out;
+}
+
+// Mốc release SẮP TỚI của các app được gán cho member KPI: task có planDate từ hôm
+// nay trở đi, chưa done, thuộc app được gán; sort ngày tăng dần, cap 10 mốc.
+function upcomingReleases(assigned: AppItem[], tasks: TaskItem[]): KpiRelease[] {
+  const today = isoLocal(new Date());
+  return tasks
+    .filter(
+      (t) =>
+        !!t.appId &&
+        !!t.planDate &&
+        t.planDate >= today &&
+        t.status !== DONE_STATUS &&
+        assigned.some((a) => a.id === t.appId),
+    )
+    .sort((a, b) => a.planDate!.localeCompare(b.planDate!))
+    .slice(0, 10)
+    .map((t) => {
+      const relTasks = releaseTasksOf(t, tasks);
+      return {
+        app: assigned.find((a) => a.id === t.appId)!.name,
+        ...(t.version ? { version: t.version } : {}),
+        date: t.planDate!,
+        ...(relTasks.length ? { tasks: relTasks } : {}),
+      };
+    });
+}
 
 // Thay version cũ bằng version mới trong 1 chuỗi (không phân biệt hoa thường);
 // không thấy version cũ → thay token vX.Y đầu tiên; không có token nào → nối cuối.
@@ -605,6 +667,25 @@ export function PmProvider({ children }: { children: ReactNode }) {
               updatedAt: now,
             });
         }
+        // Task của app được gán cho member KPI đổi lịch/version/status → refresh
+        // snapshot mốc release trên sheet công khai của các member đó (member ẩn danh
+        // chỉ đọc được meta của sheet, không đọc được tasks của leader).
+        if (curTask.appId) {
+          const appId = curTask.appId;
+          const nextTasks = stateRef.current.tasks.map((t) =>
+            t.id === id ? { ...t, ...updates } : t,
+          );
+          for (const m of stateRef.current.members) {
+            if (!m.projectIds?.includes(appId)) continue;
+            const assigned = m.projectIds
+              .map((aid) => stateRef.current.apps.find((a) => a.id === aid))
+              .filter((a): a is AppItem => !!a);
+            const releases = upcomingReleases(assigned, nextTasks);
+            writes[`shared/kpi/${m.token}/meta/releases`] = releases.length
+              ? releases
+              : null;
+          }
+        }
       }
       update(ref(db), writes);
     },
@@ -832,7 +913,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
       member?: KpiMember,
     ): Pick<
       KpiSheetMeta,
-      'categories' | 'projectNames' | 'strictProjects' | 'rules'
+      'categories' | 'projectNames' | 'strictProjects' | 'rules' | 'releases'
     > => {
       const apps = stateRef.current.apps;
       const assigned = (member?.projectIds ?? [])
@@ -844,6 +925,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
         strictProjects: true,
         // Snapshot quy chế để member xem preview (ẩn danh không đọc được meta của leader).
         rules: stateRef.current.meta.kpiRules,
+        // Snapshot mốc release sắp tới của app được gán (member xem lịch ở header).
+        releases: upcomingReleases(assigned, stateRef.current.tasks),
       };
     },
     [],
@@ -992,6 +1075,9 @@ export function PmProvider({ children }: { children: ReactNode }) {
           : null,
         [`shared/kpi/${cur.token}/meta/projectNames`]: snapshot.projectNames,
         [`shared/kpi/${cur.token}/meta/strictProjects`]: snapshot.strictProjects,
+        [`shared/kpi/${cur.token}/meta/releases`]: snapshot.releases?.length
+          ? snapshot.releases
+          : null,
       });
     },
     [uid, kpiSnapshot],
