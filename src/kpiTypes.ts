@@ -89,6 +89,13 @@ export interface KpiLeave {
   createdAt: string;
 }
 
+/** Plan chung cho 1 tuần — shared/kpi/{token}/weekPlans/{thứ-2-của-tuần}.
+ *  Member ghi được (rule chặn khi sheet khóa); text tự do, mỗi dòng 1 đầu việc. */
+export interface KpiWeekPlan {
+  text: string;
+  updatedAt: string;
+}
+
 /** Phần nghỉ của 1 ngày: cả ngày / buổi sáng / buổi chiều. */
 export type LeavePortion = 'full' | 'am' | 'pm';
 

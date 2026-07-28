@@ -30,6 +30,13 @@ export function weekdayVN(iso: string): string {
   return dow === 0 ? 'Chủ nhật' : `Thứ ${dow + 1}`;
 }
 
+// Ngày làm việc kế tiếp: Thứ 6/7/CN → Thứ 2 tuần sau, còn lại → ngày mai.
+export function nextWorkday(iso: string): string {
+  const dow = new Date(iso + 'T00:00:00').getDay(); // 0 = CN, 5 = Thứ 6, 6 = Thứ 7
+  const n = dow === 5 ? 3 : dow === 6 ? 2 : 1;
+  return addDays(iso, n);
+}
+
 // Thứ Hai → Thứ Sáu của tuần hiện tại.
 export function currentWeek(): { start: string; end: string } {
   const now = new Date();

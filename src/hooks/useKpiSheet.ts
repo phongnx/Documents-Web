@@ -6,7 +6,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { onValue, ref, set, update } from 'firebase/database';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../lib/firebase';
-import type { KpiEntry, KpiLeave, KpiScore, KpiSheetMeta } from '../kpiTypes';
+import type {
+  KpiEntry,
+  KpiLeave,
+  KpiScore,
+  KpiSheetMeta,
+  KpiWeekPlan,
+} from '../kpiTypes';
 
 export type KpiSheetState = 'loading' | 'ready' | 'notfound';
 
@@ -17,6 +23,10 @@ export interface KpiSheet {
   scores: Record<string, KpiScore>;
   /** Các đợt nghỉ phép (leader quản lý, member đọc để hiển thị + validate giờ log). */
   leaves: KpiLeave[];
+  /** Plan chung theo tuần (key = thứ 2 của tuần 'yyyy-mm-dd'). */
+  weekPlans: Record<string, KpiWeekPlan>;
+  /** Member: ghi plan tuần (text rỗng = xóa plan của tuần đó). */
+  setWeekPlan: (weekStart: string, text: string) => void;
   /** Leader: thêm 1 đợt nghỉ phép. */
   addLeave: (input: Omit<KpiLeave, 'id' | 'createdAt'>) => void;
   /** Leader: xóa 1 đợt nghỉ phép. */
@@ -73,6 +83,7 @@ export function useKpiSheet(
   const [entries, setEntries] = useState<KpiEntry[]>([]);
   const [scores, setScores] = useState<Record<string, KpiScore>>({});
   const [leaves, setLeaves] = useState<KpiLeave[]>([]);
+  const [weekPlans, setWeekPlans] = useState<Record<string, KpiWeekPlan>>({});
 
   useEffect(() => {
     if (!db || !token) {
@@ -88,6 +99,7 @@ export function useKpiSheet(
           entries?: Record<string, KpiEntry>;
           scores?: Record<string, KpiScore>;
           leaves?: Record<string, KpiLeave>;
+          weekPlans?: Record<string, KpiWeekPlan>;
         } | null;
         if (!val?.meta) {
           // Token chưa được tạo hoặc đã bị leader thu hồi (đổi link/xóa member).
@@ -95,6 +107,7 @@ export function useKpiSheet(
           setEntries([]);
           setScores({});
           setLeaves([]);
+          setWeekPlans({});
           setState('notfound');
           return;
         }
@@ -107,6 +120,7 @@ export function useKpiSheet(
             b.startDate.localeCompare(a.startDate),
           ),
         );
+        setWeekPlans(val.weekPlans ?? {});
         setState('ready');
       },
       () => setState('notfound'),
@@ -230,6 +244,19 @@ export function useKpiSheet(
     [token, failed],
   );
 
+  const setWeekPlan = useCallback(
+    (weekStart: string, text: string) => {
+      if (!db || !token) return;
+      const t = text.trim();
+      // Text rỗng = xóa plan của tuần đó.
+      const payload: KpiWeekPlan | null = t
+        ? { text: t, updatedAt: new Date().toISOString() }
+        : null;
+      set(ref(db, `shared/kpi/${token}/weekPlans/${weekStart}`), payload).catch(failed);
+    },
+    [token, failed],
+  );
+
   const deleteEntryWithScore = useCallback(
     (entryId: string) => {
       if (!db || !token) return;
@@ -257,5 +284,7 @@ export function useKpiSheet(
     deleteEntryWithScore,
     addLeave,
     deleteLeave,
+    weekPlans,
+    setWeekPlan,
   };
 }

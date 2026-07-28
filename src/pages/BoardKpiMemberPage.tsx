@@ -132,6 +132,7 @@ export default function BoardKpiMemberPage() {
           categories={sheet.meta?.categories ?? []}
           projectNames={sheet.meta?.projectNames ?? []}
           leaves={sheet.leaves}
+          weekPlans={sheet.weekPlans}
           onScoreClick={setScoring}
           onAcceptEntries={acceptEntries}
           onDeleteWithScore={sheet.deleteEntryWithScore}

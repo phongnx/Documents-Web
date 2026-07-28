@@ -19,11 +19,13 @@ import {
   type KpiEntry,
   type KpiLeave,
   type KpiScore,
+  type KpiWeekPlan,
 } from '../../kpiTypes';
 import type { KpiEntryInput } from '../../hooks/useKpiSheet';
 import { useUnsavedGuard } from '../../hooks/useUnsavedGuard';
-import { isoLocal, weekdayVN } from '../../lib/pmDates';
+import { addDays, isoLocal, mondayOf, nextWorkday, weekdayVN } from '../../lib/pmDates';
 import { formatDateVi } from '../../lib/reportFormat';
+import KpiWeekPlanDialog from './KpiWeekPlanDialog';
 
 interface Props {
   mode: 'member' | 'leader';
@@ -40,6 +42,10 @@ interface Props {
   strictProjects?: boolean;
   /** Các đợt nghỉ phép — hiển thị ở block ngày + validate giờ log không trùng giờ nghỉ. */
   leaves?: KpiLeave[];
+  /** Plan chung theo tuần (key = thứ 2 của tuần) — hiển thị block trên bảng. */
+  weekPlans?: Record<string, KpiWeekPlan>;
+  /** Member: lưu plan tuần (text rỗng = xóa). Không truyền = chỉ xem (leader). */
+  onSaveWeekPlan?: (weekStart: string, text: string) => void;
   /** Member mode: true = sheet bị khóa, ẩn mọi nút sửa. */
   locked?: boolean;
   onAdd?: (input: KpiEntryInput) => string | null;
@@ -134,6 +140,8 @@ export default function KpiLogTable({
   projectNames,
   strictProjects,
   leaves,
+  weekPlans,
+  onSaveWeekPlan,
   locked,
   onAdd,
   onUpdate,
@@ -146,6 +154,8 @@ export default function KpiLogTable({
   // Field đang lỗi validate + thông báo (chỉ set khi bấm Lưu, gõ vào ô nào thì bỏ lỗi ô đó).
   const [errFields, setErrFields] = useState<Set<string>>(new Set());
   const [errMsg, setErrMsg] = useState('');
+  // Tuần đang sửa plan chung trong dialog (null = đóng) — hooks luôn ở TOP (Rules of Hooks).
+  const [weekPlanEdit, setWeekPlanEdit] = useState<string | null>(null);
   useUnsavedGuard(!!draft);
   const patchDraft = (u: Partial<RowDraft>) => {
     setDraft((d) => (d ? { ...d, ...u } : d));
@@ -166,14 +176,16 @@ export default function KpiLogTable({
   const leaveMap = leavePortionsOf(leaves ?? []);
 
   // Bộ field tối thiểu khi lưu 1 dòng: start/end hợp lệ + giai đoạn + project + task.
+  // Dòng PLAN (ngày tương lai) chưa cần giờ — đến ngày đó sửa dòng thì bắt giờ trở lại.
   const validateDraft = (d: RowDraft): { fields: Set<string>; msg: string } => {
     const fields = new Set<string>();
     const missing: string[] = [];
-    if (!d.start) {
+    const isFuture = d.date > isoLocal(new Date());
+    if (!d.start && !isFuture) {
       fields.add('start');
       missing.push('Giờ bắt đầu');
     }
-    if (!d.end) {
+    if (!d.end && !isFuture) {
       fields.add('end');
       missing.push('Giờ kết thúc');
     }
@@ -218,6 +230,15 @@ export default function KpiLogTable({
   // Member chưa được gán project nào → không log được (project là field bắt buộc).
   const noProjects = strictProjects === true && projectNames.length === 0;
   const canEdit = mode === 'member' && !locked && !noProjects;
+
+  // Plan tuần: tuần hiện tại + tuần sau (nếu có) hiện block trên bảng;
+  // cuối tuần (Thứ 6/7/CN) member được lập/sửa plan chung cho tuần sau.
+  const todayIso = isoLocal(new Date());
+  const curWeekStart = mondayOf(todayIso);
+  const nextWeekStart = addDays(curWeekStart, 7);
+  const dowToday = new Date(todayIso + 'T00:00:00').getDay();
+  const isWeekendNow = dowToday === 5 || dowToday === 6 || dowToday === 0;
+  const shownWeekPlans = [curWeekStart, nextWeekStart].filter((w) => weekPlans?.[w]);
   const monthEntries = entriesOfMonth(entries, monthKey);
   const byDay = groupEntriesByDay(monthEntries);
   // Dòng mới của ngày chưa có entry nào → thêm ngày đó vào danh sách nhóm.
@@ -615,6 +636,30 @@ export default function KpiLogTable({
             ＋ Thêm dòng hôm nay
           </button>
         )}
+        {canEdit && (
+          <button
+            type="button"
+            className="doc-action"
+            title="Thêm dòng plan cho ngày làm việc kế tiếp (chưa cần điền giờ)"
+            onClick={() => {
+              const d = nextWorkday(isoLocal(new Date()));
+              if (!d.startsWith(monthKey)) onMonthChange(d.slice(0, 7));
+              startAdd(d);
+            }}
+          >
+            ＋ Plan hôm sau
+          </button>
+        )}
+        {canEdit && onSaveWeekPlan && isWeekendNow && (
+          <button
+            type="button"
+            className="doc-action"
+            title="Lập plan chung cho cả tuần sau"
+            onClick={() => setWeekPlanEdit(nextWeekStart)}
+          >
+            {weekPlans?.[nextWeekStart] ? '✎ Plan tuần sau' : '📋 Plan tuần sau'}
+          </button>
+        )}
         {canAccept && pendingMonth.length > 0 && (
           <button
             type="button"
@@ -626,6 +671,33 @@ export default function KpiLogTable({
           </button>
         )}
       </div>
+
+      {/* Plan chung theo tuần: tuần hiện tại + tuần sau (member sửa được, leader chỉ xem) */}
+      {shownWeekPlans.length > 0 && (
+        <div className="kpi-week-plans">
+          {shownWeekPlans.map((w) => (
+            <div key={w} className="kpi-week-plan">
+              <div className="kpi-week-plan-head">
+                <strong>
+                  📋 Plan tuần {formatDateVi(w)} – {formatDateVi(addDays(w, 4))}
+                  {w === nextWeekStart && ' (tuần sau)'}
+                </strong>
+                {canEdit && onSaveWeekPlan && (
+                  <button
+                    type="button"
+                    className="doc-action"
+                    title="Sửa plan tuần này"
+                    onClick={() => setWeekPlanEdit(w)}
+                  >
+                    ✎
+                  </button>
+                )}
+              </div>
+              <div className="kpi-week-plan-text">{weekPlans![w].text}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Datalist gợi ý project dùng chung cho mọi dòng đang sửa */}
       <datalist id="kpi-projects">
@@ -665,6 +737,11 @@ export default function KpiLogTable({
                   <tr className="kpi-day-row">
                     <td colSpan={8}>
                       {weekdayVN(date)} · {formatDateVi(date)}
+                      {date > todayIso && (
+                        <span className="kpi-plan-badge" title="Dòng plan — điền giờ thực tế khi làm">
+                          📋 Plan
+                        </span>
+                      )}
                       {leave && (
                         <span className="kpi-leave-badge">
                           🏖 Nghỉ phép: {leaveLabel(leave)}
@@ -719,6 +796,15 @@ export default function KpiLogTable({
             })}
           </table>
         </div>
+      )}
+
+      {weekPlanEdit && onSaveWeekPlan && (
+        <KpiWeekPlanDialog
+          weekStart={weekPlanEdit}
+          initialText={weekPlans?.[weekPlanEdit]?.text ?? ''}
+          onSave={(text) => onSaveWeekPlan(weekPlanEdit, text)}
+          onClose={() => setWeekPlanEdit(null)}
+        />
       )}
     </div>
   );
