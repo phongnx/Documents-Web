@@ -170,7 +170,12 @@ export default function BoardKpiListPage() {
             const s = summaries[m.id];
             const score = s ? Number((KPI_MONTH_BASE + s.delta).toFixed(2)) : null;
             return (
-              <section key={m.id} className={`plan-card kpi-member-card${m.active ? '' : ' kpi-locked'}`}>
+              <section
+                key={m.id}
+                className={`plan-card kpi-member-card${m.active ? '' : ' kpi-locked'}`}
+                title="Click để xem log & chấm điểm"
+                onClick={() => navigate(`/board/kpi/${m.id}`)}
+              >
                 <div className="plan-card-head">
                   <div className="plan-card-info">
                     <span className="plan-card-title">
@@ -192,7 +197,8 @@ export default function BoardKpiListPage() {
                       {score}
                     </span>
                   )}
-                  <div className="doc-line-actions">
+                  {/* Chặn nổi bọt để các nút hành động không dính navigate của card. */}
+                  <div className="doc-line-actions" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       className="doc-action"

@@ -518,6 +518,27 @@ export function PmProvider({ children }: { children: ReactNode }) {
     [uid],
   );
 
+  // Gom writes refresh shared/kpi/{token}/meta/releases cho các member có gán app
+  // trong appIds — tính theo danh sách task SAU mutation (nextTasks), ghi chung
+  // trong cùng 1 update nguyên tử với mutation. Dùng ở MỌI mutator chạm task
+  // (thêm/sửa/xóa/gán app/done từ plan) để chip release trên sheet member luôn đúng.
+  const kpiReleaseWrites = useCallback(
+    (writes: Record<string, unknown>, nextTasks: TaskItem[], appIds: Set<string>) => {
+      if (appIds.size === 0) return;
+      for (const m of stateRef.current.members) {
+        if (!m.projectIds?.some((id) => appIds.has(id))) continue;
+        const assigned = m.projectIds
+          .map((aid) => stateRef.current.apps.find((a) => a.id === aid))
+          .filter((a): a is AppItem => !!a);
+        const releases = upcomingReleases(assigned, nextTasks);
+        writes[`shared/kpi/${m.token}/meta/releases`] = releases.length
+          ? releases
+          : null;
+      }
+    },
+    [],
+  );
+
   const addTask = useCallback(
     (data: TaskInput): TaskItem | null => {
       if (!db || !uid) return null;
@@ -543,10 +564,16 @@ export function PmProvider({ children }: { children: ReactNode }) {
         assignee: data.assignee,
         flavor: data.flavor,
       });
-      set(ref(db, `users/${uid}/pm/tasks/${created.id}`), created);
+      // Ghi task + refresh chip release trên sheet member (nếu task thuộc app được gán).
+      const writes: Record<string, unknown> = {
+        [`users/${uid}/pm/tasks/${created.id}`]: created,
+      };
+      if (created.appId)
+        kpiReleaseWrites(writes, [...cur, created], new Set([created.appId]));
+      update(ref(db), writes);
       return created;
     },
-    [uid],
+    [uid, kpiReleaseWrites],
   );
 
   const updateTask = useCallback(
@@ -583,6 +610,12 @@ export function PmProvider({ children }: { children: ReactNode }) {
           ('title' in updates &&
             updates.title !== undefined &&
             updates.title !== curTask.title));
+      // Loại task & app đổi không ảnh hưởng plan tuần nhưng ảnh hưởng chip release
+      // trên sheet member KPI (type hiện trong dialog chi tiết; appId đổi member).
+      const typeChanged =
+        !!curTask && updates.type !== undefined && updates.type !== curTask.type;
+      const appIdChanged =
+        !!curTask && 'appId' in updates && (updates.appId ?? '') !== (curTask.appId ?? '');
       if (curTask && (statusChanged || versionChanged || planDateChanged || contentChanged)) {
         const state = statusChanged ? taskStatusToWsState(updates.status!) : null;
         const oldVersion = curTask.version ?? '';
@@ -667,60 +700,93 @@ export function PmProvider({ children }: { children: ReactNode }) {
               updatedAt: now,
             });
         }
-        // Task của app được gán cho member KPI đổi lịch/version/status → refresh
-        // snapshot mốc release trên sheet công khai của các member đó (member ẩn danh
-        // chỉ đọc được meta của sheet, không đọc được tasks của leader).
-        if (curTask.appId) {
-          const appId = curTask.appId;
-          const nextTasks = stateRef.current.tasks.map((t) =>
-            t.id === id ? { ...t, ...updates } : t,
-          );
-          for (const m of stateRef.current.members) {
-            if (!m.projectIds?.includes(appId)) continue;
-            const assigned = m.projectIds
-              .map((aid) => stateRef.current.apps.find((a) => a.id === aid))
-              .filter((a): a is AppItem => !!a);
-            const releases = upcomingReleases(assigned, nextTasks);
-            writes[`shared/kpi/${m.token}/meta/releases`] = releases.length
-              ? releases
-              : null;
-          }
-        }
+      }
+      // Refresh snapshot mốc release trên sheet member KPI (member ẩn danh chỉ đọc
+      // được meta của sheet, không đọc được tasks của leader). App ảnh hưởng = app
+      // cũ + app mới (đổi appId thì cả hai phía member đều được refresh).
+      if (
+        curTask &&
+        (statusChanged ||
+          versionChanged ||
+          planDateChanged ||
+          contentChanged ||
+          typeChanged ||
+          appIdChanged)
+      ) {
+        const nextTasks = stateRef.current.tasks.map((t) =>
+          t.id === id ? { ...t, ...updates } : t,
+        );
+        const appIds = new Set<string>();
+        if (curTask.appId) appIds.add(curTask.appId);
+        const nextAppId = appIdChanged ? updates.appId : curTask.appId;
+        if (nextAppId) appIds.add(nextAppId);
+        kpiReleaseWrites(writes, nextTasks, appIds);
       }
       update(ref(db), writes);
     },
-    [uid],
+    [uid, kpiReleaseWrites],
   );
 
   const deleteTask = useCallback(
     (id: string) => {
       if (!db || !uid) return;
-      set(ref(db, `users/${uid}/pm/tasks/${id}`), null);
+      const cur = stateRef.current.tasks.find((t) => t.id === id);
+      const writes: Record<string, unknown> = {
+        [`users/${uid}/pm/tasks/${id}`]: null,
+      };
+      // Xóa task release → chip trên sheet member phải biến mất theo.
+      if (cur?.appId)
+        kpiReleaseWrites(
+          writes,
+          stateRef.current.tasks.filter((t) => t.id !== id),
+          new Set([cur.appId]),
+        );
+      update(ref(db), writes);
     },
-    [uid],
+    [uid, kpiReleaseWrites],
   );
 
   const deleteTasks = useCallback(
     (ids: string[]) => {
       if (!db || !uid || ids.length === 0) return;
       const writes: Record<string, unknown> = {};
+      const idSet = new Set(ids);
+      const appIds = new Set<string>();
       for (const id of ids) writes[`users/${uid}/pm/tasks/${id}`] = null;
+      for (const t of stateRef.current.tasks)
+        if (idSet.has(t.id) && t.appId) appIds.add(t.appId);
+      kpiReleaseWrites(
+        writes,
+        stateRef.current.tasks.filter((t) => !idSet.has(t.id)),
+        appIds,
+      );
       update(ref(db), writes);
     },
-    [uid],
+    [uid, kpiReleaseWrites],
   );
 
   const assignTasksToApp = useCallback(
     (taskIds: string[], appId: string) => {
       if (!db || !uid || taskIds.length === 0) return;
       const writes: Record<string, unknown> = {};
+      const now = new Date().toISOString();
       for (const id of taskIds) {
         writes[`users/${uid}/pm/tasks/${id}/appId`] = appId || null;
-        writes[`users/${uid}/pm/tasks/${id}/updatedAt`] = new Date().toISOString();
+        writes[`users/${uid}/pm/tasks/${id}/updatedAt`] = now;
       }
+      // Refresh chip release cho member ở CẢ app cũ lẫn app mới của các task được gán.
+      const idSet = new Set(taskIds);
+      const appIds = new Set<string>();
+      if (appId) appIds.add(appId);
+      for (const t of stateRef.current.tasks)
+        if (idSet.has(t.id) && t.appId) appIds.add(t.appId);
+      const nextTasks = stateRef.current.tasks.map((t) =>
+        idSet.has(t.id) ? { ...t, appId: appId || undefined } : t,
+      );
+      kpiReleaseWrites(writes, nextTasks, appIds);
       update(ref(db), writes);
     },
-    [uid],
+    [uid, kpiReleaseWrites],
   );
 
   const addTaskType = useCallback(
@@ -1161,6 +1227,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
         [`users/${uid}/pm/plans/${planId}`]: normalizePlan(next),
       };
       const taskById = new Map(stateRef.current.tasks.map((t) => [t.id, t]));
+      const doneIds = new Set<string>();
       for (const u of updates) {
         if (u.state !== 'done') continue;
         const w = prev.projects?.[u.pi]?.workstreams?.[u.wi];
@@ -1169,12 +1236,23 @@ export function PmProvider({ children }: { children: ReactNode }) {
           if (!t || t.status === DONE_STATUS) continue; // task đã xóa / đã done → bỏ qua
           writes[`users/${uid}/pm/tasks/${tid}/status`] = DONE_STATUS;
           writes[`users/${uid}/pm/tasks/${tid}/updatedAt`] = now;
+          doneIds.add(tid);
         }
+      }
+      // Task release done từ plan tuần → chip trên sheet member KPI phải biến mất theo.
+      if (doneIds.size > 0) {
+        const appIds = new Set<string>();
+        for (const t of stateRef.current.tasks)
+          if (doneIds.has(t.id) && t.appId) appIds.add(t.appId);
+        const nextTasks = stateRef.current.tasks.map((t) =>
+          doneIds.has(t.id) ? { ...t, status: DONE_STATUS } : t,
+        );
+        kpiReleaseWrites(writes, nextTasks, appIds);
       }
       // Ghi plan + tasks trong 1 lần update nguyên tử.
       update(ref(db), writes);
     },
-    [uid],
+    [uid, kpiReleaseWrites],
   );
 
   const addReport = useCallback(

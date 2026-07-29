@@ -2113,9 +2113,7 @@ a:hover {
   gap: 6px;
   font-size: 13px;
 }
-.kpi-member-card .plan-card-head {
-  cursor: default;
-}
+/* Card member click được (navigate sang trang chấm) → giữ cursor pointer + hover mặc định của plan-card-head. */
 .kpi-member-card.kpi-locked {
   opacity: 0.65;
 }
