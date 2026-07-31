@@ -8,8 +8,10 @@ import { useUnsavedGuard } from '../hooks/useUnsavedGuard';
 import BoardNav from '../components/board/BoardNav';
 import {
   catMeta,
+  dayRank,
   isReleaseWs,
   msKeyFromLabel,
+  sortTimeline,
   type AppItem,
   type PlanProject,
   type PlanTimelineItem,
@@ -25,18 +27,12 @@ import TaskPickerDialog from '../components/board/TaskPickerDialog';
 
 type PlanForm = Omit<WeeklyPlan, 'id' | 'order' | 'createdAt' | 'updatedAt'>;
 
-// Thứ tự thứ trong tuần để chèn dòng timeline đúng vị trí (nhãn từ weekdayVN).
-const DAY_ORDER = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
-const dayRank = (d: string): number => {
-  const i = DAY_ORDER.findIndex((x) => d.trim().startsWith(x));
-  return i === -1 ? Number.MAX_SAFE_INTEGER : i; // day lạ/rỗng → coi như cuối
-};
-
 // Đối chiếu timeline với TASK NGUỒN của các nhánh release (task = nguồn chân lý):
 // - dòng match (token app + version; task không version chỉ match dòng không version)
 //   nhưng sai thứ so với planDate → sửa (trong tuần → đúng thứ, ngoài tuần → trống);
 // - nhánh release có task nguồn mà chưa có dòng → thêm (chèn đúng thứ tự thứ);
-// - dòng gõ tay không match nhánh nào / task đã xóa → giữ nguyên.
+// - dòng gõ tay không match nhánh nào / task đã xóa → giữ nguyên;
+// - kết quả LUÔN sort theo dòng thời gian (data cũ có thể đang lệch thứ tự).
 // Trả về timeline mới nếu có thay đổi, null nếu đã khớp.
 function reconcileTimeline(
   form: PlanForm,
@@ -82,7 +78,10 @@ function reconcileTimeline(
       }
     }
   }
-  return changed ? timeline : null;
+  const sorted = sortTimeline(timeline);
+  // Chỉ lệch thứ tự (không đổi nội dung) cũng tính là thay đổi để editor hiện đúng dòng thời gian.
+  if (JSON.stringify(sorted) !== JSON.stringify(form.timeline)) changed = true;
+  return changed ? sorted : null;
 }
 
 function toForm(p: WeeklyPlan): PlanForm {
@@ -250,15 +249,11 @@ export default function BoardPlanEditPage() {
   // Parse version từ text milestone ("Build release v1.60" → "v1.60").
   const versionOf = (text: string): string =>
     (text.match(/v[0-9][\w.]*/i)?.[0] ?? '').replace(/\.$/, '');
-  // Chèn các dòng mới trước mục đầu tiên có thứ LỚN HƠN — giữ nguyên thứ tự dòng sẵn có.
+  // Thêm dòng mới rồi sort cả danh sách theo dòng thời gian (dòng sẵn có đang lệch
+  // thứ tự cũng được đưa về đúng vị trí luôn).
   const pushTimeline = (additions: PlanTimelineItem[]) => {
     if (additions.length === 0) return;
-    let next = [...form.timeline];
-    for (const a of additions.sort((x, y) => dayRank(x.day) - dayRank(y.day))) {
-      const at = next.findIndex((x) => dayRank(x.day) > dayRank(a.day));
-      next = at === -1 ? [...next, a] : [...next.slice(0, at), a, ...next.slice(at)];
-    }
-    setTimeline(next);
+    setTimeline(sortTimeline([...form.timeline, ...additions]));
   };
 
   // Nhánh release thêm từ dialog chọn task → thêm dòng timeline "Thứ x — App vX";

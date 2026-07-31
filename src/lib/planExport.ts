@@ -1,4 +1,10 @@
-import { catMeta, isReleaseWs, type PlanWorkstream, type WeeklyPlan } from '../pmTypes';
+import {
+  catMeta,
+  isReleaseWs,
+  sortTimeline,
+  type PlanWorkstream,
+  type WeeklyPlan,
+} from '../pmTypes';
 
 // Sinh 2 file HTML tĩnh từ 1 WeeklyPlan, bám sát 2 template mẫu trong docs/plan.
 
@@ -114,6 +120,10 @@ const DETAILED_CSS = `
     .badge.research-badge { background: var(--research-bg); color: var(--research-text); }
     ul { margin: 0; padding-left: 20px; }
     li { margin: 6px 0; }
+    /* Chuỗi dài không khoảng trắng (URL…) phải bẻ dòng trong card, không tràn ra ngoài. */
+    li, .milestone, .project-title, .workstream-title, .hero p, h1 {
+      overflow-wrap: anywhere; word-break: break-word;
+    }
     .milestone {
       margin-top: 12px; padding: 10px 12px; border-radius: 12px; font-weight: 700;
       font-size: 14px; display: inline-flex; align-items: center; gap: 8px;
@@ -321,6 +331,10 @@ const RELEASE_TEST_CSS = `
     .sub-title { margin: 0 0 8px; color: var(--primary); font-weight: 700; }
     ul { margin: 0; padding-left: 22px; }
     li { margin: 4px 0; }
+    /* Chuỗi dài không khoảng trắng (URL…) phải bẻ dòng trong khối, không tràn ra ngoài. */
+    li, .sub-title, .workstream h3, .timeline-release, .header h1 {
+      overflow-wrap: anywhere; word-break: break-word;
+    }
     .timeline-list {
       display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px; padding: 0; list-style: none;
@@ -375,7 +389,8 @@ export function buildReleaseTestHtml(
     }
   }
 
-  const timeline = (plan.timeline ?? [])
+  // Sort theo dòng thời gian (plan cũ chưa lưu lại có thể đang lệch thứ tự).
+  const timeline = sortTimeline(plan.timeline ?? [])
     .filter((t) => t.day.trim() || t.release.trim())
     .map(
       (t) => `        <li class="timeline-item">

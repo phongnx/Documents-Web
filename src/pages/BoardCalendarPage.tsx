@@ -116,7 +116,11 @@ export default function BoardCalendarPage() {
         const off = dayOffset(t.day);
         return { ...t, date: off === null ? '' : addDays(plan.weekStart, off) };
       })
-      .sort((a, b) => (a.date && b.date ? a.date.localeCompare(b.date) : 0));
+      .sort((a, b) => {
+        // Dòng không có ngày (thứ trống/lạ) xếp cuối, còn lại theo dòng thời gian.
+        if (!a.date || !b.date) return !a.date && !b.date ? 0 : !a.date ? 1 : -1;
+        return a.date.localeCompare(b.date);
+      });
     // Match nhánh release ↔ mục timeline (token tên project + version từ milestone)
     // → chi tiết release sort theo đúng thứ tự timeline, kèm nhãn ngày;
     // nhánh không match xếp cuối, giữ thứ tự trong plan.

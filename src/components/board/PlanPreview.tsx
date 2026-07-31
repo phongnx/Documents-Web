@@ -1,6 +1,7 @@
 import {
   catMeta,
   isReleaseWs,
+  sortTimeline,
   WORKSTREAM_STATE_META,
   type PlanProject,
   type PlanWorkstream,
@@ -60,7 +61,10 @@ function ProjectCard({ p, releaseKeys }: { p: PlanProject; releaseKeys: Set<stri
 export default function PlanPreview({ plan }: { plan: WeeklyPlan }) {
   const releaseKeys = useReleaseKeys();
   const projects = plan.projects ?? [];
-  const timeline = (plan.timeline ?? []).filter((t) => t.day.trim() || t.release.trim());
+  // Sort theo dòng thời gian ở tầng hiển thị — plan cũ chưa lưu lại có thể đang lệch thứ tự.
+  const timeline = sortTimeline(plan.timeline ?? []).filter(
+    (t) => t.day.trim() || t.release.trim(),
+  );
   const releaseProjects = projects.filter((p) => hasRelease(p, releaseKeys));
   const otherProjects = projects.filter((p) => !hasRelease(p, releaseKeys));
 

@@ -117,6 +117,7 @@ Claude Code sẽ chạy đúng các lệnh (`npm install`, `npm run dev`, `npm r
 ## Chi tiết tính năng Bảng dự án
 
 ### Tổng quan — card Tiến độ tuần
+- **Timeline release luôn sort theo dòng thời gian** (Thứ 2 → CN, thứ trống/lạ xếp cuối — `sortTimeline` trong `pmTypes`): áp ở mọi đường ghi plan (`normalizePlan`) + tầng hiển thị (preview, export, Lịch release) cho data cũ chưa lưu lại.
 - Mỗi nhánh plan có `state` (`todo`/`doing`/`testing`/`done`/`blocked` — key `blocked` hiển thị là **⏳ Pending**, nghĩa "đang chờ") + `progress?` (%). **% tuần đo theo MỤC TIÊU tuần** (binary): mục tiêu = nhánh release hoặc nhánh có milestone; `% = số mục tiêu done / tổng mục tiêu`. Nhánh ngoài mục tiêu hiển thị/sửa được nhưng không vào %.
 - Dropdown đổi trạng thái từng nhánh (ghi 1 lần qua `setWorkstreamProgress`).
 - **Sync 2 chiều với page Task:** nhánh chuyển **Xong** → task nguồn (`sourceTaskIds`) tự thành "Đã hoàn thành" (ghi nguyên tử cùng plan, không revert khi hạ cấp nhánh); ngược lại **task là NGUỒN CHÂN LÝ** — đổi status/version/planDate/nội dung của task → nhánh chứa task đó ở plan tuần hiện tại/tương lai tự sync: state + % ngầm định, **text milestone** (thay version cũ → mới), **items nhánh dựng lại theo mô tả task** (`taskLines` — items sửa tay/chọn subset sẽ bị thay khi task đổi nội dung; sửa items trong plan editor không ghi ngược về task) và **dòng timeline release** tương ứng (match token app + version cũ; đổi planDate trong tuần → đổi thứ, dời ra ngoài tuần → thứ trống, không tự xóa dòng; version xóa trống → giữ nhãn cũ). Plan quá khứ giữ nguyên.

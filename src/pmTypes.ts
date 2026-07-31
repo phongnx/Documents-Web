@@ -162,6 +162,20 @@ export interface PlanTimelineItem {
   release: string;
 }
 
+/** Thứ tự thứ trong tuần (nhãn từ weekdayVN) — dùng sort/chèn dòng timeline. */
+export const DAY_ORDER = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+/** Rank của 1 nhãn thứ (không phân biệt hoa thường); rỗng/lạ → cuối. */
+export const dayRank = (d: string): number => {
+  const s = d.trim().toLowerCase();
+  const i = DAY_ORDER.findIndex((x) => s.startsWith(x.toLowerCase()));
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+};
+/** Sort timeline theo dòng thời gian Thứ 2 → CN (stable — cùng thứ giữ thứ tự nhập;
+ *  day rỗng/lạ xếp cuối). Dùng ở MỌI đường ghi plan + tầng hiển thị (data cũ có thể lệch). */
+export function sortTimeline(list: PlanTimelineItem[]): PlanTimelineItem[] {
+  return [...list].sort((a, b) => dayRank(a.day) - dayRank(b.day));
+}
+
 export interface WeeklyPlan {
   id: string;
   title: string;

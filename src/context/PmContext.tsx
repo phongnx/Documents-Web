@@ -30,6 +30,7 @@ import {
   isPresetMilestoneType,
   msKeyFromLabel,
   releaseKeysOf,
+  sortTimeline,
   taskStatusToWsState,
   WORKSTREAM_STATE_META,
   type AppItem,
@@ -252,7 +253,9 @@ function normalizePlan(p: WeeklyPlan): WeeklyPlan {
         ...(typeof w.progress === 'number' ? { progress: w.progress } : {}),
       })),
     })),
-    timeline: p.timeline ?? [],
+    // Sort theo dòng thời gian ở MỌI đường ghi plan (tạo/lưu/sync từ task) —
+    // dòng đổi thứ sẽ tự về đúng vị trí, không nằm lộn xộn theo thứ tự thêm.
+    timeline: sortTimeline(p.timeline ?? []),
   };
 }
 
