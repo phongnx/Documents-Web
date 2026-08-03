@@ -1,7 +1,8 @@
 // Tự sinh nội dung plan tuần mới từ dữ liệu thật (nguồn duy nhất cho map task → nhánh):
 // 1) carry-over các nhánh CHƯA HOÀN THÀNH (state !== done) của plan tuần trước
 //    (milestone của nhánh carry bị GỠ nếu mốc task nguồn không thuộc tuần mới);
-// 2) release có planDate trong tuần (luôn fill, nâng cấp nhánh carry nếu trùng task) + timeline;
+// 2) task LOẠI Release có planDate trong tuần (luôn fill, nâng cấp nhánh carry nếu
+//    trùng task) + timeline — timeline CHỈ chứa mốc milestone Release;
 // 3) task có startDate trong tuần (mọi status trừ done) + task đang chạy (chỉ app chưa
 //    có nhánh), bỏ task trùng nhánh đã done tuần trước.
 // Luật milestone ("tự tick"): CHỈ gắn khi mốc của task nằm trong tuần —
@@ -185,14 +186,20 @@ export function buildAutoPlan(opts: {
     }
   };
 
-  // ---- Bước 2: release có planDate trong tuần (xử lý TRƯỚC task đang chạy) ----
+  // ---- Bước 2: task LOẠI Release có planDate trong tuần (xử lý TRƯỚC task đang chạy) ----
   // Luôn fill (app tuần trước done mà có lịch release tuần này thì tự vào plan);
   // task đã nằm trong nhánh carry-over → NÂNG CẤP nhánh đó thành release, không thêm mới.
+  // CHỈ task loại Release mới vào nhóm này + timeline — task loại khác có planDate
+  // trong tuần rơi xuống bước 3 (nhánh theo loại, không bị force milestone release).
   const addedTaskIds = new Set(carriedTaskIds);
   const inWeek = (t: TaskItem): boolean =>
     !!t.planDate && weekStart <= t.planDate && t.planDate <= weekEnd;
   const releaseTasks = tasks.filter(
-    (t) => inWeek(t) && t.status !== DONE_STATUS && usableApp(t.appId),
+    (t) =>
+      inWeek(t) &&
+      t.status !== DONE_STATUS &&
+      usableApp(t.appId) &&
+      mapTaskCategory(t.type) === 'release',
   );
   for (const t of releaseTasks) {
     const app = usableApp(t.appId)!;
