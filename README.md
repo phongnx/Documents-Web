@@ -117,6 +117,7 @@ Claude Code sẽ chạy đúng các lệnh (`npm install`, `npm run dev`, `npm r
 ## Chi tiết tính năng Bảng dự án
 
 ### Tổng quan — card Tiến độ tuần
+- **Plan tự sinh** (`buildAutoPlan`): carry-over nhánh chưa done tuần trước (milestone bị gỡ nếu mốc task nguồn không thuộc tuần mới) → release có planDate trong tuần (+ timeline) → task có **startDate trong tuần** (mọi status trừ done) + task đang chạy (chỉ app chưa có nhánh). **Luật "tự tick" milestone:** chỉ gắn khi mốc của task nằm trong tuần — mốc = Ngày plan (planDate), không có thì Ngày kết thúc (endDate); task loại Release nhưng mốc ngoài tuần → nhánh thường, không milestone. Dialog "Thêm nhánh từ task" trong editor dùng chung luật (truyền khoảng tuần).
 - **Timeline release luôn sort theo dòng thời gian** (Thứ 2 → CN, thứ trống/lạ xếp cuối — `sortTimeline` trong `pmTypes`): áp ở mọi đường ghi plan (`normalizePlan`) + tầng hiển thị (preview, export, Lịch release) cho data cũ chưa lưu lại.
 - Mỗi nhánh plan có `state` (`todo`/`doing`/`testing`/`done`/`blocked` — key `blocked` hiển thị là **⏳ Pending**, nghĩa "đang chờ") + `progress?` (%). **% tuần đo theo MỤC TIÊU tuần** (binary): mục tiêu = nhánh release hoặc nhánh có milestone; `% = số mục tiêu done / tổng mục tiêu`. Nhánh ngoài mục tiêu hiển thị/sửa được nhưng không vào %.
 - Dropdown đổi trạng thái từng nhánh (ghi 1 lần qua `setWorkstreamProgress`).

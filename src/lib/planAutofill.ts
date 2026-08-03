@@ -1,7 +1,11 @@
 // Tự sinh nội dung plan tuần mới từ dữ liệu thật (nguồn duy nhất cho map task → nhánh):
-// 1) carry-over các nhánh CHƯA HOÀN THÀNH (state !== done) của plan tuần trước;
+// 1) carry-over các nhánh CHƯA HOÀN THÀNH (state !== done) của plan tuần trước
+//    (milestone của nhánh carry bị GỠ nếu mốc task nguồn không thuộc tuần mới);
 // 2) release có planDate trong tuần (luôn fill, nâng cấp nhánh carry nếu trùng task) + timeline;
-// 3) task đang chạy — chỉ cho app chưa có nhánh, bỏ task trùng nhánh đã done tuần trước.
+// 3) task có startDate trong tuần (mọi status trừ done) + task đang chạy (chỉ app chưa
+//    có nhánh), bỏ task trùng nhánh đã done tuần trước.
+// Luật milestone ("tự tick"): CHỈ gắn khi mốc của task nằm trong tuần —
+// mốc = Ngày plan (planDate, mốc release); không có thì Ngày kết thúc (endDate).
 import {
   DONE_STATUS,
   isReleaseWs,
@@ -38,17 +42,31 @@ export function mapTaskCategory(type: string): WorkstreamCategory {
   return 'other';
 }
 
-/** Map 1 task thành nhánh plan; `items` truyền vào để giới hạn dòng (mặc định toàn bộ mô tả). */
+/** Mốc thời gian của 1 task: Ngày plan (planDate — mốc release); không có thì Ngày kết thúc. */
+export function taskMilestoneDate(t: TaskItem): string {
+  return t.planDate || t.endDate || '';
+}
+
+/** Map 1 task thành nhánh plan; `items` truyền vào để giới hạn dòng (mặc định toàn bộ mô tả).
+ *  `week`: khoảng tuần của plan — milestone CHỈ được "tự tick" khi mốc của task
+ *  (planDate, fallback endDate) nằm trong tuần; task loại release nhưng mốc ngoài tuần
+ *  → nhánh thường (category other, không milestone). Không truyền week = hành vi cũ. */
 export function taskToWorkstream(
   t: TaskItem,
   app?: AppItem,
   items?: string[],
+  week?: { start: string; end: string },
 ): PlanWorkstream {
-  const category = mapTaskCategory(t.type);
+  const rawCat = mapTaskCategory(t.type);
+  const msDate = taskMilestoneDate(t);
+  const msInWeek = !week || (!!msDate && week.start <= msDate && msDate <= week.end);
+  // Release mà mốc ngoài tuần → không được đếm là nhánh release của tuần này.
+  const category: WorkstreamCategory =
+    rawCat === 'release' && !msInWeek ? 'other' : rawCat;
   const milestone =
-    category === 'release'
+    category === 'release' && msInWeek
       ? { type: 'release' as const, text: `Build release ${t.version ?? ''}`.trim() }
-      : category === 'test'
+      : category === 'test' && msInWeek
         ? { type: 'test' as const, text: 'Build test & fix bugs' }
         : undefined;
   return {
@@ -86,6 +104,25 @@ export function buildAutoPlan(opts: {
 
   // Key nội dung items (đã normalize) để so trùng nhánh.
   const itemsKey = (w: PlanWorkstream): string => normName((w.items ?? []).join('|'));
+  const inRange = (d?: string): boolean => !!d && weekStart <= d && d <= weekEnd;
+  const taskById = new Map(tasks.map((t) => [t.id, t]));
+
+  // Gỡ milestone của nhánh carry-over khi mốc task nguồn KHÔNG thuộc tuần mới
+  // (VD release đã dời lịch sang tuần sau) — milestone release thì hạ category về other.
+  // Nhánh gõ tay (không tìm được task nguồn) giữ nguyên; mốc đúng tuần thì bước 2 refresh.
+  const stripStaleMilestone = (w: PlanWorkstream): PlanWorkstream => {
+    if (!w.milestone) return w;
+    const srcTasks = (w.sourceTaskIds ?? [])
+      .map((id) => taskById.get(id))
+      .filter((t): t is TaskItem => !!t);
+    if (srcTasks.length === 0) return w;
+    if (srcTasks.some((t) => inRange(taskMilestoneDate(t)))) return w;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { milestone, ...rest } = w;
+    const isRelMs =
+      w.category === 'release' || releaseKeys.has(w.milestone.type);
+    return { ...rest, ...(isRelMs ? { category: 'other' as const } : {}) };
+  };
 
   // ---- Bước 1: carry-over nhánh CHƯA HOÀN THÀNH (state !== done) của plan tuần trước ----
   // (Không lọc theo % nữa: nhánh done nhưng % cũ < 100 không bị kéo sang;
@@ -107,9 +144,10 @@ export function buildAutoPlan(opts: {
     projects.push({
       name: pr.name,
       ...(pr.appId ? { appId: pr.appId } : {}),
-      // Giữ state (đang dở thì sang tuần vẫn dở), bỏ progress % của tuần cũ.
+      // Giữ state (đang dở thì sang tuần vẫn dở), bỏ progress % của tuần cũ;
+      // gỡ milestone nếu mốc task nguồn không thuộc tuần mới.
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      workstreams: kept.map(({ progress, ...rest }) => ({ ...rest })),
+      workstreams: kept.map(({ progress, ...rest }) => stripStaleMilestone({ ...rest })),
     });
     for (const w of kept) for (const id of w.sourceTaskIds ?? []) carriedTaskIds.add(id);
   }
@@ -181,15 +219,22 @@ export function buildAutoPlan(opts: {
       release: `${usableApp(t.appId)!.name} ${t.version ?? ''}`.trim(),
     }));
 
-  // ---- Bước 3: task đang chạy — CHỈ cho app chưa có nhánh nào trong plan ----
-  // (App đã có carry-over/release thì không thêm nhánh phụ → tránh duplicate nội dung.)
+  // ---- Bước 3: task có startDate trong tuần + task đang chạy ----
+  // - startDate trong tuần (mọi status trừ done, kể cả "Chưa bắt đầu"): thêm nhánh
+  //   cả khi app đã có nhánh khác (dedup nội dung với nhánh sẵn có);
+  // - đang chạy nhưng không có ngày gì trong tuần: chỉ thêm cho app CHƯA có nhánh
+  //   (luật cũ — tránh nhánh phụ trùng nội dung carry-over).
   for (const t of tasks) {
-    if (!isRunningStatus(t.status) || addedTaskIds.has(t.id)) continue;
+    if (t.status === DONE_STATUS || addedTaskIds.has(t.id)) continue;
     const app = usableApp(t.appId);
-    if (!app || projectOfApp(app)) continue;
+    if (!app) continue;
+    const startInWeek = inRange(t.startDate);
+    if (!startInWeek && !isRunningStatus(t.status)) continue;
+    const existing = projectOfApp(app);
+    if (!startInWeek && existing) continue;
     // Trùng nhánh đã DONE tuần trước → task chưa được mark done, bỏ qua.
     if (prevDoneTaskIds.has(t.id)) continue;
-    const ws = taskToWorkstream(t, app);
+    const ws = taskToWorkstream(t, app, undefined, { start: weekStart, end: weekEnd });
     const ms = normName(ws.milestone?.text ?? '');
     const it = itemsKey(ws);
     const isDup = [app.id, normName(app.name)].some(
@@ -198,6 +243,8 @@ export function buildAutoPlan(opts: {
         (it && prevDoneKeys.has(`${k}:it:${it}`)),
     );
     if (isDup) continue;
+    // Trùng nội dung với nhánh sẵn có của app trong plan mới → bỏ.
+    if (existing && it && existing.workstreams.some((w) => itemsKey(w) === it)) continue;
     pushWorkstream(app, ws);
     addedTaskIds.add(t.id);
   }

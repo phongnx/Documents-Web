@@ -9,6 +9,8 @@ interface Props {
   tasks: TaskItem[];
   /** App gợi ý mặc định (app đang gắn với dự án). */
   initialAppId?: string;
+  /** Khoảng tuần của plan — milestone chỉ "tự tick" khi mốc task nằm trong tuần. */
+  week?: { start: string; end: string };
   onConfirm: (workstreams: PlanWorkstream[]) => void;
   onClose: () => void;
 }
@@ -17,6 +19,7 @@ export default function TaskPickerDialog({
   apps,
   tasks,
   initialAppId,
+  week,
   onConfirm,
   onClose,
 }: Props) {
@@ -63,7 +66,7 @@ export default function TaskPickerDialog({
         .sort((a, b) => a - b)
         .map((i) => lines[i])
         .filter(Boolean);
-      return taskToWorkstream(t, app, items);
+      return taskToWorkstream(t, app, items, week);
     });
     onConfirm(result);
   };

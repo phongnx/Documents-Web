@@ -783,6 +783,7 @@ export default function BoardPlanEditPage() {
           apps={apps}
           tasks={tasks}
           initialAppId={pickerAppId}
+          week={{ start: form.weekStart, end: form.weekEnd }}
           onConfirm={(ws) => {
             addWorkstreamsFromTasks(pickerFor, ws);
             // Task release có lịch trong tuần → tự cập nhật timeline release.
