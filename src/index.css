@@ -2172,6 +2172,66 @@ a:hover {
 .kpi-score-form {
   grid-template-columns: 120px 1fr;
 }
+/* Rà soát bug reopen (trang chấm của leader) */
+.kpi-reopen-alert {
+  border-color: #dc2626;
+  color: #dc2626;
+  font-weight: 600;
+}
+.kpi-reopen-dialog {
+  max-width: 640px;
+}
+.kpi-reopen-hint {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+}
+.kpi-reopen-list {
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 55vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kpi-reopen-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--subtle);
+}
+.kpi-reopen-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+}
+.kpi-reopen-task {
+  overflow-wrap: anywhere;
+}
+.kpi-reopen-lines {
+  margin: 6px 0 8px;
+  padding-left: 20px;
+  font-size: 12.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.kpi-reopen-lines li {
+  overflow-wrap: anywhere;
+}
+.kpi-reopen-latest {
+  font-weight: 600;
+}
+.kpi-reopen-mark {
+  color: #dc2626;
+  font-size: 12px;
+}
+.kpi-reopen-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
 /* Nghỉ phép: badge ở block ngày + dialog quản lý */
 .kpi-leave-badge {
   display: inline-block;
@@ -2295,6 +2355,276 @@ a:hover {
 .kpi-level-label {
   flex: 1;
 }
+
+/* ---------- Break task & Estimate ---------- */
+/* Chip estimate ở trang KPI member giờ là <Link> — giữ màu chữ như chip nút. */
+a.kpi-rel-chip {
+  color: var(--text);
+}
+a.kpi-rel-chip:hover {
+  text-decoration: none;
+  border-color: var(--primary);
+}
+.est-head-row {
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.est-page-title {
+  font-size: 17px;
+  margin-right: auto;
+}
+.est-range {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.est-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.est-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--card);
+}
+.est-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.est-group-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+}
+.est-group-desc {
+  margin: 0 0 8px;
+  font-size: 13px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.est-table td {
+  vertical-align: top;
+}
+.est-task-title {
+  min-width: 220px;
+}
+.est-task-name {
+  overflow-wrap: anywhere;
+}
+/* Sub task của chính viewer (trang member) — nhấn nhẹ để tự thấy việc của mình. */
+.est-task-row.est-mine td {
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+.est-hours-cell {
+  width: 70px;
+  white-space: nowrap;
+}
+.est-actual {
+  white-space: nowrap;
+  font-weight: 600;
+}
+.est-status-cell {
+  white-space: nowrap;
+}
+.est-fast {
+  color: #16a34a;
+}
+.est-slow {
+  color: #dc2626;
+}
+.est-note-cell {
+  min-width: 140px;
+  font-size: 12.5px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.est-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+/* Tick nhanh ✅ Xong ngay trên row (không phải mở dialog). */
+.est-done-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+/* Dialog lớn thêm/sửa sub task + dialog nhóm */
+.est-task-dialog {
+  max-width: 620px;
+}
+.est-task-dialog textarea {
+  resize: vertical;
+}
+.est-done-hint {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+}
+.est-add-group {
+  align-self: flex-start;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+}
+/* Summary cuối bảng — như footer SUMIF/Start/End của file xlsx mẫu. */
+.est-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.est-summary-block {
+  flex: 1 1 220px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: var(--subtle);
+  font-size: 13px;
+}
+.est-summary-block ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+/* Dialog thông tin bảng estimate */
+.est-meta-dialog {
+  max-width: 560px;
+}
+.est-meta-grid {
+  grid-template-columns: 130px 1fr;
+}
+.est-participants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.est-participant {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+/* Ô Task ở dòng log KPI: input + nút 📐 pick */
+.kpi-task-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.kpi-task-edit input {
+  flex: 1;
+  min-width: 0;
+}
+/* Nút 📐/✕ trong ô Task: compact (mặc định .doc-action to, làm nổ layout dòng). */
+.kpi-task-edit .doc-action,
+.kpi-est-link .doc-action {
+  padding: 3px 7px;
+  font-size: 12px;
+  border-radius: 7px;
+  flex: 0 0 auto;
+}
+/* Dòng thông tin link estimate dưới ô Task (khi dòng log đã gắn estRef). */
+.kpi-est-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+/* Title sub task: cắt ellipsis 1 dòng để ô Task không phình rộng bảng
+   (đẩy các cột giờ khỏi vùng nhìn) — hover xem đủ qua tooltip. */
+.kpi-est-link .kpi-est-title {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kpi-est-done {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--primary);
+  font-weight: 600;
+}
+/* Checkbox không ăn rule "input trong dòng sửa rộng 100%/min 70px" của bảng KPI. */
+.kpi-est-link input[type='checkbox'],
+.kpi-row-edit .kpi-est-done input {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+.kpi-est-badge {
+  cursor: help;
+}
+/* Dialog pick task từ estimate */
+.est-pick-lines li {
+  list-style: none;
+}
+.est-pick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 13px;
+}
+.est-pick-btn:hover {
+  border-color: var(--primary);
+}
+.est-pick-btn.est-pick-done {
+  opacity: 0.55;
+}
+.est-pick-meta {
+  font-size: 12px;
+}
+/* Panel đối chiếu estimate trên trang chấm của leader */
+.est-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 0 0 14px;
+  background: var(--subtle);
+  font-size: 13px;
+}
+.est-panel > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.est-panel-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.est-panel-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.est-panel-title {
+  font-weight: 600;
+}
+
 /* Tóm tắt nhánh khi dự án đang thu gọn. */
 .plan-proj-summary {
   margin: 6px 0 0;

@@ -22,7 +22,10 @@ import BoardReportListPage from './pages/BoardReportListPage';
 import BoardReportEditPage from './pages/BoardReportEditPage';
 import BoardKpiListPage from './pages/BoardKpiListPage';
 import BoardKpiMemberPage from './pages/BoardKpiMemberPage';
+import BoardEstimateListPage from './pages/BoardEstimateListPage';
+import BoardEstimateEditPage from './pages/BoardEstimateEditPage';
 import KpiSharePage from './pages/KpiSharePage';
+import EstimateSharePage from './pages/EstimateSharePage';
 
 // Layout bọc các trang tài liệu bằng DocumentsProvider.
 function DocsLayout() {
@@ -93,6 +96,8 @@ function AppShell() {
         <Route path="/board/report/:id" element={<BoardReportEditPage />} />
         <Route path="/board/kpi" element={<BoardKpiListPage />} />
         <Route path="/board/kpi/:memberId" element={<BoardKpiMemberPage />} />
+        <Route path="/board/estimates" element={<BoardEstimateListPage />} />
+        <Route path="/board/estimates/:id" element={<BoardEstimateEditPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/docs" replace />} />
     </Routes>
@@ -111,6 +116,8 @@ export default function App() {
           <Route path="/share/f/:id/:docId" element={<SharedFolderPage />} />
           {/* Trang log KPI của member — link riêng, member edit ẩn danh */}
           <Route path="/share/kpi/:token" element={<KpiSharePage />} />
+          {/* Bảng break task & estimate — member tham gia mở từ trang KPI của mình */}
+          <Route path="/share/est/:id" element={<EstimateSharePage />} />
           {/* Mọi route còn lại đi qua lớp đăng nhập */}
           <Route path="/*" element={<AppShell />} />
         </Routes>

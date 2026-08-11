@@ -25,6 +25,8 @@ import type { KpiEntryInput } from '../../hooks/useKpiSheet';
 import { useUnsavedGuard } from '../../hooks/useUnsavedGuard';
 import { addDays, isoLocal, mondayOf, nextWorkday, weekdayVN } from '../../lib/pmDates';
 import { formatDateVi } from '../../lib/reportFormat';
+import type { KpiEstRef } from '../../estTypes';
+import KpiEstPickerDialog from './KpiEstPickerDialog';
 import KpiWeekPlanDialog from './KpiWeekPlanDialog';
 
 interface Props {
@@ -46,6 +48,16 @@ interface Props {
   weekPlans?: Record<string, KpiWeekPlan>;
   /** Member: lưu plan tuần (text rỗng = xóa). Không truyền = chỉ xem (leader). */
   onSaveWeekPlan?: (weekStart: string, text: string) => void;
+  /** Các bảng estimate member tham gia (meta.estimates) — bật nút 📐 pick task. */
+  estimates?: { id: string; title: string }[];
+  kpiMemberId?: string;
+  kpiMemberName?: string;
+  /** Tick "Hoàn thành task estimate" khi lưu dòng → page chạy flow chốt điểm. */
+  onCompleteEst?: (
+    estRef: KpiEstRef,
+    entryId: string,
+    entryMin: number | null,
+  ) => void;
   /** Member mode: true = sheet bị khóa, ẩn mọi nút sửa. */
   locked?: boolean;
   onAdd?: (input: KpiEntryInput) => string | null;
@@ -72,6 +84,10 @@ interface RowDraft {
   note: string;
   /** Điểm tự chấm (chuỗi từ input number; rỗng = 0). */
   selfDelta: string;
+  /** Link về sub task estimate (pick từ dialog 📐). */
+  estRef?: KpiEstRef;
+  /** Tick "Hoàn thành task estimate" — khi lưu sẽ chốt done + điểm gợi ý. */
+  estDone: boolean;
 }
 
 const emptyDraft = (date: string, start = ''): RowDraft => ({
@@ -85,6 +101,7 @@ const emptyDraft = (date: string, start = ''): RowDraft => ({
   task: '',
   note: '',
   selfDelta: '0',
+  estDone: false,
 });
 
 const draftOf = (e: KpiEntry): RowDraft => ({
@@ -98,6 +115,8 @@ const draftOf = (e: KpiEntry): RowDraft => ({
   task: e.task ?? '',
   note: e.note ?? '',
   selfDelta: typeof e.selfDelta === 'number' ? String(e.selfDelta) : '0',
+  estRef: e.estRef,
+  estDone: false,
 });
 
 // 'yyyy-mm' ± n tháng.
@@ -142,6 +161,10 @@ export default function KpiLogTable({
   leaves,
   weekPlans,
   onSaveWeekPlan,
+  estimates,
+  kpiMemberId,
+  kpiMemberName,
+  onCompleteEst,
   locked,
   onAdd,
   onUpdate,
@@ -156,6 +179,8 @@ export default function KpiLogTable({
   const [errMsg, setErrMsg] = useState('');
   // Tuần đang sửa plan chung trong dialog (null = đóng) — hooks luôn ở TOP (Rules of Hooks).
   const [weekPlanEdit, setWeekPlanEdit] = useState<string | null>(null);
+  // Dialog pick task từ bảng estimate cho dòng đang sửa.
+  const [estPickOpen, setEstPickOpen] = useState(false);
   useUnsavedGuard(!!draft);
   const patchDraft = (u: Partial<RowDraft>) => {
     setDraft((d) => (d ? { ...d, ...u } : d));
@@ -270,9 +295,15 @@ export default function KpiLogTable({
       note: d.note || undefined,
       // Điểm tự chấm: rỗng/không hợp lệ → 0 (mặc định khi log done).
       selfDelta: Number(d.selfDelta) || 0,
+      estRef: d.estRef,
     };
+    let entryId = d.id;
     if (d.id) onUpdate?.(d.id, input);
-    else onAdd?.(input);
+    else entryId = onAdd?.(input) ?? '';
+    // Tick "Hoàn thành task estimate" → dòng này là DÒNG CHỐT: page chạy flow
+    // completeEstTask (status done + điểm gợi ý điền vào chính dòng này).
+    if (d.estDone && d.estRef && entryId)
+      onCompleteEst?.(d.estRef, entryId, durationMin({ start: d.start, end: d.end }));
   };
 
   const saveDraft = () => {
@@ -428,12 +459,50 @@ export default function KpiLogTable({
         />
       </td>
       <td className="kpi-task-cell">
-        <input
-          className={errCls('task')}
-          value={d.task}
-          onChange={(e) => patchDraft({ task: e.target.value })}
-          placeholder="Mô tả task…"
-        />
+        <div className="kpi-task-edit">
+          <input
+            className={errCls('task')}
+            value={d.task}
+            onChange={(e) => patchDraft({ task: e.target.value })}
+            placeholder="Mô tả task…"
+          />
+          {(estimates?.length ?? 0) > 0 && (
+            <button
+              type="button"
+              className="doc-action"
+              title="Pick task từ bảng estimate"
+              onClick={() => setEstPickOpen(true)}
+            >
+              📐
+            </button>
+          )}
+        </div>
+        {d.estRef && (
+          <div className="kpi-est-link">
+            <span
+              className="muted kpi-est-title"
+              title={`${d.estRef.title ?? 'task estimate'} — giờ của dòng này sẽ cộng vào task estimate`}
+            >
+              📐 {d.estRef.title ?? 'task estimate'}
+            </span>
+            <button
+              type="button"
+              className="doc-action"
+              title="Bỏ link estimate"
+              onClick={() => patchDraft({ estRef: undefined, estDone: false })}
+            >
+              ✕
+            </button>
+            <label className="kpi-est-done" title="Chốt task estimate done — dòng này nhận điểm gợi ý theo est vs thực tế">
+              <input
+                type="checkbox"
+                checked={d.estDone}
+                onChange={(e) => patchDraft({ estDone: e.target.checked })}
+              />
+              Hoàn thành
+            </label>
+          </div>
+        )}
       </td>
       <td>
         <input
@@ -510,7 +579,17 @@ export default function KpiLogTable({
         <td>{e.category ?? ''}</td>
         <td>{e.project ?? ''}</td>
         <td>{e.feature ?? ''}</td>
-        <td className="kpi-task-cell">{e.task ?? ''}</td>
+        <td className="kpi-task-cell">
+          {e.estRef && (
+            <span
+              className="kpi-est-badge"
+              title={`Link task estimate: ${e.estRef.title ?? ''}`}
+            >
+              📐{' '}
+            </span>
+          )}
+          {e.task ?? ''}
+        </td>
         <td className="muted">{e.note ?? ''}</td>
         <td
           className={`kpi-score-cell${mode === 'leader' ? ' kpi-score-click' : ''}`}
@@ -804,6 +883,25 @@ export default function KpiLogTable({
           initialText={weekPlans?.[weekPlanEdit]?.text ?? ''}
           onSave={(text) => onSaveWeekPlan(weekPlanEdit, text)}
           onClose={() => setWeekPlanEdit(null)}
+        />
+      )}
+
+      {estPickOpen && draft && (
+        <KpiEstPickerDialog
+          estimates={estimates ?? []}
+          memberId={kpiMemberId}
+          memberName={kpiMemberName}
+          onPick={(r) => {
+            // Fill nội dung từ sub task estimate (member chỉnh lại được sau khi fill).
+            patchDraft({
+              estRef: r.estRef,
+              task: r.taskText || draft.task,
+              feature: r.featureText ?? draft.feature,
+              project: r.projectText || draft.project,
+            });
+            setEstPickOpen(false);
+          }}
+          onClose={() => setEstPickOpen(false)}
         />
       )}
     </div>

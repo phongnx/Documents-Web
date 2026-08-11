@@ -1,16 +1,18 @@
 // Trang leader xem log + chấm điểm KPI của 1 member (/board/kpi/:memberId).
 // Nội dung dòng là của member (leader không sửa hộ — muốn sửa thì mở link share);
 // leader chấm điểm qua popover, xóa dòng (kèm điểm), copy link share.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import KpiLogTable from '../components/board/KpiLogTable';
 import KpiScorePopover from '../components/board/KpiScorePopover';
 import KpiLeaveDialog from '../components/board/KpiLeaveDialog';
+import KpiEstPanel from '../components/board/KpiEstPanel';
+import KpiReopenDialog from '../components/board/KpiReopenDialog';
 import { useKpiSheet } from '../hooks/useKpiSheet';
 import { isoLocal } from '../lib/pmDates';
-import type { KpiEntry } from '../kpiTypes';
+import { findReopenSuspects, REOPEN_DELTA, type KpiEntry } from '../kpiTypes';
 
 export default function BoardKpiMemberPage() {
   const { memberId = '' } = useParams();
@@ -21,7 +23,14 @@ export default function BoardKpiMemberPage() {
   const [scoring, setScoring] = useState<KpiEntry | null>(null);
   const [copied, setCopied] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
   const sheet = useKpiSheet(member?.token);
+
+  // Nghi vấn bug reopen trong tháng đang chọn (hook phải nằm TRÊN mọi early return).
+  const reopenSuspects = useMemo(
+    () => findReopenSuspects(sheet.entries, sheet.scores, sheet.reopenChecks, monthKey),
+    [sheet.entries, sheet.scores, sheet.reopenChecks, monthKey],
+  );
 
   // Đồng bộ snapshot danh mục (categories/projectNames/tên) sang sheet mỗi lần mở trang.
   useEffect(() => {
@@ -100,6 +109,14 @@ export default function BoardKpiMemberPage() {
           {member.active ? '👤' : '🔒'} {member.name}
         </strong>
         <div className="plan-toolbar">
+          <button
+            type="button"
+            className={reopenSuspects.length > 0 ? 'kpi-reopen-alert' : undefined}
+            title="Quét ticket fix bugs bị log nhiều lần trong tháng — nghi bị reopen"
+            onClick={() => setReopenOpen(true)}
+          >
+            🐞 Rà soát reopen{reopenSuspects.length > 0 ? ` (${reopenSuspects.length})` : ''}
+          </button>
           <button type="button" onClick={() => setLeaveOpen(true)}>
             🏖 Nghỉ phép{sheet.leaves.length > 0 ? ` (${sheet.leaves.length})` : ''}
           </button>
@@ -122,6 +139,8 @@ export default function BoardKpiMemberPage() {
           member để tạo lại.
         </p>
       )}
+      <KpiEstPanel memberId={memberId} />
+
       {sheet.state === 'ready' && (
         <KpiLogTable
           mode="leader"
@@ -136,6 +155,22 @@ export default function BoardKpiMemberPage() {
           onScoreClick={setScoring}
           onAcceptEntries={acceptEntries}
           onDeleteWithScore={sheet.deleteEntryWithScore}
+        />
+      )}
+
+      {reopenOpen && (
+        <KpiReopenDialog
+          monthKey={monthKey}
+          suspects={reopenSuspects}
+          onConfirm={(s) =>
+            sheet.setScore(s.latest.id, {
+              delta: REOPEN_DELTA,
+              reason: 'Bug reopen (đã rà soát)',
+              ruleKey: 'fixbug',
+            })
+          }
+          onDismiss={(s) => sheet.dismissReopen(s.latest.id)}
+          onClose={() => setReopenOpen(false)}
         />
       )}
 

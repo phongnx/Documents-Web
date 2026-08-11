@@ -2,13 +2,16 @@
 // (capability URL, KHÔNG cần đăng nhập). Member tự thêm/sửa dòng log của mình;
 // dòng đã được leader chấm điểm sẽ bị khóa (rule chặn cả phía server).
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import KpiLogTable from '../components/board/KpiLogTable';
 import KpiReleaseInfoDialog from '../components/board/KpiReleaseInfoDialog';
 import KpiRulesPreviewDialog from '../components/board/KpiRulesPreviewDialog';
+import { get, ref } from 'firebase/database';
 import { useKpiSheet } from '../hooks/useKpiSheet';
 import { db } from '../lib/firebase';
+import { completeEstMessage, completeEstTask } from '../lib/estKpiSync';
+import type { EstGroup, EstLogs, KpiEstRef } from '../estTypes';
 import { addDays, isoLocal, mondayOf, weekdayVN } from '../lib/pmDates';
 import { formatDateVi } from '../lib/reportFormat';
 import { DEFAULT_KPI_RULES, type KpiRelease } from '../kpiTypes';
@@ -26,6 +29,46 @@ export default function KpiSharePage() {
 
   const sheet = useKpiSheet(token, setWriteError);
   const locked = sheet.meta?.locked === true;
+
+  // Thông báo kết quả chốt task estimate (done + điểm gợi ý) — tự ẩn sau 6s.
+  const [estNotice, setEstNotice] = useState('');
+  useEffect(() => {
+    if (!estNotice) return;
+    const t = window.setTimeout(() => setEstNotice(''), 6000);
+    return () => window.clearTimeout(t);
+  }, [estNotice]);
+
+  // Tick "Hoàn thành task estimate" trên dòng log → dòng đó là DÒNG CHỐT:
+  // set sub task done + điền điểm gợi ý vào chính dòng này (1 update nguyên tử).
+  const onCompleteEst = async (
+    estRef: KpiEstRef,
+    entryId: string,
+    entryMin: number | null,
+  ) => {
+    if (!db) return;
+    try {
+      const snap = await get(ref(db, `shared/est/${estRef.estId}`));
+      const val = snap.val() as {
+        groups?: Record<string, EstGroup>;
+        logs?: EstLogs;
+      } | null;
+      const task = val?.groups?.[estRef.groupId]?.tasks?.[estRef.taskId];
+      if (!task) return;
+      const result = await completeEstTask({
+        estId: estRef.estId,
+        groupId: estRef.groupId,
+        taskId: estRef.taskId,
+        task,
+        logs: val?.logs,
+        kpiToken: token,
+        entryId,
+        entryMin,
+      });
+      setEstNotice(completeEstMessage(result));
+    } catch {
+      setWriteError('Không chốt được task estimate (bảng có thể đã khóa).');
+    }
+  };
   // Dialog xem quy chế (chỉ đọc) — sheet cũ chưa có snapshot thì fallback quy chế gốc.
   const [rulesOpen, setRulesOpen] = useState(false);
   const rules =
@@ -120,12 +163,28 @@ export default function KpiSharePage() {
               )}
             </div>
           )}
+          {(sheet.meta?.estimates?.length ?? 0) > 0 && (
+            <div className="kpi-releases">
+              <span className="muted">📐 Bảng estimate:</span>
+              {sheet.meta!.estimates!.map((e) => (
+                <Link
+                  key={e.id}
+                  className="kpi-rel-chip"
+                  to={`/share/est/${e.id}?t=${token}`}
+                  title="Mở bảng break task & estimate"
+                >
+                  {e.title}
+                </Link>
+              ))}
+            </div>
+          )}
           {locked && (
             <p className="warn kpi-locked-banner">
               🔒 Trang đã bị khóa — chỉ xem, không sửa được. Liên hệ leader nếu cần mở lại.
             </p>
           )}
           {writeError && <p className="warn kpi-write-error">{writeError}</p>}
+          {estNotice && <p className="muted kpi-locked-banner">{estNotice}</p>}
           <KpiLogTable
             mode="member"
             entries={sheet.entries}
@@ -138,6 +197,10 @@ export default function KpiSharePage() {
             leaves={sheet.leaves}
             weekPlans={sheet.weekPlans}
             onSaveWeekPlan={sheet.setWeekPlan}
+            estimates={sheet.meta?.estimates}
+            kpiMemberId={sheet.meta?.memberId}
+            kpiMemberName={sheet.meta?.memberName}
+            onCompleteEst={onCompleteEst}
             locked={locked}
             onAdd={sheet.addEntry}
             onUpdate={sheet.updateEntry}

@@ -41,6 +41,12 @@ import {
   type WeeklyPlan,
   type WorkstreamState,
 } from '../pmTypes';
+import {
+  type EstimateMeta,
+  type EstIndexItem,
+  type EstParticipant,
+  type EstState,
+} from '../estTypes';
 import { isoLocal, weekdayVN } from '../lib/pmDates';
 import { normName } from '../lib/pmText';
 import { tokensOf } from '../lib/planProgress';
@@ -234,6 +240,29 @@ interface PmState {
   updateKpiRules: (rules: KpiRuleGroup[]) => void;
   /** Đồng bộ snapshot categories/projectNames/memberName sang sheet của member. */
   syncKpiSheetMeta: (memberId: string) => void;
+  // ---------- Break task & Estimate ----------
+  estimates: EstIndexItem[];
+  /** Tạo bảng estimate (state draft) + sync mục Estimate sang sheet KPI của participants; trả estId. */
+  addEstimate: (data: EstMetaInput) => string | null;
+  /** Sửa meta bảng (title/app/version/ngày/participants) — không đụng groups. */
+  updateEstimateMeta: (id: string, patch: Partial<EstMetaInput>) => void;
+  /** Duyệt & chốt (approved — member chỉ còn sửa status/note) hoặc mở lại draft. */
+  setEstimateState: (id: string, state: EstState) => void;
+  /** Khóa hẳn bảng (chỉ xem) / mở khóa. */
+  setEstimateLocked: (id: string, locked: boolean) => void;
+  /** Xóa bảng + index + gỡ khỏi mục Estimate trên sheet KPI của participants. */
+  deleteEstimate: (id: string) => void;
+}
+
+/** Input meta bảng estimate (leader nhập ở dialog tạo/sửa). */
+export interface EstMetaInput {
+  title: string;
+  appId?: string;
+  version?: string;
+  startDate?: string;
+  endDate?: string;
+  holidays?: number;
+  participantIds: string[];
 }
 
 // RTDB bỏ mảng rỗng → chuẩn hóa để mọi mảng lồng nhau luôn tồn tại khi đọc về.
@@ -283,6 +312,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [members, setMembers] = useState<KpiMember[]>([]);
+  const [estimates, setEstimates] = useState<EstIndexItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Đọc state mới nhất trong mutator (không đọc closure) — như DocumentsContext.
@@ -293,6 +323,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
     plans: WeeklyPlan[];
     reports: DailyReport[];
     members: KpiMember[];
+    estimates: EstIndexItem[];
   }>({
     apps: [],
     tasks: [],
@@ -300,6 +331,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
     plans: [],
     reports: [],
     members: [],
+    estimates: [],
   });
   stateRef.current.apps = apps;
   stateRef.current.tasks = tasks;
@@ -307,6 +339,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
   stateRef.current.plans = plans;
   stateRef.current.reports = reports;
   stateRef.current.members = members;
+  stateRef.current.estimates = estimates;
 
   useEffect(() => {
     if (!db || !uid) {
@@ -316,6 +349,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
       setPlans([]);
       setReports([]);
       setMembers([]);
+      setEstimates([]);
       setLoading(false);
       return;
     }
@@ -375,6 +409,15 @@ export function PmProvider({ children }: { children: ReactNode }) {
       setMembers(list);
     });
 
+    const estimatesRef = ref(db, `users/${uid}/pm/estimates`);
+    const unsubEstimates = onValue(estimatesRef, (snap) => {
+      const val = snap.val() as Record<string, EstIndexItem> | null;
+      const list = val ? Object.values(val) : [];
+      // Mới nhất trước.
+      list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      setEstimates(list);
+    });
+
     const plansRef = ref(db, `users/${uid}/pm/plans`);
     const unsubPlans = onValue(plansRef, (snap) => {
       const val = snap.val() as Record<string, WeeklyPlan> | null;
@@ -410,6 +453,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
       unsubPlans();
       unsubReports();
       unsubMembers();
+      unsubEstimates();
     };
   }, [uid]);
 
@@ -977,12 +1021,21 @@ export function PmProvider({ children }: { children: ReactNode }) {
   // Snapshot meta cho sheet member (member ẩn danh không đọc được users/{uid}/pm/meta).
   // STRICT tuyệt đối: projectNames CHỈ gồm các project được gán (có thể rỗng — member
   // chưa gán thì KHÔNG log được, không fallback "tất cả app").
+  // Danh sách bảng estimate 1 member tham gia (hiển thị mục "Estimate" trên sheet KPI).
+  const estimatesOfMember = useCallback(
+    (memberId: string): { id: string; title: string }[] =>
+      stateRef.current.estimates
+        .filter((e) => e.participantIds?.includes(memberId))
+        .map((e) => ({ id: e.id, title: e.title })),
+    [],
+  );
+
   const kpiSnapshot = useCallback(
     (
       member?: KpiMember,
     ): Pick<
       KpiSheetMeta,
-      'categories' | 'projectNames' | 'strictProjects' | 'rules' | 'releases'
+      'categories' | 'projectNames' | 'strictProjects' | 'rules' | 'releases' | 'estimates'
     > => {
       const apps = stateRef.current.apps;
       const assigned = (member?.projectIds ?? [])
@@ -996,9 +1049,11 @@ export function PmProvider({ children }: { children: ReactNode }) {
         rules: stateRef.current.meta.kpiRules,
         // Snapshot mốc release sắp tới của app được gán (member xem lịch ở header).
         releases: upcomingReleases(assigned, stateRef.current.tasks),
+        // Các bảng estimate member tham gia (mảng rỗng → RTDB tự bỏ key).
+        estimates: member ? estimatesOfMember(member.id) : [],
       };
     },
-    [],
+    [estimatesOfMember],
   );
 
   const addMember = useCallback(
@@ -1018,6 +1073,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
       const sheetMeta: KpiSheetMeta = {
         ownerId: uid,
         memberName: n,
+        memberId: member.id,
         ...kpiSnapshot(),
         createdAt: now,
       };
@@ -1055,10 +1111,25 @@ export function PmProvider({ children }: { children: ReactNode }) {
       if (!db || !uid) return;
       const cur = stateRef.current.members.find((m) => m.id === id);
       if (!cur) return;
-      update(ref(db), {
+      const writes: Record<string, unknown> = {
         [`users/${uid}/pm/members/${id}`]: null,
         [`shared/kpi/${cur.token}`]: null,
-      });
+      };
+      // Gỡ member khỏi participants các bảng estimate (sub task giữ assigneeName denormalized).
+      for (const e of stateRef.current.estimates) {
+        if (!e.participantIds?.includes(id)) continue;
+        const nextIds = e.participantIds.filter((x) => x !== id);
+        writes[`users/${uid}/pm/estimates/${e.id}/participantIds`] = nextIds.length
+          ? nextIds
+          : null;
+        writes[`shared/est/${e.id}/meta/participants`] = nextIds.length
+          ? nextIds
+              .map((mid) => stateRef.current.members.find((m) => m.id === mid))
+              .filter((m): m is KpiMember => !!m)
+              .map((m) => ({ memberId: m.id, name: m.name }))
+          : null;
+      }
+      update(ref(db), writes);
     },
     [uid],
   );
@@ -1078,6 +1149,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
             meta: {
               ownerId: uid,
               memberName: cur.name,
+              memberId: cur.id,
               ...kpiSnapshot(cur),
               createdAt: new Date().toISOString(),
             } satisfies KpiSheetMeta,
@@ -1121,6 +1193,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
       if (!cur) return;
       update(ref(db, `shared/kpi/${cur.token}/meta`), {
         memberName: cur.name,
+        memberId: cur.id,
         ...kpiSnapshot(cur),
       });
     },
@@ -1150,6 +1223,178 @@ export function PmProvider({ children }: { children: ReactNode }) {
       });
     },
     [uid, kpiSnapshot],
+  );
+
+  // ---------- Break task & Estimate ----------
+
+  // Gom writes sync mục "Estimate" (meta/estimates) trên sheet KPI của các member
+  // trong memberIds — tính theo danh sách index SAU mutation (nextIndex).
+  const kpiEstimatesWrites = useCallback(
+    (
+      writes: Record<string, unknown>,
+      nextIndex: EstIndexItem[],
+      memberIds: Set<string>,
+    ) => {
+      for (const m of stateRef.current.members) {
+        if (!memberIds.has(m.id)) continue;
+        const list = nextIndex
+          .filter((e) => e.participantIds?.includes(m.id))
+          .map((e) => ({ id: e.id, title: e.title }));
+        writes[`shared/kpi/${m.token}/meta/estimates`] = list.length ? list : null;
+      }
+    },
+    [],
+  );
+
+  // memberIds → participants (lọc member còn tồn tại, denormalize tên).
+  const toParticipants = useCallback(
+    (memberIds: string[]): EstParticipant[] =>
+      memberIds
+        .map((mid) => stateRef.current.members.find((m) => m.id === mid))
+        .filter((m): m is KpiMember => !!m)
+        .map((m) => ({ memberId: m.id, name: m.name })),
+    [],
+  );
+
+  const addEstimate = useCallback(
+    (data: EstMetaInput): string | null => {
+      if (!db || !uid) return null;
+      const title = data.title.trim();
+      if (!title) return null;
+      const now = new Date().toISOString();
+      const id = uuidv4();
+      const participants = toParticipants(data.participantIds);
+      const appName = data.appId
+        ? stateRef.current.apps.find((a) => a.id === data.appId)?.name
+        : undefined;
+      const estMeta: EstimateMeta = {
+        ownerId: uid,
+        title,
+        state: 'draft',
+        createdAt: now,
+        ...(data.appId ? { appId: data.appId } : {}),
+        ...(appName ? { appName } : {}),
+        ...(data.version ? { version: data.version } : {}),
+        ...(data.startDate ? { startDate: data.startDate } : {}),
+        ...(data.endDate ? { endDate: data.endDate } : {}),
+        ...(typeof data.holidays === 'number' ? { holidays: data.holidays } : {}),
+        ...(participants.length ? { participants } : {}),
+      };
+      const index: EstIndexItem = {
+        id,
+        title,
+        createdAt: now,
+        ...(data.appId ? { appId: data.appId } : {}),
+        ...(data.version ? { version: data.version } : {}),
+        ...(participants.length
+          ? { participantIds: participants.map((p) => p.memberId) }
+          : {}),
+      };
+      // 1 update nguyên tử: index riêng tư + meta công khai + mục Estimate trên sheet KPI.
+      const writes: Record<string, unknown> = {
+        [`users/${uid}/pm/estimates/${id}`]: index,
+        [`shared/est/${id}/meta`]: estMeta,
+      };
+      kpiEstimatesWrites(
+        writes,
+        [...stateRef.current.estimates, index],
+        new Set(index.participantIds ?? []),
+      );
+      update(ref(db), writes);
+      return id;
+    },
+    [uid, kpiEstimatesWrites, toParticipants],
+  );
+
+  const updateEstimateMeta = useCallback(
+    (id: string, patch: Partial<EstMetaInput>) => {
+      if (!db || !uid) return;
+      const cur = stateRef.current.estimates.find((e) => e.id === id);
+      if (!cur) return;
+      const writes: Record<string, unknown> = {};
+      const base = `shared/est/${id}/meta`;
+      const nextItem: EstIndexItem = { ...cur };
+      if (patch.title !== undefined && patch.title.trim()) {
+        nextItem.title = patch.title.trim();
+        writes[`${base}/title`] = nextItem.title;
+      }
+      if ('appId' in patch) {
+        const appName = patch.appId
+          ? stateRef.current.apps.find((a) => a.id === patch.appId)?.name
+          : undefined;
+        if (patch.appId) nextItem.appId = patch.appId;
+        else delete nextItem.appId;
+        writes[`${base}/appId`] = patch.appId || null;
+        writes[`${base}/appName`] = appName || null;
+      }
+      if ('version' in patch) {
+        if (patch.version) nextItem.version = patch.version;
+        else delete nextItem.version;
+        writes[`${base}/version`] = patch.version || null;
+      }
+      if ('startDate' in patch) writes[`${base}/startDate`] = patch.startDate || null;
+      if ('endDate' in patch) writes[`${base}/endDate`] = patch.endDate || null;
+      if ('holidays' in patch)
+        writes[`${base}/holidays`] =
+          typeof patch.holidays === 'number' ? patch.holidays : null;
+      let affected = new Set<string>();
+      if (patch.participantIds) {
+        const participants = toParticipants(patch.participantIds);
+        if (participants.length)
+          nextItem.participantIds = participants.map((p) => p.memberId);
+        else delete nextItem.participantIds;
+        writes[`${base}/participants`] = participants.length ? participants : null;
+        // Sync mục Estimate cho cả member bị gỡ lẫn member mới thêm.
+        affected = new Set([
+          ...(cur.participantIds ?? []),
+          ...(nextItem.participantIds ?? []),
+        ]);
+      }
+      writes[`users/${uid}/pm/estimates/${id}`] = nextItem;
+      const nextIndex = stateRef.current.estimates.map((e) =>
+        e.id === id ? nextItem : e,
+      );
+      // Đổi title cũng phải sync lại nhãn trên sheet KPI của participants hiện có.
+      if (patch.title !== undefined)
+        for (const mid of nextItem.participantIds ?? []) affected.add(mid);
+      kpiEstimatesWrites(writes, nextIndex, affected);
+      update(ref(db), writes);
+    },
+    [uid, kpiEstimatesWrites, toParticipants],
+  );
+
+  const setEstimateState = useCallback(
+    (id: string, state: EstState) => {
+      if (!db || !uid) return;
+      set(ref(db, `shared/est/${id}/meta/state`), state);
+    },
+    [uid],
+  );
+
+  const setEstimateLocked = useCallback(
+    (id: string, locked: boolean) => {
+      if (!db || !uid) return;
+      set(ref(db, `shared/est/${id}/meta/locked`), locked);
+    },
+    [uid],
+  );
+
+  const deleteEstimate = useCallback(
+    (id: string) => {
+      if (!db || !uid) return;
+      const cur = stateRef.current.estimates.find((e) => e.id === id);
+      const writes: Record<string, unknown> = {
+        [`users/${uid}/pm/estimates/${id}`]: null,
+        [`shared/est/${id}`]: null,
+      };
+      kpiEstimatesWrites(
+        writes,
+        stateRef.current.estimates.filter((e) => e.id !== id),
+        new Set(cur?.participantIds ?? []),
+      );
+      update(ref(db), writes);
+    },
+    [uid, kpiEstimatesWrites],
   );
 
   const addPlan = useCallback(
@@ -1346,6 +1591,12 @@ export function PmProvider({ children }: { children: ReactNode }) {
         setMemberProjects,
         updateKpiRules,
         syncKpiSheetMeta,
+        estimates,
+        addEstimate,
+        updateEstimateMeta,
+        setEstimateState,
+        setEstimateLocked,
+        deleteEstimate,
       }}
     >
       {children}

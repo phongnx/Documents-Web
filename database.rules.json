@@ -39,6 +39,41 @@
           }
         }
       },
+      "est": {
+        "$estId": {
+          ".read": true,
+          ".write": "auth != null && (data.exists() ? data.child('meta/ownerId').val() === auth.uid : newData.child('meta/ownerId').val() === auth.uid)",
+          "meta": {
+            ".validate": "newData.child('ownerId').isString() && (!data.child('ownerId').exists() || data.child('ownerId').val() === newData.child('ownerId').val())"
+          },
+          "groups": {
+            ".write": "data.parent().child('meta').exists() && data.parent().child('meta/locked').val() !== true && data.parent().child('meta/state').val() === 'draft'",
+            "$gid": {
+              ".validate": "newData.hasChildren(['id','title','order'])",
+              "tasks": {
+                "$tid": {
+                  ".validate": "newData.hasChildren(['id','title','order','status']) && newData.child('title').val().length <= 500 && (!newData.child('estHours').exists() || newData.child('estHours').isNumber()) && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 2000))",
+                  "status": {
+                    ".write": "data.parent().parent().parent().parent().parent().child('meta').exists() && data.parent().parent().parent().parent().parent().child('meta/locked').val() !== true",
+                    ".validate": "newData.val() === 'todo' || newData.val() === 'doing' || newData.val() === 'done'"
+                  },
+                  "note": {
+                    ".write": "data.parent().parent().parent().parent().parent().child('meta').exists() && data.parent().parent().parent().parent().parent().child('meta/locked').val() !== true"
+                  }
+                }
+              }
+            }
+          },
+          "logs": {
+            "$taskId": {
+              "$entryId": {
+                ".write": "data.parent().parent().parent().child('meta').exists() && data.parent().parent().parent().child('meta/locked').val() !== true",
+                ".validate": "newData.isNumber() && newData.val() >= 0"
+              }
+            }
+          }
+        }
+      },
       "$type": {
         "$id": {
           ".read": true,

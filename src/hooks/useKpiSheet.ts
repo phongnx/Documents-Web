@@ -6,12 +6,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { onValue, ref, set, update } from 'firebase/database';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../lib/firebase';
-import type {
-  KpiEntry,
-  KpiLeave,
-  KpiScore,
-  KpiSheetMeta,
-  KpiWeekPlan,
+import {
+  durationMin,
+  type KpiEntry,
+  type KpiLeave,
+  type KpiScore,
+  type KpiSheetMeta,
+  type KpiWeekPlan,
 } from '../kpiTypes';
 
 export type KpiSheetState = 'loading' | 'ready' | 'notfound';
@@ -25,6 +26,10 @@ export interface KpiSheet {
   leaves: KpiLeave[];
   /** Plan chung theo tuần (key = thứ 2 của tuần 'yyyy-mm-dd'). */
   weekPlans: Record<string, KpiWeekPlan>;
+  /** Ticket đã leader rà soát và BỎ QUA nghi vấn reopen (key = entryId dòng mới nhất). */
+  reopenChecks: Record<string, boolean>;
+  /** Leader: đánh dấu bỏ qua nghi vấn reopen (không phải reopen, nguyên nhân khác). */
+  dismissReopen: (entryId: string) => void;
   /** Member: ghi plan tuần (text rỗng = xóa plan của tuần đó). */
   setWeekPlan: (weekStart: string, text: string) => void;
   /** Leader: thêm 1 đợt nghỉ phép. */
@@ -66,8 +71,22 @@ function normalizeEntry(e: KpiEntry): KpiEntry {
     ...(e.task ? { task: e.task } : {}),
     ...(e.note ? { note: e.note } : {}),
     ...(typeof e.selfDelta === 'number' ? { selfDelta: e.selfDelta } : {}),
+    ...(e.estRef?.estId && e.estRef.taskId
+      ? {
+          estRef: {
+            estId: e.estRef.estId,
+            groupId: e.estRef.groupId,
+            taskId: e.estRef.taskId,
+            ...(e.estRef.title ? { title: e.estRef.title } : {}),
+          },
+        }
+      : {}),
   };
 }
+
+/** Path node "đóng góp phút" của 1 entry trên bảng estimate. */
+const estLogPath = (e: KpiEntry): string | null =>
+  e.estRef ? `shared/est/${e.estRef.estId}/logs/${e.estRef.taskId}/${e.id}` : null;
 
 /**
  * @param token token của sheet (undefined/rỗng = chưa sẵn sàng, state giữ 'loading').
@@ -84,6 +103,7 @@ export function useKpiSheet(
   const [scores, setScores] = useState<Record<string, KpiScore>>({});
   const [leaves, setLeaves] = useState<KpiLeave[]>([]);
   const [weekPlans, setWeekPlans] = useState<Record<string, KpiWeekPlan>>({});
+  const [reopenChecks, setReopenChecks] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!db || !token) {
@@ -100,6 +120,7 @@ export function useKpiSheet(
           scores?: Record<string, KpiScore>;
           leaves?: Record<string, KpiLeave>;
           weekPlans?: Record<string, KpiWeekPlan>;
+          reopenChecks?: Record<string, boolean>;
         } | null;
         if (!val?.meta) {
           // Token chưa được tạo hoặc đã bị leader thu hồi (đổi link/xóa member).
@@ -108,6 +129,7 @@ export function useKpiSheet(
           setScores({});
           setLeaves([]);
           setWeekPlans({});
+          setReopenChecks({});
           setState('notfound');
           return;
         }
@@ -121,6 +143,7 @@ export function useKpiSheet(
           ),
         );
         setWeekPlans(val.weekPlans ?? {});
+        setReopenChecks(val.reopenChecks ?? {});
         setState('ready');
       },
       () => setState('notfound'),
@@ -137,6 +160,27 @@ export function useKpiSheet(
     [onWriteError],
   );
 
+  // Ghi entry + node phút bên bảng estimate trong 1 update nguyên tử; nếu bị từ chối
+  // (VD bảng estimate đã khóa hẳn) → thử lại chỉ phần entry để member không mất log.
+  const writeWithEstLog = useCallback(
+    (writes: Record<string, unknown>, estPaths: string[]) => {
+      if (!db) return;
+      update(ref(db), writes).catch(() => {
+        if (estPaths.length === 0) return failed();
+        const rest = { ...writes };
+        for (const p of estPaths) delete rest[p];
+        update(ref(db!), rest)
+          .then(() =>
+            onWriteError?.(
+              'Đã lưu dòng log, nhưng không cộng được giờ sang bảng estimate (bảng có thể đã khóa).',
+            ),
+          )
+          .catch(failed);
+      });
+    },
+    [failed, onWriteError],
+  );
+
   const addEntry = useCallback(
     (input: KpiEntryInput): string | null => {
       if (!db || !token) return null;
@@ -147,10 +191,20 @@ export function useKpiSheet(
         createdAt: now,
         updatedAt: now,
       });
-      set(ref(db, `shared/kpi/${token}/entries/${entry.id}`), entry).catch(failed);
+      const writes: Record<string, unknown> = {
+        [`shared/kpi/${token}/entries/${entry.id}`]: entry,
+      };
+      const estPaths: string[] = [];
+      const lp = estLogPath(entry);
+      if (lp) {
+        const min = durationMin(entry);
+        writes[lp] = min === null ? null : min;
+        estPaths.push(lp);
+      }
+      writeWithEstLog(writes, estPaths);
       return entry.id;
     },
-    [token, failed],
+    [token, writeWithEstLog],
   );
 
   const updateEntry = useCallback(
@@ -166,17 +220,43 @@ export function useKpiSheet(
         createdAt: cur.createdAt,
         updatedAt: new Date().toISOString(),
       });
-      set(ref(db, `shared/kpi/${token}/entries/${id}`), next).catch(failed);
+      const writes: Record<string, unknown> = {
+        [`shared/kpi/${token}/entries/${id}`]: next,
+      };
+      const estPaths: string[] = [];
+      // estRef đổi/bỏ → gỡ node phút cũ; có estRef → ghi đè phút mới (giờ lỗi → null).
+      const oldLp = estLogPath(cur);
+      const newLp = estLogPath(next);
+      if (oldLp && oldLp !== newLp) {
+        writes[oldLp] = null;
+        estPaths.push(oldLp);
+      }
+      if (newLp) {
+        const min = durationMin(next);
+        writes[newLp] = min === null ? null : min;
+        estPaths.push(newLp);
+      }
+      writeWithEstLog(writes, estPaths);
     },
-    [token, entries, failed],
+    [token, entries, writeWithEstLog],
   );
 
   const deleteEntry = useCallback(
     (id: string) => {
       if (!db || !token) return;
-      set(ref(db, `shared/kpi/${token}/entries/${id}`), null).catch(failed);
+      const cur = entries.find((e) => e.id === id);
+      const writes: Record<string, unknown> = {
+        [`shared/kpi/${token}/entries/${id}`]: null,
+      };
+      const estPaths: string[] = [];
+      const lp = cur ? estLogPath(cur) : null;
+      if (lp) {
+        writes[lp] = null;
+        estPaths.push(lp);
+      }
+      writeWithEstLog(writes, estPaths);
     },
-    [token, failed],
+    [token, entries, writeWithEstLog],
   );
 
   const setScore = useCallback(
@@ -257,16 +337,29 @@ export function useKpiSheet(
     [token, failed],
   );
 
+  // Bỏ qua nghi vấn reopen — chỉ owner ghi được (rule cascade ở tầng $token).
+  const dismissReopen = useCallback(
+    (entryId: string) => {
+      if (!db || !token) return;
+      set(ref(db, `shared/kpi/${token}/reopenChecks/${entryId}`), true).catch(failed);
+    },
+    [token, failed],
+  );
+
   const deleteEntryWithScore = useCallback(
     (entryId: string) => {
       if (!db || !token) return;
-      // Xóa entry + score trong 1 multi-path update (nguyên tử).
-      update(ref(db), {
+      const cur = entries.find((e) => e.id === entryId);
+      // Xóa entry + score (+ node phút bên estimate nếu có) trong 1 update nguyên tử.
+      const writes: Record<string, unknown> = {
         [`shared/kpi/${token}/entries/${entryId}`]: null,
         [`shared/kpi/${token}/scores/${entryId}`]: null,
-      }).catch(failed);
+      };
+      const lp = cur ? estLogPath(cur) : null;
+      if (lp) writes[lp] = null;
+      update(ref(db), writes).catch(failed);
     },
-    [token, failed],
+    [token, entries, failed],
   );
 
   return {
@@ -286,5 +379,7 @@ export function useKpiSheet(
     deleteLeave,
     weekPlans,
     setWeekPlan,
+    reopenChecks,
+    dismissReopen,
   };
 }

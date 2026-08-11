@@ -32,6 +32,12 @@ export default function BoardNav() {
           <NavLink to="/board/kpi" className={({ isActive }) => (isActive ? 'active' : '')}>
             KPI
           </NavLink>
+          <NavLink
+            to="/board/estimates"
+            className={({ isActive }) => (isActive ? 'active' : '')}
+          >
+            Estimate
+          </NavLink>
         </nav>
       </div>
       <div className="board-nav-right">

@@ -2,6 +2,7 @@
 // (share link, member edit ẩn danh), chấm điểm KPI theo từng dòng task.
 // Dữ liệu sheet tại shared/kpi/{token}; danh sách member tại users/{uid}/pm/members.
 import { addDays } from './lib/pmDates';
+import type { KpiEstRef } from './estTypes';
 
 /** 1 dòng log của member — shared/kpi/{token}/entries/{entryId}.
  *  Duration KHÔNG lưu — luôn tính từ start/end (một nguồn sự thật). */
@@ -21,6 +22,9 @@ export interface KpiEntry {
   note?: string;
   /** Điểm TỰ CHẤM của member (mặc định 0 khi log) — hết sửa được khi leader đã chấm (scores tồn tại). */
   selfDelta?: number;
+  /** Link về sub task estimate (pick từ bảng estimate) — giờ của dòng này được cộng
+   *  vào actual của sub task đó (shared/est/{estId}/logs). */
+  estRef?: KpiEstRef;
   createdAt: string;
   updatedAt: string;
 }
@@ -60,6 +64,8 @@ export interface KpiRelease {
 export interface KpiSheetMeta {
   ownerId: string;
   memberName: string;
+  /** Id member (bản ghi riêng của leader) — match assignee bên bảng estimate. */
+  memberId?: string;
   /** Snapshot nhãn giai đoạn từ kpiRules (member ẩn danh không đọc được users/…/meta). */
   categories?: string[];
   /** Danh sách tên project cho ô Project: đã gán → chỉ các project gán; chưa gán → gợi ý tất cả app. */
@@ -70,6 +76,8 @@ export interface KpiSheetMeta {
   rules?: KpiRuleGroup[];
   /** Snapshot các mốc release SẮP TỚI của app được gán (member xem lịch ở header). */
   releases?: KpiRelease[];
+  /** Các bảng estimate member này tham gia (leader sync khi gán participants). */
+  estimates?: { id: string; title: string }[];
   /** true = khóa ghi (member nghỉ/lộ link) — rule chặn member ghi entries. */
   locked?: boolean;
   createdAt: string;
@@ -187,9 +195,10 @@ export const DEFAULT_KPI_RULES: KpiRuleGroup[] = [
     label: 'Phát triển',
     levels: [
       { label: 'Đề xuất tối ưu lớn/refactor thành công', delta: 2 },
-      { label: 'Vượt tiến độ theo estimate', delta: 1 },
+      { label: 'Vượt tiến độ theo estimate (nhanh ≥20%)', delta: 1 },
       { label: 'Đạt tiến độ', delta: 0 },
-      { label: 'Chậm/không hoạt động đúng', delta: -1 },
+      { label: 'Chậm 10–20% theo estimate', delta: -0.5 },
+      { label: 'Chậm >20% / không hoạt động đúng', delta: -1 },
     ],
   },
   {
@@ -324,4 +333,69 @@ export function totalOf(
 /** Lọc entries theo tháng 'yyyy-mm'. */
 export function entriesOfMonth(entries: KpiEntry[], monthKey: string): KpiEntry[] {
   return entries.filter((e) => monthKeyOf(e.date) === monthKey);
+}
+
+// ---------- Rà soát bug reopen ----------
+
+/** Điểm trừ khi xác nhận bug reopen (mức "Bug bị reopen" nhóm Fix bugs của quy chế). */
+export const REOPEN_DELTA = -0.2;
+
+/** 1 ticket nghi reopen: cùng ticket log ≥2 lần trên ≥2 ngày khác nhau trong tháng. */
+export interface ReopenSuspect {
+  /** Key gom nhóm (estRef.taskId hoặc project + task text normalize). */
+  key: string;
+  task: string;
+  project?: string;
+  /** Các dòng của ticket, cũ → mới. */
+  entries: KpiEntry[];
+  /** Dòng MỚI NHẤT (lần reopen) — nơi fill −0.2 nếu leader xác nhận. */
+  latest: KpiEntry;
+}
+
+/**
+ * Quét ticket fix-bugs nghi bị reopen trong 1 tháng:
+ * - Chỉ dòng có category chứa "fix"/"bug".
+ * - Gom theo estRef.taskId (nếu có) hoặc project + task text (lowercase, gộp space).
+ * - Nghi vấn = ≥2 dòng trên ≥2 NGÀY khác nhau (2 dòng cùng ngày = làm tiếp, không tính).
+ * - "Chưa chốt": dòng mới nhất chưa có điểm leader và chưa bị bỏ qua (dismissed).
+ */
+export function findReopenSuspects(
+  entries: KpiEntry[],
+  scores: Record<string, KpiScore>,
+  dismissed: Record<string, boolean>,
+  monthKey: string,
+): ReopenSuspect[] {
+  const norm = (s?: string) => (s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const groups = new Map<string, KpiEntry[]>();
+  for (const e of entriesOfMonth(entries, monthKey)) {
+    const cat = norm(e.category);
+    if (!cat.includes('fix') && !cat.includes('bug')) continue;
+    if (!norm(e.task) && !e.estRef) continue; // không có gì để nhận diện ticket
+    const key = e.estRef?.taskId ?? `${norm(e.project)}|${norm(e.task)}`;
+    const list = groups.get(key);
+    if (list) list.push(e);
+    else groups.set(key, [e]);
+  }
+  const out: ReopenSuspect[] = [];
+  for (const [key, list] of groups) {
+    if (list.length < 2) continue;
+    if (new Set(list.map((e) => e.date)).size < 2) continue;
+    const sorted = [...list].sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) ||
+        (parseHm(a.start) ?? 0) - (parseHm(b.start) ?? 0) ||
+        a.createdAt.localeCompare(b.createdAt),
+    );
+    const latest = sorted[sorted.length - 1];
+    if (scores[latest.id] || dismissed[latest.id]) continue; // đã chốt / đã bỏ qua
+    out.push({
+      key,
+      task: latest.task ?? sorted[0].task ?? '',
+      project: latest.project,
+      entries: sorted,
+      latest,
+    });
+  }
+  // Lần reopen mới nhất lên đầu.
+  return out.sort((a, b) => b.latest.date.localeCompare(a.latest.date));
 }
