@@ -25,6 +25,9 @@ export interface KpiEntry {
   /** Link về sub task estimate (pick từ bảng estimate) — giờ của dòng này được cộng
    *  vào actual của sub task đó (shared/est/{estId}/logs). */
   estRef?: KpiEstRef;
+  /** Mốc release/milestone mà task thuộc về (denormalized — mốc bị xóa khỏi snapshot
+   *  vẫn hiển thị đúng khi tổng hợp tháng). label VD "AppLock v1.114". */
+  rel?: { label: string; date?: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -333,6 +336,68 @@ export function totalOf(
 /** Lọc entries theo tháng 'yyyy-mm'. */
 export function entriesOfMonth(entries: KpiEntry[], monthKey: string): KpiEntry[] {
   return entries.filter((e) => monthKeyOf(e.date) === monthKey);
+}
+
+// ---------- Tổng kết KPI tháng (bảng tổng hợp tất cả member) ----------
+
+/** 1 dòng "đầu mục lớn" của member trong bảng tổng kết (nhóm theo project + category). */
+export interface KpiSummaryRow {
+  id: string;
+  /** Giai đoạn (Phát triển/Fix bugs/…). */
+  category?: string;
+  /** Tên app/project. */
+  app?: string;
+  /** Mốc release/milestone các task trong đoạn thuộc về (auto từ entry.rel, sửa tay được). */
+  milestone?: string;
+  /** Text nhiều dòng theo marker '# heading' / '- item' (như cột Tasks của file Excel). */
+  tasks?: string;
+  /** ISO 'yyyy-mm-dd'. */
+  start?: string;
+  end?: string;
+  /** Số ngày làm việc (auto = T2–T6 trong khoảng, sửa tay được). */
+  days?: number;
+  /** Tiến độ/Kết quả — leader điền tay. */
+  progress?: string;
+  /** Điểm ± của nhóm (auto = Σ điểm các dòng log, sửa tay được — lưu dạng text). */
+  kpi?: string;
+  /** Lý do cộng/trừ điểm — auto từ reason các dòng log có điểm ≠ 0 (mỗi dòng 1 lý do). */
+  kpiNote?: string;
+  order: number;
+}
+
+/** Khối 1 member trong bảng tổng kết. */
+export interface KpiSummaryMember {
+  memberId: string;
+  /** Snapshot tên (member xóa sau này không vỡ bảng). */
+  name: string;
+  /** KPI tháng = 100 + Σ điểm (auto, sửa tay được). */
+  kpiScore: number;
+  /** Nghỉ phép riêng trong tháng (auto từ leaves, sửa tay được). */
+  leaveNote?: string;
+  rows: KpiSummaryRow[];
+  order: number;
+}
+
+/** Bảng tổng kết KPI 1 tháng — shared/kpisum/{id} (owner ghi, ai có link đọc). */
+export interface KpiSummaryMeta {
+  ownerId: string;
+  /** 'yyyy-mm'. */
+  monthKey: string;
+  /** Nghỉ lễ chung của tháng (điền tay, áp cho mọi member). */
+  commonHolidays?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KpiSummary {
+  meta: KpiSummaryMeta;
+  members: KpiSummaryMember[];
+}
+
+/** Index riêng tư — users/{uid}/pm/kpiSummaries/{monthKey}. */
+export interface KpiSummaryIndexItem {
+  id: string;
+  updatedAt: string;
 }
 
 // ---------- Rà soát bug reopen ----------

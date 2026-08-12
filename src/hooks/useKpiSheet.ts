@@ -81,6 +81,14 @@ function normalizeEntry(e: KpiEntry): KpiEntry {
           },
         }
       : {}),
+    ...(e.rel?.label
+      ? {
+          rel: {
+            label: e.rel.label,
+            ...(e.rel.date ? { date: e.rel.date } : {}),
+          },
+        }
+      : {}),
   };
 }
 

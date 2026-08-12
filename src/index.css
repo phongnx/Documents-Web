@@ -2172,6 +2172,188 @@ a:hover {
 .kpi-score-form {
   grid-template-columns: 120px 1fr;
 }
+/* Bảng tổng kết KPI tháng (trang leader + trang share chỉ xem) */
+.ksum-page .kpi-table-wrap {
+  overflow-x: auto;
+}
+.ksum-table {
+  min-width: 1180px;
+  width: 100%;
+  /* Cột chia theo <colgroup> — nội dung không làm cột phình/lép mất cân đối. */
+  table-layout: fixed;
+}
+.ksum-table td {
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+/* Độ rộng cột (Tasks ưu tiên lớn nhất; cột actions px cứng, phần % chia phần còn lại). */
+col.ksc-name {
+  width: 6%;
+}
+col.ksc-cat {
+  width: 7%;
+}
+col.ksc-app {
+  width: 8%;
+}
+col.ksc-tasks {
+  width: 33%;
+}
+col.ksc-date {
+  width: 6.5%;
+}
+col.ksc-days {
+  width: 4%;
+}
+col.ksc-progress {
+  width: 10%;
+}
+col.ksc-kpi {
+  width: 9%;
+}
+col.ksc-leave {
+  width: 8%;
+}
+col.ksc-score {
+  width: 5%;
+}
+col.ksc-act {
+  width: 44px;
+}
+/* Input mặc định trong bảng (rule width cụ thể đặt SAU sẽ đè). */
+.ksum-table input {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 12.5px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.ksum-name {
+  font-size: 14px;
+  background: var(--subtle);
+}
+.ksum-name .doc-action {
+  margin-left: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+.ksum-tasks textarea,
+.ksum-progress textarea,
+.ksum-kpi textarea,
+.ksum-leave textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 12.5px;
+  resize: vertical;
+}
+.ksum-tasks-text {
+  font-size: 12.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ksum-tasks-text div {
+  overflow-wrap: anywhere;
+}
+.ksum-tasks-head {
+  font-weight: 600;
+}
+/* Mốc release/milestone dưới ô App (bảng tổng kết) */
+.ksum-milestone {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--primary);
+  overflow-wrap: anywhere;
+}
+.ksum-milestone-input {
+  margin-top: 4px;
+}
+.ksum-date {
+  font-size: 12.5px;
+}
+.ksum-date input {
+  padding: 4px 3px;
+  font-size: 11.5px;
+}
+.ksum-days {
+  text-align: center;
+}
+.ksum-kpi {
+  text-align: center;
+}
+.ksum-kpi textarea {
+  margin-top: 4px;
+  font-size: 11.5px;
+}
+/* Lý do cộng/trừ điểm dưới badge ± (hiện cả trên trang share). */
+.ksum-kpi-note {
+  margin-top: 4px;
+  font-size: 11.5px;
+  text-align: left;
+  color: var(--muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.ksum-leave {
+  font-size: 12.5px;
+}
+.ksum-score {
+  text-align: center;
+  background: var(--subtle);
+}
+.ksum-score .kpi-month-score {
+  font-size: 16px;
+}
+.ksum-preline {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.ksum-add-row td {
+  background: color-mix(in srgb, var(--subtle) 55%, transparent);
+}
+.ksum-row-actions {
+  white-space: nowrap;
+}
+/* Ô nhập nghỉ lễ chung trên header trang */
+.ksum-holidays {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.ksum-holidays input {
+  flex: 1;
+  max-width: 420px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+}
+.ksum-holidays-view {
+  margin: 0 0 12px;
+}
+/* Select mốc release/milestone dưới ô Project của dòng log */
+.kpi-rel-select,
+.kpi-row-edit select.kpi-rel-select {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.kpi-relmark {
+  cursor: help;
+  font-size: 11px;
+}
 /* Rà soát bug reopen (trang chấm của leader) */
 .kpi-reopen-alert {
   border-color: #dc2626;

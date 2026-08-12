@@ -138,6 +138,13 @@ export default function BoardKpiListPage() {
         <button type="button" onClick={() => setRulesOpen(true)}>
           ⚖️ Quy chế chấm điểm
         </button>
+        <button
+          type="button"
+          title="Bảng tổng hợp task + KPI của tất cả member trong tháng đang chọn"
+          onClick={() => navigate(`/board/kpi/summary/${monthKey}`)}
+        >
+          📊 Tổng kết tháng
+        </button>
         <input
           type="month"
           className="kpi-month-input"

@@ -20,7 +20,15 @@ import {
   type KpiReleaseTask,
   type KpiRuleGroup,
   type KpiSheetMeta,
+  type KpiSummary,
+  type KpiSummaryIndexItem,
+  type KpiSummaryMember,
+  type KpiSummaryMeta,
 } from '../kpiTypes';
+import {
+  aggregateKpiSummaryMembers,
+  normalizeSummaryMembers,
+} from '../lib/kpiSummary';
 import {
   DEFAULT_MILESTONE_TYPES,
   DEFAULT_PLAN_CATEGORIES,
@@ -252,6 +260,13 @@ interface PmState {
   setEstimateLocked: (id: string, locked: boolean) => void;
   /** Xóa bảng + index + gỡ khỏi mục Estimate trên sheet KPI của participants. */
   deleteEstimate: (id: string) => void;
+  // ---------- Tổng kết KPI tháng ----------
+  /** Mở bảng tổng kết của tháng: đã có → trả id; chưa có → tổng hợp từ log + tạo mới. */
+  ensureKpiSummary: (monthKey: string) => Promise<string | null>;
+  /** Ghi đè cả bảng tổng kết (sau khi leader sửa) — trả false nếu ghi lỗi. */
+  saveKpiSummary: (id: string, summary: KpiSummary) => Promise<boolean>;
+  /** Tổng hợp lại khối member từ log hiện tại (dùng cho nút 🔄, chưa ghi DB). */
+  rebuildKpiSummaryMembers: (monthKey: string) => Promise<KpiSummaryMember[]>;
 }
 
 /** Input meta bảng estimate (leader nhập ở dialog tạo/sửa). */
@@ -1397,6 +1412,77 @@ export function PmProvider({ children }: { children: ReactNode }) {
     [uid, kpiEstimatesWrites],
   );
 
+  // ---------- Tổng kết KPI tháng ----------
+  // Mỗi tháng 1 bảng: index riêng tư users/{uid}/pm/kpiSummaries/{monthKey} → id;
+  // bản đầy đủ tại shared/kpisum/{id} (owner ghi, ai có link đọc — share view-only).
+  const ensureKpiSummary = useCallback(
+    async (monthKey: string): Promise<string | null> => {
+      if (!db || !uid) return null;
+      const idxSnap = await get(ref(db, `users/${uid}/pm/kpiSummaries/${monthKey}`));
+      const idx = idxSnap.val() as KpiSummaryIndexItem | null;
+      if (idx?.id) return idx.id;
+      const membersData = await aggregateKpiSummaryMembers(
+        stateRef.current.members,
+        monthKey,
+      );
+      const id = uuidv4();
+      const now = new Date().toISOString();
+      const meta: KpiSummaryMeta = {
+        ownerId: uid,
+        monthKey,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await update(ref(db), {
+        [`shared/kpisum/${id}`]: {
+          meta,
+          members: normalizeSummaryMembers(membersData),
+        },
+        [`users/${uid}/pm/kpiSummaries/${monthKey}`]: { id, updatedAt: now },
+      });
+      return id;
+    },
+    [uid],
+  );
+
+  const saveKpiSummary = useCallback(
+    async (id: string, summary: KpiSummary): Promise<boolean> => {
+      if (!db || !uid) return false;
+      const now = new Date().toISOString();
+      const meta: KpiSummaryMeta = {
+        ownerId: uid,
+        monthKey: summary.meta.monthKey,
+        createdAt: summary.meta.createdAt,
+        updatedAt: now,
+        ...(summary.meta.commonHolidays?.trim()
+          ? { commonHolidays: summary.meta.commonHolidays.trim() }
+          : {}),
+      };
+      try {
+        await update(ref(db), {
+          [`shared/kpisum/${id}`]: {
+            meta,
+            members: normalizeSummaryMembers(summary.members),
+          },
+          [`users/${uid}/pm/kpiSummaries/${summary.meta.monthKey}`]: {
+            id,
+            updatedAt: now,
+          },
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [uid],
+  );
+
+  const rebuildKpiSummaryMembers = useCallback(
+    (monthKey: string): Promise<KpiSummaryMember[]> =>
+      aggregateKpiSummaryMembers(stateRef.current.members, monthKey),
+    [],
+  );
+
   const addPlan = useCallback(
     (data: PlanInput): WeeklyPlan | null => {
       if (!db || !uid) return null;
@@ -1597,6 +1683,9 @@ export function PmProvider({ children }: { children: ReactNode }) {
         setEstimateState,
         setEstimateLocked,
         deleteEstimate,
+        ensureKpiSummary,
+        saveKpiSummary,
+        rebuildKpiSummaryMembers,
       }}
     >
       {children}

@@ -74,6 +74,15 @@
           }
         }
       },
+      "kpisum": {
+        "$sumId": {
+          ".read": true,
+          ".write": "auth != null && (data.exists() ? data.child('meta/ownerId').val() === auth.uid : newData.child('meta/ownerId').val() === auth.uid)",
+          "meta": {
+            ".validate": "newData.child('ownerId').isString() && (!data.child('ownerId').exists() || data.child('ownerId').val() === newData.child('ownerId').val())"
+          }
+        }
+      },
       "$type": {
         "$id": {
           ".read": true,

@@ -198,6 +198,7 @@ export default function KpiSharePage() {
             weekPlans={sheet.weekPlans}
             onSaveWeekPlan={sheet.setWeekPlan}
             estimates={sheet.meta?.estimates}
+            releases={sheet.meta?.releases}
             kpiMemberId={sheet.meta?.memberId}
             kpiMemberName={sheet.meta?.memberName}
             onCompleteEst={onCompleteEst}

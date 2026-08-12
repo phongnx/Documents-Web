@@ -18,6 +18,7 @@ import {
   totalOf,
   type KpiEntry,
   type KpiLeave,
+  type KpiRelease,
   type KpiScore,
   type KpiWeekPlan,
 } from '../../kpiTypes';
@@ -50,6 +51,8 @@ interface Props {
   onSaveWeekPlan?: (weekStart: string, text: string) => void;
   /** Các bảng estimate member tham gia (meta.estimates) — bật nút 📐 pick task. */
   estimates?: { id: string; title: string }[];
+  /** Snapshot mốc release của app được gán (meta.releases) — nguồn select 🚀 Mốc. */
+  releases?: KpiRelease[];
   kpiMemberId?: string;
   kpiMemberName?: string;
   /** Tick "Hoàn thành task estimate" khi lưu dòng → page chạy flow chốt điểm. */
@@ -88,6 +91,8 @@ interface RowDraft {
   estRef?: KpiEstRef;
   /** Tick "Hoàn thành task estimate" — khi lưu sẽ chốt done + điểm gợi ý. */
   estDone: boolean;
+  /** Mốc release/milestone task thuộc về (denormalized). */
+  rel?: { label: string; date?: string };
 }
 
 const emptyDraft = (date: string, start = ''): RowDraft => ({
@@ -117,6 +122,7 @@ const draftOf = (e: KpiEntry): RowDraft => ({
   selfDelta: typeof e.selfDelta === 'number' ? String(e.selfDelta) : '0',
   estRef: e.estRef,
   estDone: false,
+  rel: e.rel,
 });
 
 // 'yyyy-mm' ± n tháng.
@@ -162,6 +168,7 @@ export default function KpiLogTable({
   weekPlans,
   onSaveWeekPlan,
   estimates,
+  releases,
   kpiMemberId,
   kpiMemberName,
   onCompleteEst,
@@ -265,6 +272,19 @@ export default function KpiLogTable({
   const isWeekendNow = dowToday === 5 || dowToday === 6 || dowToday === 0;
   const shownWeekPlans = [curWeekStart, nextWeekStart].filter((w) => weekPlans?.[w]);
   const monthEntries = entriesOfMonth(entries, monthKey);
+  // Danh sách mốc cho select 🚀: releases snapshot + bảng estimate + mốc đã dùng
+  // trong tháng (mốc quá khứ rớt khỏi snapshot vẫn chọn lại được để log hậu release).
+  const relOptions: { label: string; date?: string }[] = (() => {
+    const map = new Map<string, string | undefined>();
+    for (const r of releases ?? []) {
+      const label = `${r.app}${r.version ? ` ${r.version}` : ''}`;
+      if (!map.has(label)) map.set(label, r.date);
+    }
+    for (const est of estimates ?? []) if (!map.has(est.title)) map.set(est.title, undefined);
+    for (const e of monthEntries)
+      if (e.rel?.label && !map.has(e.rel.label)) map.set(e.rel.label, e.rel.date);
+    return [...map.entries()].map(([label, date]) => ({ label, date }));
+  })();
   const byDay = groupEntriesByDay(monthEntries);
   // Dòng mới của ngày chưa có entry nào → thêm ngày đó vào danh sách nhóm.
   if (draft && !draft.id && draft.date.startsWith(monthKey) && !byDay.has(draft.date)) {
@@ -296,6 +316,7 @@ export default function KpiLogTable({
       // Điểm tự chấm: rỗng/không hợp lệ → 0 (mặc định khi log done).
       selfDelta: Number(d.selfDelta) || 0,
       estRef: d.estRef,
+      rel: d.rel,
     };
     let entryId = d.id;
     if (d.id) onUpdate?.(d.id, input);
@@ -450,6 +471,38 @@ export default function KpiLogTable({
             placeholder="Project"
           />
         )}
+        {/* Mốc release/milestone task thuộc về — không bắt buộc (task chung để trống). */}
+        <select
+          className="kpi-rel-select"
+          value={d.rel?.label ?? ''}
+          title="Mốc release/milestone task thuộc về (hiện ở bảng tổng kết tháng)"
+          onChange={(e) => {
+            const v = e.target.value;
+            if (!v) {
+              patchDraft({ rel: undefined });
+              return;
+            }
+            if (v === '__custom') {
+              const t = window.prompt('Tên mốc (VD: AppLock v1.114):', '');
+              if (t?.trim()) patchDraft({ rel: { label: t.trim() } });
+              return;
+            }
+            const o = relOptions.find((x) => x.label === v);
+            patchDraft({ rel: { label: v, ...(o?.date ? { date: o.date } : {}) } });
+          }}
+        >
+          <option value="">🚀 (không thuộc mốc)</option>
+          {relOptions.map((o) => (
+            <option key={o.label} value={o.label}>
+              🚀 {o.label}
+              {o.date ? ` · ${o.date.slice(8, 10)}/${o.date.slice(5, 7)}` : ''}
+            </option>
+          ))}
+          {d.rel?.label && !relOptions.some((o) => o.label === d.rel!.label) && (
+            <option value={d.rel.label}>🚀 {d.rel.label}</option>
+          )}
+          <option value="__custom">Khác…</option>
+        </select>
       </td>
       <td>
         <input
@@ -577,7 +630,15 @@ export default function KpiLogTable({
           )}
         </td>
         <td>{e.category ?? ''}</td>
-        <td>{e.project ?? ''}</td>
+        <td>
+          {e.project ?? ''}
+          {e.rel && (
+            <span className="kpi-relmark" title={`Mốc: ${e.rel.label}`}>
+              {' '}
+              🚀
+            </span>
+          )}
+        </td>
         <td>{e.feature ?? ''}</td>
         <td className="kpi-task-cell">
           {e.estRef && (
@@ -892,12 +953,15 @@ export default function KpiLogTable({
           memberId={kpiMemberId}
           memberName={kpiMemberName}
           onPick={(r) => {
-            // Fill nội dung từ sub task estimate (member chỉnh lại được sau khi fill).
+            // Fill nội dung từ sub task estimate (member chỉnh lại được sau khi fill);
+            // chưa chọn mốc → tự gắn theo bảng estimate (bảng đại diện 1 milestone).
+            const estTitle = estimates?.find((x) => x.id === r.estRef.estId)?.title;
             patchDraft({
               estRef: r.estRef,
               task: r.taskText || draft.task,
               feature: r.featureText ?? draft.feature,
               project: r.projectText || draft.project,
+              ...(!draft.rel && estTitle ? { rel: { label: estTitle } } : {}),
             });
             setEstPickOpen(false);
           }}
