@@ -187,7 +187,32 @@ export default function KpiSummaryTable({
       </>
     );
 
+  // Thống kê nhanh toàn team (khối trên đầu bảng — cả trang edit lẫn share).
+  const scoreCls = (v: number) =>
+    v >= KPI_MONTH_BASE ? 'kpi-month-score pos' : 'kpi-month-score neg';
+
   return (
+    <>
+      {summary.members.length > 0 && (
+        <div className="ksum-overview">
+          <span className="muted">📊 Điểm KPI tháng:</span>
+          {summary.members.map((m) => (
+            <button
+              key={m.memberId}
+              type="button"
+              className="ksum-ov-chip"
+              title="Cuộn tới phần của member trong bảng"
+              onClick={() =>
+                document
+                  .getElementById(`ksum-m-${m.memberId}`)
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+            >
+              {m.name} <strong className={scoreCls(m.kpiScore)}>{m.kpiScore}</strong>
+            </button>
+          ))}
+        </div>
+      )}
     <div className="kpi-table-wrap">
       {editable && (
         <datalist id="ksum-categories">
@@ -273,7 +298,7 @@ export default function KpiSummaryTable({
             </>
           );
           return (
-            <tbody key={m.memberId}>
+            <tbody key={m.memberId} id={`ksum-m-${m.memberId}`}>
               {rows.length === 0 ? (
                 <tr>
                   <td className="ksum-name" rowSpan={1}>
@@ -348,5 +373,6 @@ export default function KpiSummaryTable({
         <p className="muted empty">Không có member nào có log trong tháng này.</p>
       )}
     </div>
+    </>
   );
 }

@@ -2172,6 +2172,33 @@ a:hover {
 .kpi-score-form {
   grid-template-columns: 120px 1fr;
 }
+/* Khối thống kê nhanh điểm KPI toàn team trên đầu bảng tổng kết */
+.ksum-overview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--subtle);
+  font-size: 13px;
+}
+.ksum-ov-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.ksum-ov-chip:hover {
+  border-color: var(--primary);
+}
 /* Bảng tổng kết KPI tháng (trang leader + trang share chỉ xem) */
 .ksum-page .kpi-table-wrap {
   overflow-x: auto;
