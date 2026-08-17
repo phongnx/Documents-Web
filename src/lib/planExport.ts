@@ -3,8 +3,11 @@ import {
   isReleaseWs,
   sortTimeline,
   type PlanWorkstream,
+  type TaskItem,
   type WeeklyPlan,
 } from '../pmTypes';
+import { weekdayVN } from './pmDates';
+import { taskMilestoneDate } from './planAutofill';
 
 // Sinh 2 file HTML tĩnh từ 1 WeeklyPlan, bám sát 2 template mẫu trong docs/plan.
 
@@ -157,6 +160,9 @@ const DETAILED_CSS = `
 export function buildDetailedHtml(
   plan: WeeklyPlan,
   releaseKeys: Set<string> = new Set(['release']),
+  // Task nguồn (tùy chọn) — để gắn nhãn thứ cho mốc milestone KHÔNG phải release
+  // (mốc non-release chỉ hiển thị trong file này, không vào Timeline release).
+  tasks?: TaskItem[],
 ): string {
   const projects = plan.projects ?? [];
   const allWs = projects.flatMap((p) => p.workstreams ?? []);
@@ -207,14 +213,23 @@ ${streams}
         ),
     )
     .join('\n');
+  // Nhãn thứ cho mốc non-release: từ mốc task nguồn (planDate/endDate) khi nằm trong tuần.
+  const msDayLabel = (w: PlanWorkstream): string => {
+    for (const tid of w.sourceTaskIds ?? []) {
+      const t = (tasks ?? []).find((x) => x.id === tid);
+      const d = t ? taskMilestoneDate(t) : '';
+      if (d && plan.weekStart <= d && d <= plan.weekEnd) return weekdayVN(d);
+    }
+    return '';
+  };
   const testSummary = projects
     .flatMap((p) =>
       (p.workstreams ?? [])
         .filter((w) => !!w.milestone && !isReleaseWs(w, releaseKeys))
-        .map(
-          (w) =>
-            `            <li><strong>${esc(p.name)} ${esc(w.title)}:</strong> ${esc(w.milestone!.text)}.</li>`,
-        ),
+        .map((w) => {
+          const day = msDayLabel(w);
+          return `            <li><strong>${esc(p.name)} ${esc(w.title)}:</strong> ${esc(w.milestone!.text)}${day ? ` <em>(${esc(day)})</em>` : ''}.</li>`;
+        }),
     )
     .join('\n');
 

@@ -22,6 +22,7 @@ import {
 } from '../pmTypes';
 import { weekdayVN } from './pmDates';
 import { normName } from './pmText';
+import { dedupTimeline } from './planProgress';
 
 /** Shape input tạo plan (WeeklyPlan bỏ các field do context điền). */
 export type PlanDraft = Omit<WeeklyPlan, 'id' | 'order' | 'createdAt' | 'updatedAt'>;
@@ -218,13 +219,16 @@ export function buildAutoPlan(opts: {
     pushWorkstream(app, { ...taskToWorkstream(t, app), category: 'release', milestone });
     addedTaskIds.add(t.id);
   }
-  const timeline: PlanTimelineItem[] = releaseTasks
-    .filter((t) => weekdayVN(t.planDate!))
-    .sort((a, b) => a.planDate!.localeCompare(b.planDate!))
-    .map((t) => ({
-      day: weekdayVN(t.planDate!),
-      release: `${usableApp(t.appId)!.name} ${t.version ?? ''}`.trim(),
-    }));
+  // Dedup ngay khi build: 2 task release cùng app + version → 1 dòng (giữ mốc sớm nhất).
+  const timeline: PlanTimelineItem[] = dedupTimeline(
+    releaseTasks
+      .filter((t) => weekdayVN(t.planDate!))
+      .sort((a, b) => a.planDate!.localeCompare(b.planDate!))
+      .map((t) => ({
+        day: weekdayVN(t.planDate!),
+        release: `${usableApp(t.appId)!.name} ${t.version ?? ''}`.trim(),
+      })),
+  );
 
   // ---- Bước 3: task có startDate trong tuần + task đang chạy ----
   // - startDate trong tuần (mọi status trừ done, kể cả "Chưa bắt đầu"): thêm nhánh

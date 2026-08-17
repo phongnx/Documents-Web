@@ -57,7 +57,7 @@ import {
 } from '../estTypes';
 import { isoLocal, weekdayVN } from '../lib/pmDates';
 import { normName } from '../lib/pmText';
-import { tokensOf } from '../lib/planProgress';
+import { dedupTimeline, timelineRowHasVersion, tokensOf } from '../lib/planProgress';
 import { taskLines } from '../lib/planAutofill';
 
 // Danh sách task thuộc 1 mốc release (snapshot cho dialog chi tiết ở trang member):
@@ -297,9 +297,9 @@ function normalizePlan(p: WeeklyPlan): WeeklyPlan {
         ...(typeof w.progress === 'number' ? { progress: w.progress } : {}),
       })),
     })),
-    // Sort theo dòng thời gian ở MỌI đường ghi plan (tạo/lưu/sync từ task) —
-    // dòng đổi thứ sẽ tự về đúng vị trí, không nằm lộn xộn theo thứ tự thêm.
-    timeline: sortTimeline(p.timeline ?? []),
+    // Dedup + sort theo dòng thời gian ở MỌI đường ghi plan (tạo/lưu/sync từ task) —
+    // chốt chặn cuối: dòng trùng mốc bị gom về 1, dòng đổi thứ tự về đúng vị trí.
+    timeline: sortTimeline(dedupTimeline(p.timeline ?? [])),
   };
 }
 
@@ -735,14 +735,17 @@ export function PmProvider({ children }: { children: ReactNode }) {
               const rel = normName(tl.release);
               if (!tokensOf(appName).every((k) => rel.includes(k))) return tl;
               // Dòng có version → phải đúng version cũ (app nhiều release không dính
-              // nhầm dòng); dòng chưa có version → nhận luôn.
-              const hasVer = /v[0-9]/i.test(tl.release);
+              // nhầm dòng); dòng chưa có version → nhận luôn. (Định nghĩa "có version"
+              // dùng chung timelineRowHasVersion — "Music v2" là TÊN app, không phải version.)
+              const hasVer = timelineRowHasVersion(tl.release);
               if (hasVer && (!oldVersion || !rel.includes(normName(oldVersion)))) return tl;
               let release = tl.release;
               if (versionChanged && newVersion)
                 release = hasVer
                   ? replaceVersion(release, oldVersion, newVersion)
-                  : `${release} ${newVersion}`.trim();
+                  : rel.includes(normName(newVersion))
+                    ? release
+                    : `${release} ${newVersion}`.trim();
               let day = tl.day;
               if (planDateChanged) {
                 // Dời trong tuần → thứ mới; dời ra ngoài tuần → thứ trống (không tự xóa dòng).

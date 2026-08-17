@@ -2,11 +2,15 @@
 import {
   isGoalWs,
   isReleaseWs,
+  sortTimeline,
   workstreamPct,
+  type AppItem,
   type DailyReport,
   type PlanProject,
+  type PlanTimelineItem,
   type PlanWorkstream,
   type ReportProject,
+  type TaskItem,
   type WeeklyPlan,
   type WorkstreamState,
 } from '../pmTypes';
@@ -340,6 +344,169 @@ export function tokensOf(s: string): string[] {
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((t) => t.length >= 2);
+}
+
+// ---------- Match & dedup dòng Timeline (dùng chung cho MỌI đường ghi plan) ----------
+
+// Regex version RELEASE trong nhãn timeline: "vX.Y" BẮT BUỘC có dấu chấm.
+// (Cố ý — tên app có thể chứa "v+số" trần như "Music v2": đó là tên, không phải version.)
+const TL_VERSION_RE = /v[0-9]\w*\.[\w.]*/gi;
+
+/** Nhãn dòng timeline đã chứa version release chưa? */
+export function timelineRowHasVersion(release: string): boolean {
+  return /v[0-9]\w*\./i.test(release);
+}
+
+// Version trong nhãn timeline ("Music v2 v1.62" → "v1.62" — lấy match cuối,
+// version release luôn đứng sau tên app).
+function timelineVersionOf(release: string): string {
+  const all = release.match(TL_VERSION_RE);
+  return (all?.[all.length - 1] ?? '').replace(/\.$/, '');
+}
+
+/** Dòng timeline `release` có phải mốc của (app, version) không?
+ * - token TÊN APP phải khớp đủ (không phụ thuộc thứ tự từ);
+ * - version đã biết: nhận dòng ĐÚNG version hoặc dòng CHƯA có version (dòng sinh ra
+ *   lúc task chưa điền version — caller NÂNG CẤP nhãn dòng đó thay vì thêm dòng mới,
+ *   đây là nguồn gốc lỗi duplicate mốc release trước đây);
+ * - version rỗng: chỉ nhận dòng không version (không dính nhầm mốc release khác của app). */
+export function matchTimelineRow(release: string, appName: string, version: string): boolean {
+  const rel = norm(release);
+  if (!tokensOf(appName).every((k) => rel.includes(k))) return false;
+  if (!timelineRowHasVersion(release)) return true;
+  return !!version && rel.includes(norm(version));
+}
+
+/** Gom các dòng timeline trùng mốc — chốt chặn cuối cho mọi đường ghi plan:
+ * - trùng khi cùng "base" (nhãn bỏ version) và cùng version → giữ dòng đầu;
+ * - dòng KHÔNG version gộp vào dòng có version cùng base khi base đó chỉ có ĐÚNG
+ *   1 version (≥2 version thì không đoán được thuộc mốc nào → giữ nguyên);
+ * - khi gộp: nhãn lấy dòng có version, thứ ưu tiên dòng có version (day từ planDate
+ *   của task chuẩn hơn), dòng đó trống thứ thì lấy của dòng kia;
+ * - dòng nhãn rỗng giữ nguyên (dòng user vừa thêm chưa kịp gõ). */
+export function dedupTimeline(list: PlanTimelineItem[]): PlanTimelineItem[] {
+  const baseOf = (s: string) => norm(s.replace(TL_VERSION_RE, ' '));
+  // Số version KHÁC NHAU theo base — quyết định dòng không version có được gộp không.
+  const versByBase = new Map<string, Set<string>>();
+  for (const t of list) {
+    const b = baseOf(t.release);
+    const v = norm(timelineVersionOf(t.release));
+    if (!b || !v) continue;
+    if (!versByBase.has(b)) versByBase.set(b, new Set());
+    versByBase.get(b)!.add(v);
+  }
+  const out: PlanTimelineItem[] = [];
+  const keyIdx = new Map<string, number>();
+  for (const t of list) {
+    const b = baseOf(t.release);
+    if (!b) {
+      out.push(t);
+      continue;
+    }
+    let v = norm(timelineVersionOf(t.release));
+    const vers = versByBase.get(b);
+    if (!v && vers?.size === 1) v = [...vers][0]; // gộp dòng trần vào version duy nhất
+    const key = `${b}|${v}`;
+    const i = keyIdx.get(key);
+    if (i === undefined) {
+      keyIdx.set(key, out.length);
+      out.push(t);
+      continue;
+    }
+    const cur = out[i];
+    const withVer = timelineRowHasVersion(cur.release)
+      ? cur
+      : timelineRowHasVersion(t.release)
+        ? t
+        : null;
+    const release = withVer ? withVer.release : cur.release;
+    const day = withVer?.day ? withVer.day : cur.day || t.day;
+    if (release !== cur.release || day !== cur.day) out[i] = { day, release };
+  }
+  return out;
+}
+
+/** Đối chiếu timeline của plan với TASK NGUỒN của các nhánh (task = nguồn chân lý).
+ * Timeline CHỈ chứa mốc của nhánh có milestone LOẠI RELEASE:
+ * - nhánh milestone Release: dòng match sai thứ so với planDate → sửa (trong tuần →
+ *   đúng thứ, ngoài tuần → trống); dòng chưa có version mà task có → nâng cấp nhãn;
+ *   chưa có dòng → thêm; mỗi dòng chỉ nhận 1 task (app có 2 release không tranh nhau);
+ * - nhánh KHÔNG có milestone Release (test/custom/không milestone): dòng match task
+ *   nguồn là rác do luật cũ → XÓA;
+ * - dòng gõ tay không match nhánh nào / task đã xóa → giữ nguyên;
+ * - kết quả LUÔN dedup + sort theo dòng thời gian.
+ * Trả về timeline mới nếu có thay đổi, null nếu đã khớp. */
+export function reconcileTimeline(
+  form: Pick<WeeklyPlan, 'weekStart' | 'weekEnd' | 'projects' | 'timeline'>,
+  tasks: TaskItem[],
+  apps: AppItem[],
+  releaseKeys: Set<string>,
+): PlanTimelineItem[] | null {
+  let timeline = [...(form.timeline ?? [])];
+  let changed = false;
+  // Duyệt task nguồn của các nhánh, tách theo nhánh có milestone Release hay không.
+  const eachSourceTask = (
+    wantReleaseMs: boolean,
+    fn: (t: TaskItem, appName: string) => void,
+  ) => {
+    for (const pr of form.projects ?? []) {
+      for (const w of pr.workstreams ?? []) {
+        const isRelMs = !!w.milestone && releaseKeys.has(w.milestone.type);
+        if (isRelMs !== wantReleaseMs) continue;
+        for (const tid of w.sourceTaskIds ?? []) {
+          const t = tasks.find((x) => x.id === tid);
+          if (!t) continue;
+          const appName = (apps.find((a) => a.id === t.appId)?.name ?? pr.name).trim();
+          if (appName) fn(t, appName);
+        }
+      }
+    }
+  };
+  // Pass 1: xóa MỌI dòng match của nhánh không-Release TRƯỚC (cả dòng trần lẫn dòng
+  // versioned trùng mốc); nếu task cũng thuộc nhánh Release, pass 2 sẽ thêm lại đúng thứ.
+  eachSourceTask(false, (t, appName) => {
+    const before = timeline.length;
+    timeline = timeline.filter((x) => !matchTimelineRow(x.release, appName, t.version ?? ''));
+    if (timeline.length !== before) changed = true;
+  });
+  // Pass 2: nhánh milestone Release — nâng cấp nhãn / sửa thứ / thêm dòng thiếu.
+  const used = new Set<PlanTimelineItem>();
+  eachSourceTask(true, (t, appName) => {
+    const version = t.version ?? '';
+    const inWeek =
+      !!t.planDate && form.weekStart <= t.planDate && t.planDate <= form.weekEnd;
+    const day = inWeek ? weekdayVN(t.planDate!) : '';
+    const i = timeline.findIndex(
+      (x) => !used.has(x) && matchTimelineRow(x.release, appName, version),
+    );
+    if (i >= 0) {
+      let row = timeline[i];
+      // Dòng chưa có version mà task đã có → nâng cấp nhãn (KHÔNG thêm dòng mới).
+      // Guard includes: nhãn kiểu "Music v2" đã chứa sẵn version trần thì không nối thêm.
+      if (
+        version &&
+        !timelineRowHasVersion(row.release) &&
+        !norm(row.release).includes(norm(version))
+      )
+        row = { ...row, release: `${row.release} ${version}`.trim() };
+      if (row.day !== day) row = { ...row, day };
+      if (row !== timeline[i]) {
+        timeline = timeline.map((x, xi) => (xi === i ? row : x));
+        changed = true;
+      }
+      used.add(row);
+    } else {
+      const row = { day, release: `${appName} ${version}`.trim() };
+      timeline = [...timeline, row];
+      used.add(row);
+      changed = true;
+    }
+  });
+  // Dedup + sort là chốt chặn cuối — dòng rác cũ trùng mốc cũng được gom về 1.
+  const result = sortTimeline(dedupTimeline(timeline));
+  // Chỉ lệch thứ tự/trùng dòng (không đổi nội dung) cũng tính là thay đổi.
+  if (JSON.stringify(result) !== JSON.stringify(form.timeline ?? [])) changed = true;
+  return changed ? result : null;
 }
 
 // Điểm match nhánh release ↔ mục Timeline: tổng ký tự token khớp (bắt buộc có
