@@ -5,13 +5,18 @@ import {
   signOut,
   type User,
 } from 'firebase/auth';
-import { auth, googleProvider, firebaseReady } from '../lib/firebase';
+import { get, ref } from 'firebase/database';
+import { auth, db, googleProvider, firebaseReady } from '../lib/firebase';
 
 interface AuthState {
   user: User | null;
   loading: boolean;
   /** false khi thiếu cấu hình Firebase (.env) */
   ready: boolean;
+  /** Tài khoản có trong whitelist `admin/allowed` không?
+   * null = chưa đăng nhập / đang kiểm tra. Chốt bảo mật THẬT nằm ở database rules
+   * (mọi read/write đều bị chặn server-side) — cờ này chỉ để UI hiện màn chặn tử tế. */
+  allowed: boolean | null;
   signIn: () => Promise<void>;
   signOutUser: () => Promise<void>;
 }
@@ -21,6 +26,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!auth) {
@@ -34,6 +40,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsub;
   }, []);
 
+  // Đọc cờ whitelist sau khi đăng nhập (rule chỉ cho mỗi uid đọc cờ của chính mình).
+  useEffect(() => {
+    if (!db || !user) {
+      setAllowed(null);
+      return;
+    }
+    let stale = false;
+    get(ref(db, `admin/allowed/${user.uid}`))
+      .then((snap) => {
+        if (!stale) setAllowed(snap.val() === true);
+      })
+      .catch(() => {
+        // Lỗi đọc (mạng/permission) → coi như chưa được cấp quyền; rules vẫn chặn thật.
+        if (!stale) setAllowed(false);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [user]);
+
   const signIn = async () => {
     if (!auth || !googleProvider) return;
     await signInWithPopup(auth, googleProvider);
@@ -46,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, ready: firebaseReady, signIn, signOutUser }}
+      value={{ user, loading, ready: firebaseReady, allowed, signIn, signOutUser }}
     >
       {children}
     </AuthContext.Provider>

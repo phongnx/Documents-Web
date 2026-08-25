@@ -72,10 +72,28 @@ function BoardLayout() {
 
 // Khu vực cần đăng nhập.
 function AppShell() {
-  const { user, loading } = useAuth();
+  const { user, loading, allowed, signOutUser } = useAuth();
 
   if (loading) return <div className="container">Đang tải…</div>;
   if (!user) return <LoginPage />;
+  // Whitelist tài khoản: chỉ uid có trong `admin/allowed` mới dùng được app.
+  // Database rules đã chặn server-side — màn này là UX, tránh người lạ vào UI
+  // rồi gặp permission denied khắp nơi. Routes /share/* không qua đây.
+  if (allowed === null)
+    return <div className="container">Đang kiểm tra quyền truy cập…</div>;
+  if (!allowed)
+    return (
+      <div className="container">
+        <h1>Không có quyền truy cập</h1>
+        <p className="muted">
+          Tài khoản <strong>{user.email}</strong> chưa được cấp quyền sử dụng ứng
+          dụng này. Liên hệ quản trị viên nếu bạn cho rằng đây là nhầm lẫn.
+        </p>
+        <button type="button" className="doc-action" onClick={() => void signOutUser()}>
+          Đăng xuất
+        </button>
+      </div>
+    );
 
   return (
     <Routes>

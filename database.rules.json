@@ -1,16 +1,23 @@
 {
   "rules": {
+    "admin": {
+      "allowed": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid"
+        }
+      }
+    },
     "users": {
       "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        ".read": "auth != null && auth.uid === $uid && root.child('admin/allowed').child($uid).val() === true",
+        ".write": "auth != null && auth.uid === $uid && root.child('admin/allowed').child($uid).val() === true"
       }
     },
     "shared": {
       "kpi": {
         "$token": {
           ".read": true,
-          ".write": "auth != null && (data.exists() ? data.child('meta/ownerId').val() === auth.uid : newData.child('meta/ownerId').val() === auth.uid)",
+          ".write": "auth != null && root.child('admin/allowed').child(auth.uid).val() === true && (data.exists() ? data.child('meta/ownerId').val() === auth.uid : newData.child('meta/ownerId').val() === auth.uid)",
           "meta": {
             ".validate": "newData.child('ownerId').isString() && (!data.child('ownerId').exists() || data.child('ownerId').val() === newData.child('ownerId').val())"
           },
@@ -42,7 +49,7 @@
       "est": {
         "$estId": {
           ".read": true,
-          ".write": "auth != null && (data.exists() ? data.child('meta/ownerId').val() === auth.uid : newData.child('meta/ownerId').val() === auth.uid)",
+          ".write": "auth != null && root.child('admin/allowed').child(auth.uid).val() === true && (data.exists() ? data.child('meta/ownerId').val() === auth.uid : newData.child('meta/ownerId').val() === auth.uid)",
           "meta": {
             ".validate": "newData.child('ownerId').isString() && (!data.child('ownerId').exists() || data.child('ownerId').val() === newData.child('ownerId').val())"
           },
@@ -77,7 +84,7 @@
       "kpisum": {
         "$sumId": {
           ".read": true,
-          ".write": "auth != null && (data.exists() ? data.child('meta/ownerId').val() === auth.uid : newData.child('meta/ownerId').val() === auth.uid)",
+          ".write": "auth != null && root.child('admin/allowed').child(auth.uid).val() === true && (data.exists() ? data.child('meta/ownerId').val() === auth.uid : newData.child('meta/ownerId').val() === auth.uid)",
           "meta": {
             ".validate": "newData.child('ownerId').isString() && (!data.child('ownerId').exists() || data.child('ownerId').val() === newData.child('ownerId').val())"
           }
@@ -86,7 +93,7 @@
       "$type": {
         "$id": {
           ".read": true,
-          ".write": "auth != null && (!data.exists() ? newData.child('ownerId').val() === auth.uid : data.child('ownerId').val() === auth.uid)"
+          ".write": "auth != null && root.child('admin/allowed').child(auth.uid).val() === true && (!data.exists() ? newData.child('ownerId').val() === auth.uid : data.child('ownerId').val() === auth.uid)"
         }
       }
     }

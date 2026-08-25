@@ -28,3 +28,6 @@ firebase-debug.log
 
 # Tài liệu làm việc cục bộ (Excel/export DB…) — không commit
 docs/
+
+# Backup Realtime Database (data nhạy cảm) — không commit
+backups/

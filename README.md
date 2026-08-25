@@ -119,6 +119,8 @@ Claude Code sẽ chạy đúng các lệnh (`npm install`, `npm run dev`, `npm r
 
 **Lưu trữ:** tài liệu tại `users/{uid}/documents`, `users/{uid}/folders` + bản chia sẻ `shared/d|f/{id}`; bảng dự án riêng tư tại `users/{uid}/pm/{apps,tasks,meta,plans,reports,members,estimates}`; KPI member log tại `shared/kpi/{token}`; bảng estimate tại `shared/est/{estId}`. Luật bảo mật trong `database.rules.json` — sửa rules phải `firebase deploy --only database`.
 
+**Whitelist tài khoản (`admin/allowed`):** chỉ uid có cờ `admin/allowed/{uid} = true` mới đọc/ghi được `users/{uid}` và tạo/ghi các node `shared/*` thuộc owner (d, f, kpi meta, est, kpisum). Tài khoản Google khác vẫn đăng nhập được (Firebase Auth không chặn) nhưng bị rules chặn toàn bộ read/write — client hiện màn "Không có quyền truy cập" (check trong `useAuth`/`AppShell`). Các đường ghi ẨN DANH theo capability URL (member log KPI entries/weekPlans/leaves, estimate status/note/logs) giữ nguyên — chúng chỉ ghi được vào sheet có `meta` tồn tại, mà meta chỉ uid whitelist tạo được. Node `admin/allowed` không có rule write — thêm/bớt tài khoản qua Firebase Console (Realtime Database) hoặc CLI admin, không cần deploy lại rules. **Lưu ý khi setup DB mới: phải seed cờ allowed cho uid owner TRƯỚC khi deploy rules, nếu không chính owner bị khóa.**
+
 ## Chi tiết tính năng Bảng dự án
 
 ### Tổng quan — card Tiến độ tuần
