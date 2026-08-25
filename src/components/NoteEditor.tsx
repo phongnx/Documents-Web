@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ClipboardEvent, type MouseEvent } from 'react';
+import { sanitizeHtml } from '../lib/sanitizeHtml';
 
 // Lột mã BBCode kiểu [b]...[/b], [user=42]... khi dán.
 function stripBbcode(text: string): string {
@@ -21,8 +22,10 @@ export default function NoteEditor({ value, onChange }: Props) {
   // Chỉ nạp nội dung ban đầu một lần khi mount (parent remount bằng key theo
   // doc.id), để con trỏ không bị nhảy về đầu khi đang gõ.
   useEffect(() => {
-    if (elRef.current && elRef.current.innerHTML !== value) {
-      elRef.current.innerHTML = value;
+    // Lọc trước khi nạp vào DOM — nội dung cũ trong DB có thể chứa mã độc.
+    const clean = sanitizeHtml(value);
+    if (elRef.current && elRef.current.innerHTML !== clean) {
+      elRef.current.innerHTML = clean;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

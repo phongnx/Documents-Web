@@ -2,7 +2,7 @@
 
 Ứng dụng web quản lý & chia sẻ tài liệu (documents / notes) xây bằng **Vite + React 19 + TypeScript**, dùng **Firebase** (Authentication + Realtime Database) làm backend.
 
-**🔗 Demo:** https://documents-d0410.web.app/share/f/8ff369c1-80ed-4c6c-b1e9-4330950bd13c
+> ⚠️ **Không dán link `/share/*` thật vào README hay bất kỳ file nào trong repo.** Link chia sẻ là *capability URL* — ai có link là đọc được nội dung, không cần đăng nhập (rules cho `.read: true` ở `shared/d|f/{id}`). Repo này công khai nên link dán vào đây sẽ nằm lại vĩnh viễn trong git history.
 
 ## Tính năng chính
 - Đăng nhập bằng Google (Firebase Auth).
@@ -118,6 +118,12 @@ Claude Code sẽ chạy đúng các lệnh (`npm install`, `npm run dev`, `npm r
 | `/share/est/:id` | `EstimateSharePage` | Bảng estimate cho member — mở qua link `?t={kpiToken}` từ trang KPI riêng của participant. |
 
 **Lưu trữ:** tài liệu tại `users/{uid}/documents`, `users/{uid}/folders` + bản chia sẻ `shared/d|f/{id}`; bảng dự án riêng tư tại `users/{uid}/pm/{apps,tasks,meta,plans,reports,members,estimates}`; KPI member log tại `shared/kpi/{token}`; bảng estimate tại `shared/est/{estId}`. Luật bảo mật trong `database.rules.json` — sửa rules phải `firebase deploy --only database`.
+
+**Lớp bảo vệ khác (bổ sung 25/08/2026):**
+- **Sanitize HTML**: nội dung type `note` đi qua `sanitizeHtml` (DOMPurify) trước khi vào DOM app — áp cho cả `HtmlContent` (đọc) lẫn `NoteEditor` (nạp lúc mount). Tài liệu type `html` **không** sanitize vì render trong `<iframe sandbox>` không có `allow-same-origin` (`HtmlFrame`) — đã cô lập sẵn và cần chạy JS để hiển thị đúng.
+- **Security headers** (`firebase.json`): `X-Frame-Options: DENY`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, CSP `frame-ancestors/object-src/base-uri/form-action`. **Cố ý KHÔNG đặt `script-src`**: iframe `srcdoc` kế thừa CSP của trang cha, đặt `script-src 'self'` sẽ chặn JS trong tài liệu HTML người dùng xem (dashboard…) làm vỡ tính năng.
+- **Siết ghi ẩn danh** (chống bơm rác vào DB qua capability URL): validate đặt ở **TỪNG FIELD**, không chỉ ở node cha — vì `.validate` của RTDB **không chạy khi ghi vào path con** (`entries/{id}/note`), nên validate gộp ở `$entryId` một mình là lách được. Mỗi field có giới hạn kiểu + độ dài, kèm `"$other"` regex **whitelist tên field** để chặn field lạ (dùng regex thay vì `.validate: false` để đúng trong mọi thứ tự ưu tiên rule). Áp cho `entries`, `weekPlans`, `est/groups` + `tasks`. **Thêm field mới cho `KpiEntry`/`EstSubTask` thì phải cập nhật whitelist trong rules, nếu không ghi sẽ bị từ chối.**
+- `entries/$entryId` bắt buộc `id` khớp key (chặn tạo key rác); `weekPlans/$weekStart` validate format ngày; `est/groups` không cho xóa sạch cả cây bằng 1 request (`newData.exists()` ở `groups`) nhưng **vẫn xóa được từng group** (rule `.write` riêng ở `$gid`); bỏ wildcard `shared/$type` → khai báo tường minh `d` và `f` (nhánh mới không còn tự động public read).
 
 **Whitelist tài khoản (`admin/allowed`):** chỉ uid có cờ `admin/allowed/{uid} = true` mới đọc/ghi được `users/{uid}` và tạo/ghi các node `shared/*` thuộc owner (d, f, kpi meta, est, kpisum). Tài khoản Google khác vẫn đăng nhập được (Firebase Auth không chặn) nhưng bị rules chặn toàn bộ read/write — client hiện màn "Không có quyền truy cập" (check trong `useAuth`/`AppShell`). Các đường ghi ẨN DANH theo capability URL (member log KPI entries/weekPlans/leaves, estimate status/note/logs) giữ nguyên — chúng chỉ ghi được vào sheet có `meta` tồn tại, mà meta chỉ uid whitelist tạo được. Node `admin/allowed` không có rule write — thêm/bớt tài khoản qua Firebase Console (Realtime Database) hoặc CLI admin, không cần deploy lại rules. **Lưu ý khi setup DB mới: phải seed cờ allowed cho uid owner TRƯỚC khi deploy rules, nếu không chính owner bị khóa.**
 
