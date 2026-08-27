@@ -52,8 +52,9 @@ function setFavicon(href: string, title: string) {
 }
 
 // Layout bọc các trang "Bảng dự án" bằng PmProvider (giữ 1 provider xuyên các route).
-// Bọc thêm DocumentsProvider để plan editor upload file export vào quản lý tài liệu
-// (mọi mutation tài liệu vẫn đi qua DocumentsContext — giữ pattern shared mirror).
+// CỐ Ý KHÔNG bọc DocumentsProvider ở đây: nó onValue toàn bộ users/{uid}/documents
+// (gồm cả trường content — vài MB) trong khi chỉ trang sửa plan tuần cần tài liệu;
+// bọc cả khu khiến mọi trang board (KPI, task, lịch…) phải chờ tải thừa vài MB.
 function BoardLayout() {
   // Khi vào khu Bảng dự án: đổi icon/tiêu đề tab; rời đi thì trả lại mặc định.
   useEffect(() => {
@@ -62,10 +63,19 @@ function BoardLayout() {
   }, []);
 
   return (
+    <PmProvider>
+      <Outlet />
+    </PmProvider>
+  );
+}
+
+// Trang sửa plan tuần là nơi DUY NHẤT trong khu Bảng dự án cần tới tài liệu
+// (upload bản export vào folder + kiểm tra trùng tên) → bọc DocumentsProvider
+// riêng cho nó; mọi mutation tài liệu vẫn đi qua DocumentsContext như cũ.
+function PlanEditRoute() {
+  return (
     <DocumentsProvider>
-      <PmProvider>
-        <Outlet />
-      </PmProvider>
+      <BoardPlanEditPage />
     </DocumentsProvider>
   );
 }
@@ -111,7 +121,7 @@ function AppShell() {
         <Route path="/board/calendar" element={<BoardCalendarPage />} />
         <Route path="/board/apps" element={<BoardAppsPage />} />
         <Route path="/board/plan" element={<BoardPlanListPage />} />
-        <Route path="/board/plan/:id" element={<BoardPlanEditPage />} />
+        <Route path="/board/plan/:id" element={<PlanEditRoute />} />
         <Route path="/board/report" element={<BoardReportListPage />} />
         <Route path="/board/report/:id" element={<BoardReportEditPage />} />
         <Route path="/board/kpi" element={<BoardKpiListPage />} />

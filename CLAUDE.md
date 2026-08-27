@@ -26,7 +26,8 @@ Web app quản lý & chia sẻ tài liệu: **Vite 6 + React 19 + React Router 7
 ### Hai lớp routing (src/App.tsx)
 Đây là ranh giới quan trọng nhất của app:
 - Route `/share/d/:id` và `/share/f/:id[/:docId]` nằm **NGOÀI** lớp đăng nhập — người xem ẩn danh đọc được, không cần login.
-- Mọi route còn lại đi qua `<AppShell>`, vốn chặn lại nếu chưa đăng nhập và chỉ bọc `<DocumentsProvider>` cho phần này. Nghĩa là các trang `/share/*` **không** có quyền truy cập `useDocuments()` — chúng tự `get()` dữ liệu công khai trực tiếp từ Realtime Database.
+- Mọi route còn lại đi qua `<AppShell>` (chặn nếu chưa đăng nhập, và chặn tiếp nếu uid không có trong whitelist `admin/allowed`). Các trang `/share/*` **không** truy cập được `useDocuments()` — chúng tự `get()` dữ liệu công khai trực tiếp từ Realtime Database.
+- **Provider gắn theo khu, không gắn toàn cục** — quan trọng cho hiệu năng: `DocsLayout` bọc `<DocumentsProvider>` cho khu `/docs/*`; `BoardLayout` chỉ bọc `<PmProvider>`. `DocumentsProvider` `onValue` toàn bộ `users/{uid}/documents` **kèm trường `content`** (thực tế vài MB), nên **KHÔNG bọc nó cho cả khu `/board/*`**: trang duy nhất trong khu này cần tài liệu là editor plan tuần (upload bản export), và nó được bọc riêng qua `PlanEditRoute`. Thêm trang board mới mà cần `useDocuments()` thì bọc riêng route đó, đừng nâng provider lên layout.
 
 ### Single source of truth cho mọi mutation: src/context/DocumentsContext.tsx
 Toàn bộ thao tác ghi dữ liệu (tạo/sửa/xóa/di chuyển/chia sẻ document và folder) **chỉ** sống trong context này. Các component không được tự gọi Firebase write. Hai pattern bắt buộc phải hiểu:
