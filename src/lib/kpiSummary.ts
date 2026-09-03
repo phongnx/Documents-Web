@@ -2,13 +2,12 @@
 // Excel mẫu: mỗi member các đầu mục lớn nhóm theo project + category, cột Tasks gộp
 // '# feature' + '- task', Start/End/days, KPI nhóm = Σ điểm log, KPI tháng = 100 + Σ).
 // Các hàm build là pure (test được); aggregate đọc sheet qua get() 1 lần, không subscribe.
-import { get, ref } from 'firebase/database';
+import { fetchMonthSheet } from './kpiFetch';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './firebase';
 import { totalWorkDays } from '../estTypes';
 import {
   durationMin,
-  entriesOfMonth,
   fmtDelta,
   KPI_MONTH_BASE,
   leavePortionsOf,
@@ -334,17 +333,13 @@ export async function aggregateKpiSummaryMembers(
   await Promise.all(
     members.map(async (m, i) => {
       try {
-        const snap = await get(ref(db!, `shared/kpi/${m.token}`));
-        const val = snap.val() as {
-          entries?: Record<string, KpiEntry>;
-          scores?: Record<string, KpiScore>;
-          leaves?: Record<string, KpiLeave>;
-        } | null;
-        if (!val) return;
-        const monthEntries = entriesOfMonth(Object.values(val.entries ?? {}), monthKey);
-        const leaveNote = leaveNoteOf(Object.values(val.leaves ?? {}), monthKey);
+        // Chỉ đọc entries của tháng cần tổng kết (query index 'date'), không tải cả sheet.
+        const { entries: monthEntries, scores, leaves } = await fetchMonthSheet(
+          m.token,
+          monthKey,
+        );
+        const leaveNote = leaveNoteOf(leaves, monthKey);
         if (monthEntries.length === 0 && !leaveNote) return;
-        const scores = val.scores ?? {};
         out.push({
           memberId: m.id,
           name: m.name,

@@ -2,7 +2,7 @@
 // copy link share, khóa/mở, đổi link, xóa; quản lý quy chế chấm điểm.
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { get, ref } from 'firebase/database';
+import { fetchMonthSheet } from '../lib/kpiFetch';
 import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import KpiRulesDialog from '../components/board/KpiRulesDialog';
@@ -10,13 +10,10 @@ import MemberProjectsDialog from '../components/board/MemberProjectsDialog';
 import { db } from '../lib/firebase';
 import { isoLocal } from '../lib/pmDates';
 import {
-  entriesOfMonth,
   fmtHours,
   KPI_MONTH_BASE,
   totalOf,
-  type KpiEntry,
   type KpiMember,
-  type KpiScore,
 } from '../kpiTypes';
 
 /** Tóm tắt tháng của 1 member (đọc get() 1 lần, không subscribe). */
@@ -35,6 +32,7 @@ export default function BoardKpiListPage() {
     deleteMember,
     rotateMemberToken,
     setMemberLocked,
+    syncAllKpiSheetMeta,
   } = usePm();
   const navigate = useNavigate();
   const [monthKey, setMonthKey] = useState(isoLocal(new Date()).slice(0, 7));
@@ -44,6 +42,9 @@ export default function BoardKpiListPage() {
   const [showLocked, setShowLocked] = useState(false);
   // Member đang mở dialog gán project.
   const [assignFor, setAssignFor] = useState<KpiMember | null>(null);
+  // Trạng thái nút đồng bộ tất cả (null = nhàn rỗi, chuỗi = kết quả hiện tạm).
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   // Đọc tóm tắt từng sheet khi vào trang / đổi tháng / danh sách member đổi.
   useEffect(() => {
@@ -54,13 +55,9 @@ export default function BoardKpiListPage() {
       await Promise.all(
         members.map(async (m) => {
           try {
-            const snap = await get(ref(db!, `shared/kpi/${m.token}`));
-            const val = snap.val() as {
-              entries?: Record<string, KpiEntry>;
-              scores?: Record<string, KpiScore>;
-            } | null;
-            const entries = entriesOfMonth(Object.values(val?.entries ?? {}), monthKey);
-            const t = totalOf(entries, val?.scores ?? {});
+            // Chỉ đọc entries của tháng đang xem (query index 'date'), không tải cả sheet.
+            const { entries, scores } = await fetchMonthSheet(m.token, monthKey);
+            const t = totalOf(entries, scores);
             next[m.id] = { minutes: t.minutes, delta: t.delta, entryCount: entries.length };
           } catch {
             // Bỏ qua sheet lỗi (node bị xóa tay…) — card hiện "—".
@@ -83,6 +80,22 @@ export default function BoardKpiListPage() {
       window.setTimeout(() => setCopiedId((cur) => (cur === id ? null : cur)), 1500);
     } catch {
       window.prompt('Copy link thủ công:', shareUrl(token));
+    }
+  };
+
+  // Đẩy lại snapshot (quy chế, project, mốc release, bảng estimate) xuống mọi sheet
+  // member — trang share chỉ đọc snapshot này, không đọc được dữ liệu gốc của leader.
+  const onSyncAll = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const n = await syncAllKpiSheetMeta();
+      setSyncMsg(n > 0 ? `✓ Đã đồng bộ ${n} member` : 'Chưa có member nào');
+    } catch {
+      setSyncMsg('⚠ Đồng bộ lỗi');
+    } finally {
+      setSyncing(false);
+      window.setTimeout(() => setSyncMsg(null), 2500);
     }
   };
 
@@ -144,6 +157,14 @@ export default function BoardKpiListPage() {
           onClick={() => navigate(`/board/kpi/summary/${monthKey}`)}
         >
           📊 Tổng kết tháng
+        </button>
+        <button
+          type="button"
+          disabled={syncing || members.length === 0}
+          title="Đẩy lại quy chế, project, mốc release, bảng estimate xuống trang share của mọi member"
+          onClick={onSyncAll}
+        >
+          {syncMsg ?? (syncing ? '⏳ Đang đồng bộ…' : '🔄 Đồng bộ tất cả')}
         </button>
         <input
           type="month"

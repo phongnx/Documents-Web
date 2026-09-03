@@ -3,7 +3,16 @@
 // Nguyên tắc: ghi theo PATH HẸP từng entry/score (không set cả node) để member và leader
 // thao tác đồng thời không đè nhau; onValue realtime tự hòa dữ liệu về.
 import { useCallback, useEffect, useState } from 'react';
-import { onValue, ref, set, update } from 'firebase/database';
+import {
+  endAt,
+  onValue,
+  orderByChild,
+  query,
+  ref,
+  set,
+  startAt,
+  update,
+} from 'firebase/database';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../lib/firebase';
 import {
@@ -100,10 +109,14 @@ const estLogPath = (e: KpiEntry): string | null =>
  * @param token token của sheet (undefined/rỗng = chưa sẵn sàng, state giữ 'loading').
  * @param onWriteError gọi khi 1 lần ghi bị từ chối (thường do rule: dòng đã chấm điểm /
  *   sheet bị khóa / token không còn tồn tại) — UI hiện thông báo, dữ liệu tự revert qua onValue.
+ * @param monthKey 'yyyy-mm' — CHỈ tải entries của tháng này (query theo index `date`).
+ *   Sheet tích lũy nhiều tháng nên tải cả node là lãng phí: mọi nơi dùng entries đều lọc
+ *   theo tháng trước khi tính. Bỏ trống = tải toàn bộ (giữ tương thích).
  */
 export function useKpiSheet(
   token: string | undefined,
   onWriteError?: (message: string) => void,
+  monthKey?: string,
 ): KpiSheet {
   const [state, setState] = useState<KpiSheetState>('loading');
   const [meta, setMeta] = useState<KpiSheetMeta | null>(null);
@@ -113,51 +126,77 @@ export function useKpiSheet(
   const [weekPlans, setWeekPlans] = useState<Record<string, KpiWeekPlan>>({});
   const [reopenChecks, setReopenChecks] = useState<Record<string, boolean>>({});
 
+  // Các nhánh NHỎ (meta/scores/leaves/weekPlans/reopenChecks) subscribe cả node —
+  // chúng không lọc được theo tháng (không có index) nhưng tổng chỉ vài chục KB.
+  // meta là nguồn quyết định state: không có meta = token chưa tạo hoặc đã bị thu hồi.
   useEffect(() => {
     if (!db || !token) {
       setState(token ? 'notfound' : 'loading');
       return;
     }
     setState('loading');
-    const unsub = onValue(
-      ref(db, `shared/kpi/${token}`),
-      (snap) => {
-        const val = snap.val() as {
-          meta?: KpiSheetMeta;
-          entries?: Record<string, KpiEntry>;
-          scores?: Record<string, KpiScore>;
-          leaves?: Record<string, KpiLeave>;
-          weekPlans?: Record<string, KpiWeekPlan>;
-          reopenChecks?: Record<string, boolean>;
-        } | null;
-        if (!val?.meta) {
-          // Token chưa được tạo hoặc đã bị leader thu hồi (đổi link/xóa member).
-          setMeta(null);
-          setEntries([]);
-          setScores({});
-          setLeaves([]);
-          setWeekPlans({});
-          setReopenChecks({});
-          setState('notfound');
-          return;
-        }
-        setMeta(val.meta);
-        setEntries(Object.values(val.entries ?? {}));
-        setScores(val.scores ?? {});
+    const base = `shared/kpi/${token}`;
+    const subs = [
+      onValue(
+        ref(db, `${base}/meta`),
+        (snap) => {
+          const val = snap.val() as KpiSheetMeta | null;
+          if (!val) {
+            setMeta(null);
+            setEntries([]);
+            setScores({});
+            setLeaves([]);
+            setWeekPlans({});
+            setReopenChecks({});
+            setState('notfound');
+            return;
+          }
+          setMeta(val);
+          setState('ready');
+        },
+        () => setState('notfound'),
+      ),
+      onValue(ref(db, `${base}/scores`), (snap) =>
+        setScores((snap.val() as Record<string, KpiScore> | null) ?? {}),
+      ),
+      onValue(ref(db, `${base}/leaves`), (snap) =>
         // Mới nhất trước (theo ngày bắt đầu) để dialog quản lý dễ nhìn.
         setLeaves(
-          Object.values(val.leaves ?? {}).sort((a, b) =>
-            b.startDate.localeCompare(a.startDate),
-          ),
-        );
-        setWeekPlans(val.weekPlans ?? {});
-        setReopenChecks(val.reopenChecks ?? {});
-        setState('ready');
-      },
-      () => setState('notfound'),
-    );
-    return unsub;
+          Object.values(
+            (snap.val() as Record<string, KpiLeave> | null) ?? {},
+          ).sort((a, b) => b.startDate.localeCompare(a.startDate)),
+        ),
+      ),
+      onValue(ref(db, `${base}/weekPlans`), (snap) =>
+        setWeekPlans((snap.val() as Record<string, KpiWeekPlan> | null) ?? {}),
+      ),
+      onValue(ref(db, `${base}/reopenChecks`), (snap) =>
+        setReopenChecks((snap.val() as Record<string, boolean> | null) ?? {}),
+      ),
+    ];
+    return () => subs.forEach((u) => u());
   }, [token]);
+
+  // entries tách riêng vì đây là nhánh phình theo thời gian — query đúng tháng đang
+  // xem qua index 'date' (khai báo .indexOn trong database.rules.json).
+  // Khoảng ngày tường minh: date 'yyyy-mm-dd' so sánh chuỗi nên '-01'..'-31' bao trọn tháng.
+  useEffect(() => {
+    if (!db || !token) return;
+    const entriesRef = ref(db, `shared/kpi/${token}/entries`);
+    const q = monthKey
+      ? query(
+          entriesRef,
+          orderByChild('date'),
+          startAt(`${monthKey}-01`),
+          endAt(`${monthKey}-31`),
+        )
+      : entriesRef;
+    return onValue(
+      q,
+      (snap) => setEntries(Object.values((snap.val() as Record<string, KpiEntry> | null) ?? {})),
+      () => setEntries([]),
+    );
+  }, [token, monthKey]);
 
   // Báo lỗi ghi thống nhất (rule từ chối → catch của promise set/update).
   const failed = useCallback(

@@ -27,7 +27,7 @@ export default function KpiSharePage() {
     return () => window.clearTimeout(t);
   }, [writeError]);
 
-  const sheet = useKpiSheet(token, setWriteError);
+  const sheet = useKpiSheet(token, setWriteError, monthKey);
   const locked = sheet.meta?.locked === true;
 
   // Thông báo kết quả chốt task estimate (done + điểm gợi ý) — tự ẩn sau 6s.

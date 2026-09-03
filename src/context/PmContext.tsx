@@ -63,9 +63,13 @@ import { taskLines } from '../lib/planAutofill';
 // Danh sách task thuộc 1 mốc release (snapshot cho dialog chi tiết ở trang member):
 // task cùng app + cùng version với task nguồn (gồm cả task đã done — để member thấy
 // tiến độ tổng thể); mốc không có version → chỉ có task nguồn. Cap 15 task/mốc,
-// 10 dòng mô tả/task để payload snapshot gọn.
+// 40 dòng mô tả/task để payload snapshot gọn.
+// Cap dòng đặt ở 40 vì đo data thật: task dài nhất 27 dòng, p99 = 19 → thực tế không
+// cắt dòng nào, cap chỉ còn là trần chặn payload phình (member tải meta mỗi lần mở
+// trang share). Cap cũ là 10 → cắt oan ~5% task, member không có cách nào xem tiếp
+// (họ chỉ đọc được snapshot này, không đọc được task gốc của leader).
 const REL_TASK_CAP = 15;
-const REL_ITEM_CAP = 10;
+const REL_ITEM_CAP = 40;
 function releaseTasksOf(source: TaskItem, tasks: TaskItem[]): KpiReleaseTask[] {
   const matched = source.version
     ? tasks
@@ -79,8 +83,15 @@ function releaseTasksOf(source: TaskItem, tasks: TaskItem[]): KpiReleaseTask[] {
     : [source];
   const out: KpiReleaseTask[] = matched.slice(0, REL_TASK_CAP).map((t) => {
     const lines = t.description?.trim() ? taskLines(t) : [];
+    // Marker phải nói rõ còn bao nhiêu dòng: dấu '…' trơ trọi khiến member tưởng
+    // trang bị lỗi hiển thị chứ không phải nội dung bị cắt có chủ đích.
     const items =
-      lines.length > REL_ITEM_CAP ? [...lines.slice(0, REL_ITEM_CAP), '…'] : lines;
+      lines.length > REL_ITEM_CAP
+        ? [
+            ...lines.slice(0, REL_ITEM_CAP),
+            `… còn ${lines.length - REL_ITEM_CAP} dòng nữa (hỏi leader để xem đầy đủ)`,
+          ]
+        : lines;
     return {
       title: t.title,
       status: t.status,
@@ -248,6 +259,8 @@ interface PmState {
   updateKpiRules: (rules: KpiRuleGroup[]) => void;
   /** Đồng bộ snapshot categories/projectNames/memberName sang sheet của member. */
   syncKpiSheetMeta: (memberId: string) => void;
+  /** Đồng bộ snapshot cho TẤT CẢ member trong 1 lần ghi; trả về số member đã ghi. */
+  syncAllKpiSheetMeta: () => Promise<number>;
   // ---------- Break task & Estimate ----------
   estimates: EstIndexItem[];
   /** Tạo bảng estimate (state draft) + sync mục Estimate sang sheet KPI của participants; trả estId. */
@@ -1218,6 +1231,30 @@ export function PmProvider({ children }: { children: ReactNode }) {
     [uid, kpiSnapshot],
   );
 
+  // Đồng bộ snapshot cho MỌI member trong 1 multi-path update (nút "🔄 Đồng bộ tất
+  // cả" ở trang danh sách): dùng khi đổi quy chế / đổi cách dựng snapshot mà không
+  // muốn mở lần lượt từng trang member. Ghi kèm ownerId (đúng bằng giá trị cũ nên
+  // qua .validate) để sheet có node đã bị xóa tay vẫn ghi được — thiếu nó thì rule
+  // deny 1 member là hỏng cả update nguyên tử.
+  const syncAllKpiSheetMeta = useCallback(async (): Promise<number> => {
+    if (!db || !uid) return 0;
+    const list = stateRef.current.members;
+    if (list.length === 0) return 0;
+    const writes: Record<string, unknown> = {};
+    for (const m of list) {
+      const base = `shared/kpi/${m.token}/meta`;
+      writes[`${base}/ownerId`] = uid;
+      writes[`${base}/memberName`] = m.name;
+      writes[`${base}/memberId`] = m.id;
+      for (const [k, v] of Object.entries(kpiSnapshot(m))) {
+        // Mảng rỗng → null để RTDB xóa key (giữ đúng hành vi của các mutator khác).
+        writes[`${base}/${k}`] = Array.isArray(v) && v.length === 0 ? null : v;
+      }
+    }
+    await update(ref(db), writes);
+    return list.length;
+  }, [uid, kpiSnapshot]);
+
   // Gán danh sách project cho member + đồng bộ ngay sang sheet (1 lần ghi).
   const setMemberProjects = useCallback(
     (memberId: string, projectIds: string[]) => {
@@ -1680,6 +1717,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
         setMemberProjects,
         updateKpiRules,
         syncKpiSheetMeta,
+        syncAllKpiSheetMeta,
         estimates,
         addEstimate,
         updateEstimateMeta,

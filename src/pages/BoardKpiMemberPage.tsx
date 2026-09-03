@@ -24,7 +24,7 @@ export default function BoardKpiMemberPage() {
   const [copied, setCopied] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
-  const sheet = useKpiSheet(member?.token);
+  const sheet = useKpiSheet(member?.token, undefined, monthKey);
 
   // Nghi vấn bug reopen trong tháng đang chọn (hook phải nằm TRÊN mọi early return).
   const reopenSuspects = useMemo(

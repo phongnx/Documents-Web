@@ -2023,11 +2023,15 @@ a:hover {
 .kpi-rel-dialog {
   max-width: 560px;
 }
+/* Body ăn hết chiều cao còn lại của dialog (.modal-dialog đã max-height 80vh + flex
+   column) thay vì fix 60vh — task mô tả dài đỡ phải scroll trong khung hẹp trên màn
+   laptop thấp. min-height: 0 để flex item cho phép co lại và bật thanh cuộn. */
 .kpi-rel-dialog-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 60vh;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
 .kpi-rel-task-head {
