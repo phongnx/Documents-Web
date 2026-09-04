@@ -134,6 +134,12 @@ export default function KpiSummaryTable({
               })
             }
           />
+          {/* Các đợt làm việc rời nhau của đầu mục gộp — auto, không sửa tay. */}
+          {r.spans && (
+            <div className="ksum-spans" title="Các đợt có log của đầu mục này">
+              {r.spans}
+            </div>
+          )}
         </td>
         <td className="ksum-progress">
           <textarea
@@ -170,7 +176,10 @@ export default function KpiSummaryTable({
         </td>
         <td className="ksum-date">{r.start ? formatDateVi(r.start) : ''}</td>
         <td className="ksum-date">{r.end ? formatDateVi(r.end) : ''}</td>
-        <td className="ksum-days">{typeof r.days === 'number' ? r.days : ''}</td>
+        <td className="ksum-days">
+          {typeof r.days === 'number' ? r.days : ''}
+          {r.spans && <div className="ksum-spans">{r.spans}</div>}
+        </td>
         <td className="ksum-progress ksum-preline">{r.progress ?? ''}</td>
         <td className="ksum-kpi">
           {r.kpi ? (

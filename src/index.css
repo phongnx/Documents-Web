@@ -2234,7 +2234,7 @@ col.ksc-date {
   width: 6.5%;
 }
 col.ksc-days {
-  width: 4%;
+  width: 6.5%;
 }
 col.ksc-progress {
   width: 10%;
@@ -2316,6 +2316,14 @@ col.ksc-act {
 }
 .ksum-days {
   text-align: center;
+}
+/* Các đợt rời nhau của 1 đầu mục gộp (dưới số ngày công). */
+.ksum-spans {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+  word-break: break-word;
 }
 .ksum-kpi {
   text-align: center;

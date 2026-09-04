@@ -18,6 +18,7 @@ import {
   totalOf,
   type KpiEntry,
   type KpiLeave,
+  NO_MILESTONE,
   type KpiRelease,
   type KpiScore,
   type KpiWeekPlan,
@@ -233,6 +234,12 @@ export default function KpiLogTable({
       fields.add('task');
       missing.push('Task');
     }
+    // Mốc release BẮT BUỘC — việc không thuộc release nào thì chọn "Không thuộc mốc"
+    // (chọn có ý thức, tránh bảng tổng kết thiếu mốc rồi phải dò lại từng dòng).
+    if (!d.rel?.label?.trim()) {
+      fields.add('rel');
+      missing.push('Mốc release');
+    }
     let msg = missing.length > 0 ? `Thiếu: ${missing.join(', ')}.` : '';
     if (d.start && d.end && durationMin({ start: d.start, end: d.end }) === null) {
       fields.add('start');
@@ -281,8 +288,10 @@ export default function KpiLogTable({
       if (!map.has(label)) map.set(label, r.date);
     }
     for (const est of estimates ?? []) if (!map.has(est.title)) map.set(est.title, undefined);
+    // Mốc đã dùng trong tháng — trừ nhãn 'Không thuộc mốc' vì đã có option cố định.
     for (const e of monthEntries)
-      if (e.rel?.label && !map.has(e.rel.label)) map.set(e.rel.label, e.rel.date);
+      if (e.rel?.label && e.rel.label !== NO_MILESTONE && !map.has(e.rel.label))
+        map.set(e.rel.label, e.rel.date);
     return [...map.entries()].map(([label, date]) => ({ label, date }));
   })();
   const byDay = groupEntriesByDay(monthEntries);
@@ -471,11 +480,11 @@ export default function KpiLogTable({
             placeholder="Project"
           />
         )}
-        {/* Mốc release/milestone task thuộc về — không bắt buộc (task chung để trống). */}
+        {/* Mốc release/milestone task thuộc về — BẮT BUỘC chọn (có mục "Không thuộc mốc"). */}
         <select
-          className="kpi-rel-select"
+          className={`kpi-rel-select ${errCls('rel') ?? ''}`.trim()}
           value={d.rel?.label ?? ''}
-          title="Mốc release/milestone task thuộc về (hiện ở bảng tổng kết tháng)"
+          title="Mốc release/milestone task thuộc về (bắt buộc — hiện ở bảng tổng kết tháng)"
           onChange={(e) => {
             const v = e.target.value;
             if (!v) {
@@ -491,16 +500,20 @@ export default function KpiLogTable({
             patchDraft({ rel: { label: v, ...(o?.date ? { date: o.date } : {}) } });
           }}
         >
-          <option value="">🚀 (không thuộc mốc)</option>
+          <option value="">🚀 Chọn mốc…</option>
           {relOptions.map((o) => (
             <option key={o.label} value={o.label}>
               🚀 {o.label}
               {o.date ? ` · ${o.date.slice(8, 10)}/${o.date.slice(5, 7)}` : ''}
             </option>
           ))}
-          {d.rel?.label && !relOptions.some((o) => o.label === d.rel!.label) && (
-            <option value={d.rel.label}>🚀 {d.rel.label}</option>
-          )}
+          {/* Mốc cũ của dòng đang sửa (đã rớt khỏi snapshot) — giữ để không mất dữ liệu. */}
+          {d.rel?.label &&
+            d.rel.label !== NO_MILESTONE &&
+            !relOptions.some((o) => o.label === d.rel!.label) && (
+              <option value={d.rel.label}>🚀 {d.rel.label}</option>
+            )}
+          <option value={NO_MILESTONE}>— {NO_MILESTONE} —</option>
           <option value="__custom">Khác…</option>
         </select>
       </td>

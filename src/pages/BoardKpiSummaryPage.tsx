@@ -10,7 +10,7 @@ import BoardNav from '../components/board/BoardNav';
 import KpiSummaryTable from '../components/board/KpiSummaryTable';
 import { useUnsavedGuard } from '../hooks/useUnsavedGuard';
 import { db } from '../lib/firebase';
-import { normalizeSummaryRead } from '../lib/kpiSummary';
+import { normalizeSummaryRead, optimizeSummaryMembers } from '../lib/kpiSummary';
 import type { KpiSummary, KpiSummaryMember, KpiSummaryMeta } from '../kpiTypes';
 
 export default function BoardKpiSummaryPage() {
@@ -111,6 +111,28 @@ export default function BoardKpiSummaryPage() {
     setNotice('Đã tổng hợp lại từ log — kiểm tra rồi bấm 💾 Lưu để chốt.');
   };
 
+  // Tối ưu bảng HIỆN TẠI (không đọc lại log): gộp các dòng cùng App+Giai đoạn+Mốc —
+  // dùng sau khi leader điền bổ sung mốc release cho các dòng tổng hợp còn thiếu.
+  const onOptimize = () => {
+    if (!summary) return;
+    const preview = optimizeSummaryMembers(summary.members);
+    if (preview.after === preview.before) {
+      setNotice('Không có dòng nào gộp được (khác App / Giai đoạn / Mốc).');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Gộp ${preview.before} dòng còn ${preview.after} dòng (cùng App + Giai đoạn + Mốc)? Nội dung Tasks/Tiến độ/Lý do ± của các dòng sẽ được nối lại.`,
+      )
+    )
+      return;
+    setSummary({ ...summary, members: preview.members });
+    setDirty(true);
+    setNotice(
+      `Đã gộp ${preview.before} → ${preview.after} dòng — kiểm tra rồi bấm 💾 Lưu để chốt.`,
+    );
+  };
+
   const shareUrl = id ? `${window.location.origin}/share/kpisum/${id}` : '';
   const onShare = async () => {
     if (!id) return;
@@ -144,6 +166,13 @@ export default function BoardKpiSummaryPage() {
               title="Tổng hợp lại từ log KPI hiện tại (đè nội dung đã sửa tay)"
             >
               {rebuilding ? '⏳ Đang tổng hợp…' : '🔄 Tổng hợp lại'}
+            </button>
+            <button
+              type="button"
+              onClick={onOptimize}
+              title="Gộp các dòng cùng App + Giai đoạn + Mốc release (dùng sau khi điền bổ sung mốc)"
+            >
+              🧹 Tối ưu bảng
             </button>
             <button type="button" onClick={onShare} title={shareUrl}>
               {copied ? '✓ Đã copy' : '📋 Share (chỉ xem)'}

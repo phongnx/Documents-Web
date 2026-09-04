@@ -32,6 +32,11 @@ export interface KpiEntry {
   updatedAt: string;
 }
 
+/** Nhãn mốc cho việc KHÔNG thuộc release nào (họp, nghiên cứu chung, hỗ trợ…).
+ *  Member buộc phải chọn mốc khi log, nên cần một lựa chọn tường minh thay vì bỏ
+ *  trống — bảng tổng kết gom các dòng này thành nhóm riêng có tên rõ ràng. */
+export const NO_MILESTONE = 'Không thuộc mốc';
+
 /** Điểm leader chấm cho 1 dòng — shared/kpi/{token}/scores/{entryId}. Chỉ owner ghi. */
 export interface KpiScore {
   delta: number;
@@ -354,8 +359,11 @@ export interface KpiSummaryRow {
   /** ISO 'yyyy-mm-dd'. */
   start?: string;
   end?: string;
-  /** Số ngày làm việc (auto = T2–T6 trong khoảng, sửa tay được). */
+  /** Số ngày làm việc (auto = T2–T6 của RIÊNG các khoảng có log, sửa tay được). */
   days?: number;
+  /** Các khoảng ngày có log khi đầu mục gộp nhiều đợt rời nhau —
+   *  '12/08–14/08 · 18/08 · 25/08–28/08'. Chỉ 1 khoảng thì bỏ trống (Start/End đã đủ). */
+  spans?: string;
   /** Tiến độ/Kết quả — leader điền tay. */
   progress?: string;
   /** Điểm ± của nhóm (auto = Σ điểm các dòng log, sửa tay được — lưu dạng text). */
