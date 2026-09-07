@@ -12,6 +12,7 @@ import { isoLocal } from '../lib/pmDates';
 import {
   fmtHours,
   KPI_MONTH_BASE,
+  kpiScoreClass,
   totalOf,
   type KpiMember,
 } from '../kpiTypes';
@@ -219,7 +220,7 @@ export default function BoardKpiListPage() {
                   </div>
                   {score !== null && (
                     <span
-                      className={`kpi-month-score ${score >= KPI_MONTH_BASE ? 'pos' : 'neg'}`}
+                      className={`kpi-month-score ${kpiScoreClass(score)}`}
                       title={`${KPI_MONTH_BASE} ${s!.delta >= 0 ? '+' : '−'} ${Math.abs(s!.delta)}`}
                     >
                       {score}

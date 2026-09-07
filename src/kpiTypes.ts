@@ -32,6 +32,15 @@ export interface KpiEntry {
   updatedAt: string;
 }
 
+/** Class màu cho điểm KPI THÁNG: đúng mốc 100 = xanh dương (đạt chuẩn, không hơn
+ *  không kém), trên 100 = xanh lá, dưới 100 = đỏ. Dùng chung ở mọi chỗ hiện điểm
+ *  tháng để 4 nơi không lệch luật nhau. */
+export function kpiScoreClass(score: number): 'pos' | 'base' | 'neg' {
+  if (score > KPI_MONTH_BASE) return 'pos';
+  if (score < KPI_MONTH_BASE) return 'neg';
+  return 'base';
+}
+
 /** Nhãn mốc cho việc KHÔNG thuộc release nào (họp, nghiên cứu chung, hỗ trợ…).
  *  Member buộc phải chọn mốc khi log, nên cần một lựa chọn tường minh thay vì bỏ
  *  trống — bảng tổng kết gom các dòng này thành nhóm riêng có tên rõ ràng. */

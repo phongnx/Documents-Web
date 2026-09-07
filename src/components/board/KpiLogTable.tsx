@@ -11,6 +11,7 @@ import {
   fmtHours,
   groupEntriesByDay,
   KPI_MONTH_BASE,
+  kpiScoreClass,
   leaveLabel,
   leavePortionsOf,
   overlapsLeave,
@@ -767,7 +768,7 @@ export default function KpiLogTable({
           </button>
         </div>
         <div className="kpi-month-sum">
-          <span className={`kpi-month-score ${monthScore >= KPI_MONTH_BASE ? 'pos' : 'neg'}`}>
+          <span className={`kpi-month-score ${kpiScoreClass(monthScore)}`}>
             KPI tháng: {KPI_MONTH_BASE} {monthTotal.delta >= 0 ? '+' : '−'}{' '}
             {Math.abs(monthTotal.delta)} = <strong>{monthScore}</strong>
           </span>

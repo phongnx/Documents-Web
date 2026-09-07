@@ -9,6 +9,7 @@ import MarkdownPreview from '../components/MarkdownPreview';
 import FullscreenViewer from '../components/FullscreenViewer';
 import ThemeToggle from '../components/ThemeToggle';
 import { useFontScale } from '../components/FontSizeControl';
+import { downloadDocument } from '../lib/downloadHelpers';
 import { formatDate } from '../lib/formatDate';
 
 interface SharedPayload {
@@ -59,6 +60,16 @@ export default function SharePage() {
         <Link to="/" className="brand">📄 Docs Web</Link>
         <div className="share-header-actions">
           {state === 'ready' && doc && control}
+          {state === 'ready' && doc && (
+            <button
+              type="button"
+              className="share-download-btn"
+              onClick={() => downloadDocument(doc)}
+              title="Tải tài liệu này về máy"
+            >
+              ⬇ Tải về
+            </button>
+          )}
           <ThemeToggle />
           <span className="badge badge-shared">Chia sẻ công khai · chỉ đọc</span>
         </div>

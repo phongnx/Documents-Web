@@ -3,7 +3,7 @@
 // - readonly (trang share): render text thuần, không input.
 // Mỗi member 1 tbody: cột Tên / Ngày nghỉ / KPI tháng rowspan các dòng đầu mục.
 import {
-  KPI_MONTH_BASE,
+  kpiScoreClass,
   type KpiSummary,
   type KpiSummaryMember,
   type KpiSummaryRow,
@@ -197,8 +197,7 @@ export default function KpiSummaryTable({
     );
 
   // Thống kê nhanh toàn team (khối trên đầu bảng — cả trang edit lẫn share).
-  const scoreCls = (v: number) =>
-    v >= KPI_MONTH_BASE ? 'kpi-month-score pos' : 'kpi-month-score neg';
+  const scoreCls = (v: number) => `kpi-month-score ${kpiScoreClass(v)}`;
 
   return (
     <>
@@ -266,6 +265,25 @@ export default function KpiSummaryTable({
         {summary.members.map((m, mi) => {
           const rows = m.rows ?? [];
           const span = Math.max(rows.length, 1);
+          // Ô Tên dùng chung cho 2 nhánh render (member không có đầu mục / có đầu mục).
+          const nameCell = (rowSpan: number) => (
+            <td className="ksum-name" rowSpan={rowSpan}>
+              <strong className="ksum-name-title">{m.name}</strong>
+              {editable && (
+                <button
+                  type="button"
+                  className="doc-action danger"
+                  title="Bỏ member khỏi bảng"
+                  onClick={() => deleteMember(mi)}
+                >
+                  🗑️
+                </button>
+              )}
+              <div className={`ksum-name-score ${scoreCls(m.kpiScore)}`}>
+                KPI tháng: {m.kpiScore}
+              </div>
+            </td>
+          );
           const memberCells = (
             <>
               <td className="ksum-leave" rowSpan={span}>
@@ -293,13 +311,7 @@ export default function KpiSummaryTable({
                     }
                   />
                 ) : (
-                  <strong
-                    className={
-                      m.kpiScore >= KPI_MONTH_BASE
-                        ? 'kpi-month-score pos'
-                        : 'kpi-month-score neg'
-                    }
-                  >
+                  <strong className={scoreCls(m.kpiScore)}>
                     {m.kpiScore}
                   </strong>
                 )}
@@ -310,19 +322,7 @@ export default function KpiSummaryTable({
             <tbody key={m.memberId} id={`ksum-m-${m.memberId}`}>
               {rows.length === 0 ? (
                 <tr>
-                  <td className="ksum-name" rowSpan={1}>
-                    <strong>{m.name}</strong>
-                    {editable && (
-                      <button
-                        type="button"
-                        className="doc-action danger"
-                        title="Bỏ member khỏi bảng"
-                        onClick={() => deleteMember(mi)}
-                      >
-                        🗑️
-                      </button>
-                    )}
-                  </td>
+                  {nameCell(1)}
                   <td colSpan={8} className="muted">
                     (không có đầu mục nào — member chỉ có nghỉ phép/không log)
                   </td>
@@ -332,21 +332,7 @@ export default function KpiSummaryTable({
               ) : (
                 rows.map((r, ri) => (
                   <tr key={r.id}>
-                    {ri === 0 && (
-                      <td className="ksum-name" rowSpan={span}>
-                        <strong>{m.name}</strong>
-                        {editable && (
-                          <button
-                            type="button"
-                            className="doc-action danger"
-                            title="Bỏ member khỏi bảng"
-                            onClick={() => deleteMember(mi)}
-                          >
-                            🗑️
-                          </button>
-                        )}
-                      </td>
-                    )}
+                    {ri === 0 && nameCell(span)}
                     {renderRowCells(mi, r, ri)}
                     {ri === 0 && memberCells}
                     {/* Ô actions đặt SAU 2 ô rowspan — khớp thứ tự cột với header. */}

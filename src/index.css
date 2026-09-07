@@ -1846,6 +1846,10 @@ a:hover {
 .kpi-month-score.neg {
   color: #dc2626;
 }
+/* Đúng mốc 100 điểm — không cộng không trừ. */
+.kpi-month-score.base {
+  color: #3b82f6;
+}
 .kpi-add-today {
   margin-left: auto;
 }
@@ -2262,9 +2266,34 @@ col.ksc-act {
   width: 100%;
   box-sizing: border-box;
 }
+/* Mỗi member là 1 <tbody>: kẻ đậm giữa các khối + nền xen kẽ để mắt tách nhanh
+   ranh giới member với ranh giới giữa các đầu mục của cùng người. */
+.ksum-table tbody + tbody > tr > td {
+  border-top: 3px solid color-mix(in srgb, var(--muted) 45%, transparent);
+}
+.ksum-table tbody:nth-of-type(even) > tr > td {
+  background: color-mix(in srgb, var(--subtle) 70%, transparent);
+}
+/* Hai ô có nền riêng phải thắng nền xen kẽ (specificity cao hơn). */
+.ksum-table tbody > tr > td.ksum-name {
+  background: var(--subtle);
+}
+.ksum-table tbody > tr.ksum-add-row > td {
+  background: color-mix(in srgb, var(--subtle) 55%, transparent);
+}
 .ksum-name {
   font-size: 14px;
   background: var(--subtle);
+}
+/* Tên member + điểm KPI tháng ngay dưới tên (cột KPI tháng nằm tận cùng bên phải,
+   cách tên cả nghìn pixel khi bảng cuộn ngang). */
+.ksum-name-title {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.ksum-name-score {
+  margin-top: 4px;
+  font-size: 12.5px;
 }
 .ksum-name .doc-action {
   margin-left: 6px;
