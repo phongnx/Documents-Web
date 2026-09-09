@@ -59,7 +59,12 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
 
   const [documents, setDocuments] = useState<DocItem[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
-  const [loading, setLoading] = useState(true);
+  // loading chỉ tắt khi CẢ documents lẫn folders đã về: trước đây chỉ theo dõi
+  // documents nên có cửa sổ loading=false mà folders còn rỗng — đủ để export plan
+  // tuần tạo folder trùng tên.
+  const [docsReady, setDocsReady] = useState(false);
+  const [foldersReady, setFoldersReady] = useState(false);
+  const loading = !docsReady || !foldersReady;
 
   // Luôn giữ bản state mới nhất để các mutator đọc từ đây (KHÔNG đọc closure),
   // tránh lỗi "tạo hàng loạt chỉ lưu được item cuối".
@@ -74,10 +79,13 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
     if (!db || !uid) {
       setDocuments([]);
       setFolders([]);
-      setLoading(false);
+      // Không có gì để chờ — đánh dấu xong để UI không kẹt ở trạng thái "đang tải".
+      setDocsReady(true);
+      setFoldersReady(true);
       return;
     }
-    setLoading(true);
+    setDocsReady(false);
+    setFoldersReady(false);
 
     const docsRef = ref(db, `users/${uid}/documents`);
     const unsubDocs = onValue(docsRef, (snap) => {
@@ -87,7 +95,7 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
         (a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt),
       );
       setDocuments(list);
-      setLoading(false);
+      setDocsReady(true);
     });
 
     const foldersRef = ref(db, `users/${uid}/folders`);
@@ -98,6 +106,7 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
         (a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt),
       );
       setFolders(list);
+      setFoldersReady(true);
     });
 
     return () => {
@@ -246,11 +255,14 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
       if (!db || !uid) return null;
       const cur = stateRef.current.folders;
       // Giữ đúng 1 cấp: chỉ cho tạo sub-folder bên trong folder GỐC.
-      // Nếu parentId không hợp lệ hoặc lại là sub-folder ⇒ tạo ở cấp gốc.
+      // Parent đã là sub-folder ⇒ hạ về cấp gốc. KHÔNG hạ cấp khi chỉ vì không tìm
+      // thấy parent trong state: folder cha vừa được tạo trong cùng tick chưa kịp
+      // dội về qua onValue — hạ cấp lúc đó khiến sub-folder rơi ra gốc (đúng lỗi
+      // đã sinh ra folder "Tester" mồ côi khi export plan tuần).
       let pid = parentId;
       if (pid) {
         const parent = cur.find((f) => f.id === pid);
-        if (!parent || parent.parentId) pid = undefined;
+        if (parent?.parentId) pid = undefined;
       }
       const now = new Date().toISOString();
       // order tính trong phạm vi cùng cấp cha (cùng parentId, gốc = rỗng).

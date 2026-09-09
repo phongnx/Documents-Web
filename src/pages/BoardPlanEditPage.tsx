@@ -70,7 +70,7 @@ export default function BoardPlanEditPage() {
 
   // ----- Hook cho upload file export vào quản lý tài liệu -----
   // LƯU Ý: phải đặt TRƯỚC mọi early return bên dưới (Rules of Hooks — bài học 27/07).
-  const { folders, addFolder } = useDocuments();
+  const { folders, addFolder, loading: docsLoading } = useDocuments();
   const { commitItems } = useUploadDocuments();
   // Cache id folder vừa tạo trong phiên: export 2 bản liên tiếp trước khi onValue
   // dội folder mới về sẽ không tạo folder trùng.
@@ -295,12 +295,16 @@ export default function BoardPlanEditPage() {
     const key = `${parentId ?? ''}:${name.toLowerCase()}`;
     const cached = createdFolders.current[key];
     if (cached) return cached;
-    const found = folders.find(
-      (f) =>
-        f.name.trim().toLowerCase() === name.toLowerCase() &&
-        (f.parentId ?? '') === (parentId ?? ''),
-    );
-    if (found) return found.id;
+    // Trùng tên (đã lỡ tạo bản sao) → luôn lấy folder TẠO SỚM NHẤT để mọi lần
+    // export đổ về đúng folder gốc, không nhảy qua lại giữa các bản sao.
+    const matches = folders
+      .filter(
+        (f) =>
+          f.name.trim().toLowerCase() === name.toLowerCase() &&
+          (f.parentId ?? '') === (parentId ?? ''),
+      )
+      .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+    if (matches.length > 0) return matches[0].id;
     const created = addFolder(name, parentId);
     if (created) createdFolders.current[key] = created.id;
     return created?.id ?? null;
@@ -316,6 +320,13 @@ export default function BoardPlanEditPage() {
   // (re-export cùng tuần) → commitItems hỏi thay thế: OK = ghi đè giữ id
   // (share link cũ vẫn sống).
   const exportHtml = (kind: 'detailed' | 'release') => {
+    // Chưa tải xong danh sách tài liệu/folder thì KHÔNG export: lúc đó folders và
+    // documents còn rỗng, ensureFolder sẽ tạo folder trùng tên và commitItems tạo
+    // file mới thay vì hỏi ghi đè — bản export cũ nằm lại folder khác.
+    if (docsLoading) {
+      window.alert('Đang tải danh sách tài liệu — thử lại sau giây lát.');
+      return;
+    }
     if (dirty) save();
     const full: WeeklyPlan = { ...plan, ...form };
     const html =
@@ -405,10 +416,20 @@ export default function BoardPlanEditPage() {
           <button type="button" className="primary" onClick={save} disabled={!dirty}>
             {dirty ? '💾 Lưu' : '✓ Đã lưu'}
           </button>
-          <button type="button" onClick={() => exportHtml('detailed')}>
-            ⬇ Export bản chi tiết
+          <button
+            type="button"
+            onClick={() => exportHtml('detailed')}
+            disabled={docsLoading}
+            title={docsLoading ? 'Đang tải danh sách tài liệu…' : undefined}
+          >
+            {docsLoading ? '⏳ Đang tải tài liệu…' : '⬇ Export bản chi tiết'}
           </button>
-          <button type="button" onClick={() => exportHtml('release')}>
+          <button
+            type="button"
+            onClick={() => exportHtml('release')}
+            disabled={docsLoading}
+            title={docsLoading ? 'Đang tải danh sách tài liệu…' : undefined}
+          >
             ⬇ Export bản release/test
           </button>
         </div>
