@@ -8,17 +8,11 @@ import {
 } from '../pmTypes';
 import { weekdayVN } from './pmDates';
 import { taskMilestoneDate } from './planAutofill';
+import { escHtml as esc, renderItemsHtml } from './planItems';
 
 // Sinh 2 file HTML tĩnh từ 1 WeeklyPlan, bám sát 2 template mẫu trong docs/plan.
-
-function esc(s: string): string {
-  return String(s ?? '').replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ??
-      c,
-  );
-}
+// Nội dung nhánh render theo cấp bậc marker (xem planItems.ts) — tiêu đề '#' in đậm
+// đứng riêng, '- ' là đầu việc, '+ ' là ý con, dòng trần là phần tiếp của đầu việc trên.
 
 // 'yyyy-mm-dd' → 'dd/mm/yyyy' | 'dd/mm'
 function dmy(iso: string): string {
@@ -123,8 +117,19 @@ const DETAILED_CSS = `
     .badge.research-badge { background: var(--research-bg); color: var(--research-text); }
     ul { margin: 0; padding-left: 20px; }
     li { margin: 6px 0; }
+    /* Cấp bậc nội dung nhánh: tiêu đề '#' đứng riêng, ý con thụt thêm, dòng nối tiếp nhạt hơn. */
+    .item-head {
+      margin: 12px 0 6px; font-weight: 700; font-size: 14.5px; color: #111827;
+    }
+    .item-head:first-child { margin-top: 0; }
+    .item-arrow { margin: 10px 0 6px; font-weight: 600; color: var(--primary-dark); }
+    ul.item-sub { margin: 4px 0 2px; padding-left: 18px; list-style: circle; }
+    ul.item-sub > li { margin: 3px 0; color: #374151; }
+    .item-cont {
+      margin: 2px 0 2px 2px; color: var(--muted); font-size: 13.5px;
+    }
     /* Chuỗi dài không khoảng trắng (URL…) phải bẻ dòng trong card, không tràn ra ngoài. */
-    li, .milestone, .project-title, .workstream-title, .hero p, h1 {
+    li, .milestone, .project-title, .workstream-title, .hero p, h1, .item-head, .item-cont {
       overflow-wrap: anywhere; word-break: break-word;
     }
     .milestone {
@@ -177,18 +182,13 @@ export function buildDetailedHtml(
       const streams = (p.workstreams ?? [])
         .map((w) => {
           const meta = catMeta(w.category);
-          const items = (w.items ?? [])
-            .filter((it) => it.trim())
-            .map((it) => `            <li>${esc(it)}</li>`)
-            .join('\n');
+          const items = renderItemsHtml(w.items ?? [], '          ');
           const ms = w.milestone
             ? `\n          <div class="milestone ${isReleaseWs(w, releaseKeys) ? 'release' : 'test'}">→ ${esc(w.milestone.text)}</div>`
             : '';
           return `        <div class="workstream">
           <h4 class="workstream-title">${esc(w.title)} <span class="badge ${meta.badgeClass}">${esc(meta.label)}</span></h4>
-          <ul>
-${items}
-          </ul>${ms}
+${items}${ms}
         </div>`;
         })
         .join('\n\n');
@@ -346,8 +346,15 @@ const RELEASE_TEST_CSS = `
     .sub-title { margin: 0 0 8px; color: var(--primary); font-weight: 700; }
     ul { margin: 0; padding-left: 22px; }
     li { margin: 4px 0; }
+    /* Cấp bậc nội dung nhánh: tiêu đề '#' đứng riêng, ý con thụt thêm, dòng nối tiếp nhạt hơn. */
+    .item-head { margin: 12px 0 6px; font-weight: 700; font-size: 16px; color: #111827; }
+    .item-head:first-of-type { margin-top: 0; }
+    .item-arrow { margin: 10px 0 6px; font-weight: 700; color: var(--primary); }
+    ul.item-sub { margin: 4px 0 2px; padding-left: 18px; list-style: circle; }
+    ul.item-sub > li { margin: 3px 0; color: #374151; }
+    .item-cont { margin: 2px 0 2px 2px; color: var(--muted); font-size: 14px; }
     /* Chuỗi dài không khoảng trắng (URL…) phải bẻ dòng trong khối, không tràn ra ngoài. */
-    li, .sub-title, .workstream h3, .timeline-release, .header h1 {
+    li, .sub-title, .workstream h3, .timeline-release, .header h1, .item-head, .item-cont {
       overflow-wrap: anywhere; word-break: break-word;
     }
     .timeline-list {
@@ -376,15 +383,10 @@ function rtWorkstream(
 ): string {
   const sub = w.milestone?.text || w.title;
   const subLine = sub ? `        <p class="sub-title">${esc(sub)}</p>\n` : '';
-  const items = (w.items ?? [])
-    .filter((it) => it.trim())
-    .map((it) => `          <li>${esc(it)}</li>`)
-    .join('\n');
+  const items = renderItemsHtml(w.items ?? [], '        ');
   return `      <article class="workstream">
         <h3>${roman(index)}. ${esc(projectName)}</h3>
-${subLine}        <ul>
-${items}
-        </ul>
+${subLine}${items}
       </article>`;
 }
 

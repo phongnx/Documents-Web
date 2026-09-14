@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { usePm, useReleaseKeys } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
+import ItemLines from '../components/board/ItemLines';
 import {
   catMeta,
   isReleaseWs,
@@ -218,11 +219,7 @@ export default function BoardCalendarPage() {
                       )}
                     </span>
                     {items.length > 0 && (
-                      <ul className="cal-notes">
-                        {items.map((it, ii) => (
-                          <li key={ii}>{it}</li>
-                        ))}
-                      </ul>
+                      <ItemLines items={items} className="cal-notes" />
                     )}
                   </div>
                 </li>

@@ -16,6 +16,7 @@ import {
   type WeeklyPlan,
 } from '../pmTypes';
 import { buildDetailedHtml, buildReleaseTestHtml } from '../lib/planExport';
+import { taskLines } from '../lib/planAutofill';
 import { normName, suggestAppId } from '../lib/pmText';
 import { isoLocal, weekdayVN } from '../lib/pmDates';
 import { matchTimelineRow, reconcileTimeline, tokensOf } from '../lib/planProgress';
@@ -287,6 +288,45 @@ export default function BoardPlanEditPage() {
     setDirty(false);
   };
 
+  // Dựng lại items của mọi nhánh từ mô tả task nguồn — dùng cho plan cũ sinh trước khi
+  // taskLines biết giữ marker cấp bậc ('# tiêu đề', '- đầu việc', '+ ý con'). Nhánh không
+  // có task nguồn (leader tự thêm tay) và nhánh có task nguồn đã xóa đều được giữ nguyên.
+  const syncItemsFromTasks = () => {
+    let changed = 0;
+    const projects = form.projects.map((pr) => ({
+      ...pr,
+      workstreams: (pr.workstreams ?? []).map((w) => {
+        const ids = w.sourceTaskIds ?? [];
+        if (ids.length === 0) return w;
+        // Nhánh gộp nhiều task → nối theo đúng thứ tự sourceTaskIds (luật của PmContext).
+        const items = ids.flatMap((tid) => {
+          const src = tasks.find((t) => t.id === tid);
+          return src ? taskLines(src) : [];
+        });
+        if (items.length === 0) return w;
+        if (JSON.stringify(items) === JSON.stringify(w.items ?? [])) return w;
+        changed++;
+        return { ...w, items };
+      }),
+    }));
+    if (changed === 0) {
+      window.alert(
+        'Không có nhánh nào cần đồng bộ — nội dung đã khớp với mô tả task nguồn.',
+      );
+      return;
+    }
+    if (
+      !window.confirm(
+        `Dựng lại nội dung của ${changed} nhánh từ mô tả task nguồn?\n` +
+          'Phần đã sửa TAY trong các nhánh đó sẽ bị ghi đè. Bảng chỉ đổi trên form — ' +
+          'bấm 💾 Lưu mới ghi lại.',
+      )
+    )
+      return;
+    patch({ projects });
+    setDirty(true);
+  };
+
   // ----- Upload file export vào quản lý tài liệu (hook đã khai báo ở đầu component) -----
   const PLAN_FOLDER = 'THSOFT - Weekly Plan';
   const TESTER_SUBFOLDER = 'Tester';
@@ -415,6 +455,13 @@ export default function BoardPlanEditPage() {
         <div className="plan-toolbar">
           <button type="button" className="primary" onClick={save} disabled={!dirty}>
             {dirty ? '💾 Lưu' : '✓ Đã lưu'}
+          </button>
+          <button
+            type="button"
+            onClick={syncItemsFromTasks}
+            title="Dựng lại nội dung các nhánh từ mô tả task nguồn (lấy lại cấp bậc # / - / +)"
+          >
+            🔄 Đồng bộ từ task
           </button>
           <button
             type="button"
@@ -626,6 +673,10 @@ export default function BoardPlanEditPage() {
                 }
                 placeholder="Mỗi dòng là 1 đầu việc"
               />
+              <p className="muted plan-items-hint">
+                Cấp bậc trong bản export: <code>#</code> tiêu đề · <code>-</code> đầu việc
+                · <code>+</code> ý con · dòng không dấu = phần tiếp của đầu việc trên.
+              </p>
 
               <label className="plan-milestone-toggle">
                 <input

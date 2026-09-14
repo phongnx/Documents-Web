@@ -4,6 +4,7 @@ import type { KpiRelease } from '../../kpiTypes';
 import { statusMeta } from '../../pmTypes';
 import { weekdayVN } from '../../lib/pmDates';
 import { formatDateVi } from '../../lib/reportFormat';
+import ItemLines from './ItemLines';
 
 interface Props {
   release: KpiRelease;
@@ -47,11 +48,7 @@ export default function KpiReleaseInfoDialog({ release, onClose }: Props) {
                   {t.type && <span className="muted kpi-rel-task-type">{t.type}</span>}
                 </div>
                 {t.items && t.items.length > 0 && (
-                  <ul className="kpi-rel-task-items">
-                    {t.items.map((line, j) => (
-                      <li key={j}>{line}</li>
-                    ))}
-                  </ul>
+                  <ItemLines items={t.items} className="kpi-rel-task-items" />
                 )}
               </section>
             ))}

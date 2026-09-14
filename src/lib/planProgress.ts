@@ -15,6 +15,7 @@ import {
   type WorkstreamState,
 } from '../pmTypes';
 import { formatDateVi, parseBody } from './reportFormat';
+import { hasMarker } from './planItems';
 import { normName as norm } from './pmText';
 import { weekdayVN } from './pmDates';
 
@@ -614,7 +615,11 @@ export function buildReleaseDoneText(
     const when = r.doneDate
       ? `✅ ${weekdayVN(r.doneDate)} (${formatDateVi(r.doneDate)})`
       : '✅ done (không rõ ngày)';
-    return [`${i + 1}. ${title} — ${when}`, ...r.items.map((it) => `- ${it}`)].join('\n');
+    // Giữ marker cấp bậc sẵn có của item; chỉ dòng trần mới thêm '- '.
+    return [
+      `${i + 1}. ${title} — ${when}`,
+      ...r.items.map((it) => (hasMarker(it) ? it.trim() : `- ${it}`)),
+    ].join('\n');
   });
   return [
     `🚀 Release tuần ${formatDateVi(plan.weekStart)} – ${formatDateVi(plan.weekEnd)}`,

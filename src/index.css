@@ -3570,3 +3570,43 @@ a.kpi-rel-chip:hover {
   border-radius: 10px;
   box-shadow: 0 2px 10px var(--shadow);
 }
+
+/* ---------- Cấp bậc nội dung item (ItemLines) ----------
+   Dùng chung cho preview plan, lịch tuần và dialog mốc release ở KPI Log — cùng luật
+   marker với bản HTML export (xem planItems.ts), để web và file export nhìn như nhau. */
+.item-lines > :first-child {
+  margin-top: 0;
+}
+.item-head {
+  margin: 10px 0 4px;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.item-arrow {
+  margin: 8px 0 4px;
+  font-weight: 600;
+  color: var(--primary);
+  overflow-wrap: anywhere;
+}
+.item-lines ul.item-sub {
+  margin: 2px 0 2px;
+  padding-left: 18px;
+  list-style: circle;
+}
+.item-cont {
+  margin: 2px 0 2px 2px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+/* Gợi ý marker dưới ô sửa nội dung nhánh ở trang sửa plan. */
+.plan-items-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.plan-items-hint code {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--subtle);
+  font-size: 12px;
+}

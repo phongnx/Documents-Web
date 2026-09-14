@@ -1,6 +1,7 @@
 // Tiện ích cho "Báo cáo ngày": số La Mã, định dạng ngày, tách dòng theo marker,
 // và dựng lại đúng text báo cáo để copy/paste ra ngoài.
 import type { DailyReport, ReportProject, WeeklyPlan } from '../pmTypes';
+import { hasMarker } from './planItems';
 
 // Sinh khung project báo cáo từ plan tuần: mỗi nhánh CHƯA done → "# tiêu đề:" +
 // "- item" + "-> milestone" (đúng marker bộ sync đọc); nhánh done bị bỏ (không cần
@@ -13,7 +14,10 @@ export function reportProjectsFromPlan(plan: WeeklyPlan): ReportProject[] {
     const body = wss
       .map((w) => {
         const lines = [`# ${w.title}:`];
-        for (const it of w.items ?? []) if (it.trim()) lines.push(`- ${it.trim()}`);
+        // Item đã mang marker cấp bậc ('- ', '+ ', '# ') thì GIỮ NGUYÊN — ép thêm '- '
+        // sẽ ra '- # Scan QR' và parseBody đọc nhầm tiêu đề thành 1 đầu việc.
+        for (const it of w.items ?? [])
+          if (it.trim()) lines.push(hasMarker(it) ? it.trim() : `- ${it.trim()}`);
         if (w.milestone?.text) lines.push(`-> ${w.milestone.text}`);
         return lines.join('\n');
       })

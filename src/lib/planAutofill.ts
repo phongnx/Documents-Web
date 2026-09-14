@@ -21,17 +21,20 @@ import {
   type WorkstreamCategory,
 } from '../pmTypes';
 import { weekdayVN } from './pmDates';
+import { normalizeItemLine } from './planItems';
 import { normName } from './pmText';
 import { dedupTimeline } from './planProgress';
 
 /** Shape input tạo plan (WeeklyPlan bỏ các field do context điền). */
 export type PlanDraft = Omit<WeeklyPlan, 'id' | 'order' | 'createdAt' | 'updatedAt'>;
 
-// Tách mô tả task thành các dòng "item" đã làm sạch (bỏ #, gạch đầu dòng, dòng rỗng).
+// Tách mô tả task thành các dòng "item", GIỮ marker cấp bậc ('# tiêu đề', '- đầu việc',
+// '+ ý con', '-> mốc') đã chuẩn hóa — trước đây strip sạch marker nên bản export và
+// dialog KPI mất hết phân cấp, mọi dòng thành 1 item ngang hàng.
 export function taskLines(t: TaskItem): string[] {
-  const raw = (t.description ?? '').split('\n');
-  const lines = raw
-    .map((l) => l.replace(/^\s*[#>-]+\s*/, '').trim())
+  const lines = (t.description ?? '')
+    .split('\n')
+    .map((l) => normalizeItemLine(l))
     .filter((l) => l.length > 0);
   return lines.length ? lines : [t.title];
 }

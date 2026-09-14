@@ -8,6 +8,7 @@ import {
   type WeeklyPlan,
 } from '../../pmTypes';
 import { useReleaseKeys } from '../../context/PmContext';
+import ItemLines from './ItemLines';
 
 // Dự án có ít nhất 1 nhánh release.
 const hasRelease = (p: PlanProject, releaseKeys: Set<string>) =>
@@ -34,13 +35,7 @@ function Workstream({ w, releaseKeys }: { w: PlanWorkstream; releaseKeys: Set<st
           </span>
         )}
       </div>
-      {items.length > 0 && (
-        <ul className="pp-items">
-          {items.map((it, ii) => (
-            <li key={ii}>{it}</li>
-          ))}
-        </ul>
-      )}
+      {items.length > 0 && <ItemLines items={items} className="pp-items" />}
     </div>
   );
 }
