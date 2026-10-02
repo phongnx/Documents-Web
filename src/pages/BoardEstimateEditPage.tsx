@@ -14,8 +14,15 @@ import { formatDateVi } from '../lib/reportFormat';
 
 export default function BoardEstimateEditPage() {
   const { id = '' } = useParams();
-  const { apps, members, setEstimateState, setEstimateLocked, updateEstimateMeta } =
-    usePm();
+  const {
+    apps,
+    members,
+    tasks,
+    estimates,
+    setEstimateState,
+    setEstimateLocked,
+    updateEstimateMeta,
+  } = usePm();
   const [writeError, setWriteError] = useState('');
   const sheet = useEstSheet(id, setWriteError);
   const [metaOpen, setMetaOpen] = useState(false);
@@ -163,10 +170,19 @@ export default function BoardEstimateEditPage() {
           title="✏️ Thông tin bảng"
           apps={apps}
           members={members}
+          tasks={tasks}
+          takenTaskIds={
+            new Set(
+              estimates
+                .filter((e) => e.id !== id && e.taskId)
+                .map((e) => e.taskId as string),
+            )
+          }
           initial={{
             title: meta.title,
             appId: meta.appId,
             version: meta.version,
+            taskId: meta.taskId,
             startDate: meta.startDate,
             endDate: meta.endDate,
             holidays: meta.holidays,

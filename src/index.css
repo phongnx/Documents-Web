@@ -3610,3 +3610,49 @@ a.kpi-rel-chip:hover {
   background: var(--subtle);
   font-size: 12px;
 }
+
+/* ---------- Trang Estimate của member (MemberEstimateList) ----------
+   Dùng lại .task-row/.task-main của trang task theo app; chỉ thêm nhóm theo app,
+   dòng tóm tắt bảng, và đánh dấu dòng đã có bảng (click được). */
+.mest-app {
+  margin-top: 18px;
+}
+.mest-app-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.mest-app-title .muted {
+  font-weight: 400;
+  font-size: 13px;
+}
+.mest-est {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-size: 13px;
+}
+.task-row.mest-has-est {
+  border-left: 3px solid var(--primary);
+}
+/* Dòng chưa có bảng: không click được nhưng vẫn đọc rõ (không mờ như nút disabled). */
+.task-row .task-main:disabled {
+  cursor: default;
+  opacity: 1;
+  color: inherit;
+}
+
+/* Dialog estimate: người tham gia thu gọn theo app đang chọn. */
+.est-participant.est-outside {
+  color: var(--muted);
+}
+.est-participants-note {
+  margin: 2px 0 6px;
+  font-size: 12.5px;
+}
+.est-participants-more {
+  align-self: flex-start;
+  margin-top: 6px;
+  font-size: 12.5px;
+}

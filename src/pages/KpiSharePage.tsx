@@ -109,6 +109,17 @@ export default function KpiSharePage() {
       <header className="share-header">
         <span className="brand">📝 KPI log{sheet.meta ? ` · ${sheet.meta.memberName}` : ''}</span>
         <div className="share-header-actions">
+          {sheet.state === 'ready' && token && (
+            // Lối vào LUÔN có (kể cả chưa tham gia bảng nào) — trang Estimate liệt kê task
+            // các app được gán, task nào leader đã mở bảng thì click vào được.
+            <Link
+              to={`/share/kpi/${token}/estimates`}
+              className="doc-action"
+              title="Task các app được gán + bảng estimate của từng task"
+            >
+              📐 Estimate của tôi
+            </Link>
+          )}
           {sheet.state === 'ready' && (
             <button
               type="button"
@@ -161,21 +172,6 @@ export default function KpiSharePage() {
                   {relOpen ? '▴ Thu gọn' : `+${releases.length - 2} ▾`}
                 </button>
               )}
-            </div>
-          )}
-          {(sheet.meta?.estimates?.length ?? 0) > 0 && (
-            <div className="kpi-releases">
-              <span className="muted">📐 Bảng estimate:</span>
-              {sheet.meta!.estimates!.map((e) => (
-                <Link
-                  key={e.id}
-                  className="kpi-rel-chip"
-                  to={`/share/est/${e.id}?t=${token}`}
-                  title="Mở bảng break task & estimate"
-                >
-                  {e.title}
-                </Link>
-              ))}
             </div>
           )}
           {locked && (

@@ -77,6 +77,55 @@ export interface KpiRelease {
   tasks?: KpiReleaseTask[];
 }
 
+/** Snapshot gọn 1 task của leader cho trang Estimate của member —
+ *  shared/kpi/{token}/tasks/{taskId}. Member ẩn danh không đọc được users/…/tasks nên
+ *  leader đẩy xuống (node RIÊNG, không nằm trong meta: meta tải mỗi lần mở trang KPI,
+ *  còn danh sách task chỉ tải khi vào trang Estimate). Không kèm mô tả để payload gọn. */
+export interface KpiTaskSnap {
+  id: string;
+  appId: string;
+  appName: string;
+  title: string;
+  type?: string;
+  status: string;
+  version?: string;
+  startDate?: string;
+  endDate?: string;
+  planDate?: string;
+  order: number;
+}
+
+/** Dựng snapshot từ 1 task (loại field rỗng — RTDB không nhận undefined). */
+export function taskSnapOf(
+  t: {
+    id: string;
+    appId?: string;
+    title: string;
+    type?: string;
+    status: string;
+    version?: string;
+    startDate?: string;
+    endDate?: string;
+    planDate?: string;
+    order: number;
+  },
+  appName: string,
+): KpiTaskSnap {
+  return {
+    id: t.id,
+    appId: t.appId ?? '',
+    appName,
+    title: t.title,
+    status: t.status,
+    order: t.order,
+    ...(t.type ? { type: t.type } : {}),
+    ...(t.version ? { version: t.version } : {}),
+    ...(t.startDate ? { startDate: t.startDate } : {}),
+    ...(t.endDate ? { endDate: t.endDate } : {}),
+    ...(t.planDate ? { planDate: t.planDate } : {}),
+  };
+}
+
 /** Meta của sheet — shared/kpi/{token}/meta. Chỉ owner ghi; ownerId bất biến (rule validate). */
 export interface KpiSheetMeta {
   ownerId: string;
@@ -93,8 +142,9 @@ export interface KpiSheetMeta {
   rules?: KpiRuleGroup[];
   /** Snapshot các mốc release SẮP TỚI của app được gán (member xem lịch ở header). */
   releases?: KpiRelease[];
-  /** Các bảng estimate member này tham gia (leader sync khi gán participants). */
-  estimates?: { id: string; title: string }[];
+  /** Các bảng estimate member này tham gia (leader sync khi gán participants).
+   *  taskId = task được estimate (thiếu = bảng cũ theo phase/release). */
+  estimates?: { id: string; title: string; taskId?: string }[];
   /** true = khóa ghi (member nghỉ/lộ link) — rule chặn member ghi entries. */
   locked?: boolean;
   createdAt: string;

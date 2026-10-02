@@ -2,7 +2,7 @@
 // Nội dung dòng là của member (leader không sửa hộ — muốn sửa thì mở link share);
 // leader chấm điểm qua popover, xóa dòng (kèm điểm), copy link share.
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import KpiLogTable from '../components/board/KpiLogTable';
@@ -16,6 +16,7 @@ import { findReopenSuspects, REOPEN_DELTA, type KpiEntry } from '../kpiTypes';
 
 export default function BoardKpiMemberPage() {
   const { memberId = '' } = useParams();
+  const navigate = useNavigate();
   const { members, meta, loading, syncKpiSheetMeta } = usePm();
   const member = members.find((m) => m.id === memberId);
 
@@ -109,6 +110,13 @@ export default function BoardKpiMemberPage() {
           {member.active ? '👤' : '🔒'} {member.name}
         </strong>
         <div className="plan-toolbar">
+          <button
+            type="button"
+            title="Task các app được gán cho member + bảng estimate của từng task"
+            onClick={() => navigate(`/board/kpi/${member.id}/estimates`)}
+          >
+            📐 Estimate
+          </button>
           <button
             type="button"
             className={reopenSuspects.length > 0 ? 'kpi-reopen-alert' : undefined}

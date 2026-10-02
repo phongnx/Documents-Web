@@ -15,11 +15,13 @@ import { useAuth } from '../auth/useAuth';
 import { computeSplit, keyOfTask } from '../lib/flavorSplit';
 import {
   DEFAULT_KPI_RULES,
+  taskSnapOf,
   type KpiMember,
   type KpiRelease,
   type KpiReleaseTask,
   type KpiRuleGroup,
   type KpiSheetMeta,
+  type KpiTaskSnap,
   type KpiSummary,
   type KpiSummaryIndexItem,
   type KpiSummaryMember,
@@ -129,6 +131,21 @@ function upcomingReleases(assigned: AppItem[], tasks: TaskItem[]): KpiRelease[] 
         ...(relTasks.length ? { tasks: relTasks } : {}),
       };
     });
+}
+
+// Snapshot TOÀN BỘ task của các app được gán (kể cả đã xong — trang Estimate của member
+// lọc mặc định "chưa xong" nhưng vẫn xem lại được task cũ). Trả null khi rỗng để RTDB
+// xóa node. Đo data thật: 2–23 KB/member (leader gán đủ 24 app thì ~69 KB).
+function memberTaskSnaps(
+  assigned: AppItem[],
+  tasks: TaskItem[],
+): Record<string, KpiTaskSnap> | null {
+  const out: Record<string, KpiTaskSnap> = {};
+  for (const t of tasks) {
+    const app = t.appId ? assigned.find((a) => a.id === t.appId) : undefined;
+    if (app) out[t.id] = taskSnapOf(t, app.name);
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 // Thay version cũ bằng version mới trong 1 chuỗi (không phân biệt hoa thường);
@@ -287,6 +304,8 @@ export interface EstMetaInput {
   title: string;
   appId?: string;
   version?: string;
+  /** Task được estimate ('' khi sửa = gỡ gắn task). */
+  taskId?: string;
   startDate?: string;
   endDate?: string;
   holidays?: number;
@@ -609,6 +628,9 @@ export function PmProvider({ children }: { children: ReactNode }) {
         writes[`shared/kpi/${m.token}/meta/releases`] = releases.length
           ? releases
           : null;
+        // Cùng nhịp với releases: mọi mutation chạm task đều đi qua đây, nên danh sách
+        // task trên trang Estimate của member luôn khớp task thật của leader.
+        writes[`shared/kpi/${m.token}/tasks`] = memberTaskSnaps(assigned, nextTasks);
       }
     },
     [],
@@ -1057,7 +1079,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
     (memberId: string): { id: string; title: string }[] =>
       stateRef.current.estimates
         .filter((e) => e.participantIds?.includes(memberId))
-        .map((e) => ({ id: e.id, title: e.title })),
+        .map((e) => ({ id: e.id, title: e.title, ...(e.taskId ? { taskId: e.taskId } : {}) })),
     [],
   );
 
@@ -1085,6 +1107,18 @@ export function PmProvider({ children }: { children: ReactNode }) {
       };
     },
     [estimatesOfMember],
+  );
+
+  // Snapshot task cho trang Estimate của member (node shared/kpi/{token}/tasks).
+  const kpiTaskSnaps = useCallback(
+    (member: KpiMember): Record<string, KpiTaskSnap> | null => {
+      const apps = stateRef.current.apps;
+      const assigned = (member.projectIds ?? [])
+        .map((id) => apps.find((a) => a.id === id))
+        .filter((a): a is AppItem => !!a);
+      return memberTaskSnaps(assigned, stateRef.current.tasks);
+    },
+    [],
   );
 
   const addMember = useCallback(
@@ -1222,13 +1256,17 @@ export function PmProvider({ children }: { children: ReactNode }) {
       if (!db || !uid) return;
       const cur = stateRef.current.members.find((m) => m.id === memberId);
       if (!cur) return;
-      update(ref(db, `shared/kpi/${cur.token}/meta`), {
-        memberName: cur.name,
-        memberId: cur.id,
-        ...kpiSnapshot(cur),
-      });
+      const base = `shared/kpi/${cur.token}`;
+      const writes: Record<string, unknown> = {
+        [`${base}/meta/memberName`]: cur.name,
+        [`${base}/meta/memberId`]: cur.id,
+        // Node task nằm NGOÀI meta → phải multi-path từ gốc thay vì update(meta).
+        [`${base}/tasks`]: kpiTaskSnaps(cur),
+      };
+      for (const [k, v] of Object.entries(kpiSnapshot(cur))) writes[`${base}/meta/${k}`] = v;
+      update(ref(db), writes);
     },
-    [uid, kpiSnapshot],
+    [uid, kpiSnapshot, kpiTaskSnaps],
   );
 
   // Đồng bộ snapshot cho MỌI member trong 1 multi-path update (nút "🔄 Đồng bộ tất
@@ -1250,10 +1288,11 @@ export function PmProvider({ children }: { children: ReactNode }) {
         // Mảng rỗng → null để RTDB xóa key (giữ đúng hành vi của các mutator khác).
         writes[`${base}/${k}`] = Array.isArray(v) && v.length === 0 ? null : v;
       }
+      writes[`shared/kpi/${m.token}/tasks`] = kpiTaskSnaps(m);
     }
     await update(ref(db), writes);
     return list.length;
-  }, [uid, kpiSnapshot]);
+  }, [uid, kpiSnapshot, kpiTaskSnaps]);
 
   // Gán danh sách project cho member + đồng bộ ngay sang sheet (1 lần ghi).
   const setMemberProjects = useCallback(
@@ -1275,9 +1314,10 @@ export function PmProvider({ children }: { children: ReactNode }) {
         [`shared/kpi/${cur.token}/meta/releases`]: snapshot.releases?.length
           ? snapshot.releases
           : null,
+        [`shared/kpi/${cur.token}/tasks`]: kpiTaskSnaps({ ...cur, projectIds: cleanIds }),
       });
     },
-    [uid, kpiSnapshot],
+    [uid, kpiSnapshot, kpiTaskSnaps],
   );
 
   // ---------- Break task & Estimate ----------
@@ -1294,7 +1334,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
         if (!memberIds.has(m.id)) continue;
         const list = nextIndex
           .filter((e) => e.participantIds?.includes(m.id))
-          .map((e) => ({ id: e.id, title: e.title }));
+          .map((e) => ({ id: e.id, title: e.title, ...(e.taskId ? { taskId: e.taskId } : {}) }));
         writes[`shared/kpi/${m.token}/meta/estimates`] = list.length ? list : null;
       }
     },
@@ -1316,11 +1356,20 @@ export function PmProvider({ children }: { children: ReactNode }) {
       if (!db || !uid) return null;
       const title = data.title.trim();
       if (!title) return null;
+      // 1 task ↔ tối đa 1 bảng: task đã có bảng thì trả bảng đó, không tạo trùng
+      // (bấm 2 lần / 2 tab cùng mở trang Estimate của member).
+      if (data.taskId) {
+        const existed = stateRef.current.estimates.find((e) => e.taskId === data.taskId);
+        if (existed) return existed.id;
+      }
       const now = new Date().toISOString();
       const id = uuidv4();
       const participants = toParticipants(data.participantIds);
       const appName = data.appId
         ? stateRef.current.apps.find((a) => a.id === data.appId)?.name
+        : undefined;
+      const taskTitle = data.taskId
+        ? stateRef.current.tasks.find((t) => t.id === data.taskId)?.title
         : undefined;
       const estMeta: EstimateMeta = {
         ownerId: uid,
@@ -1330,6 +1379,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
         ...(data.appId ? { appId: data.appId } : {}),
         ...(appName ? { appName } : {}),
         ...(data.version ? { version: data.version } : {}),
+        ...(data.taskId ? { taskId: data.taskId } : {}),
+        ...(taskTitle ? { taskTitle } : {}),
         ...(data.startDate ? { startDate: data.startDate } : {}),
         ...(data.endDate ? { endDate: data.endDate } : {}),
         ...(typeof data.holidays === 'number' ? { holidays: data.holidays } : {}),
@@ -1341,6 +1392,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
         createdAt: now,
         ...(data.appId ? { appId: data.appId } : {}),
         ...(data.version ? { version: data.version } : {}),
+        ...(data.taskId ? { taskId: data.taskId } : {}),
         ...(participants.length
           ? { participantIds: participants.map((p) => p.memberId) }
           : {}),
@@ -1387,6 +1439,23 @@ export function PmProvider({ children }: { children: ReactNode }) {
         else delete nextItem.version;
         writes[`${base}/version`] = patch.version || null;
       }
+      let taskChanged = false;
+      if ('taskId' in patch && (patch.taskId || undefined) !== cur.taskId) {
+        // Task đích đã có bảng khác → không gắn (giữ luật 1 task ↔ 1 bảng).
+        const taken =
+          !!patch.taskId &&
+          stateRef.current.estimates.some((e) => e.id !== id && e.taskId === patch.taskId);
+        if (!taken) {
+          const taskTitle = patch.taskId
+            ? stateRef.current.tasks.find((t) => t.id === patch.taskId)?.title
+            : undefined;
+          if (patch.taskId) nextItem.taskId = patch.taskId;
+          else delete nextItem.taskId;
+          writes[`${base}/taskId`] = patch.taskId || null;
+          writes[`${base}/taskTitle`] = taskTitle || null;
+          taskChanged = true;
+        }
+      }
       if ('startDate' in patch) writes[`${base}/startDate`] = patch.startDate || null;
       if ('endDate' in patch) writes[`${base}/endDate`] = patch.endDate || null;
       if ('holidays' in patch)
@@ -1409,8 +1478,9 @@ export function PmProvider({ children }: { children: ReactNode }) {
       const nextIndex = stateRef.current.estimates.map((e) =>
         e.id === id ? nextItem : e,
       );
-      // Đổi title cũng phải sync lại nhãn trên sheet KPI của participants hiện có.
-      if (patch.title !== undefined)
+      // Đổi title / đổi task gắn cũng phải sync lại mục Estimate (nhãn + taskId) trên
+      // sheet KPI của participants hiện có.
+      if (patch.title !== undefined || taskChanged)
         for (const mid of nextItem.participantIds ?? []) affected.add(mid);
       kpiEstimatesWrites(writes, nextIndex, affected);
       update(ref(db), writes);

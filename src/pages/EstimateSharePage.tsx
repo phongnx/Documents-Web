@@ -99,6 +99,11 @@ export default function EstimateSharePage() {
         </span>
         <div className="share-header-actions">
           {kpiToken && (
+            <Link to={`/share/kpi/${kpiToken}/estimates`} className="board-docs-link">
+              ← Estimate của tôi
+            </Link>
+          )}
+          {kpiToken && (
             <Link to={`/share/kpi/${kpiToken}`} className="board-docs-link">
               📝 Bảng KPI của tôi
             </Link>

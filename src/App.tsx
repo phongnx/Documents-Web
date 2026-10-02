@@ -23,6 +23,8 @@ import BoardReportEditPage from './pages/BoardReportEditPage';
 import BoardKpiListPage from './pages/BoardKpiListPage';
 import BoardKpiMemberPage from './pages/BoardKpiMemberPage';
 import BoardKpiSummaryPage from './pages/BoardKpiSummaryPage';
+import BoardKpiEstimateListPage from './pages/BoardKpiEstimateListPage';
+import KpiEstimateListPage from './pages/KpiEstimateListPage';
 import KpiSummarySharePage from './pages/KpiSummarySharePage';
 import BoardEstimateListPage from './pages/BoardEstimateListPage';
 import BoardEstimateEditPage from './pages/BoardEstimateEditPage';
@@ -128,6 +130,7 @@ function AppShell() {
         {/* Đặt trước :memberId — segment tĩnh "summary" được ưu tiên match. */}
         <Route path="/board/kpi/summary/:monthKey" element={<BoardKpiSummaryPage />} />
         <Route path="/board/kpi/:memberId" element={<BoardKpiMemberPage />} />
+        <Route path="/board/kpi/:memberId/estimates" element={<BoardKpiEstimateListPage />} />
         <Route path="/board/estimates" element={<BoardEstimateListPage />} />
         <Route path="/board/estimates/:id" element={<BoardEstimateEditPage />} />
       </Route>
@@ -148,6 +151,8 @@ export default function App() {
           <Route path="/share/f/:id/:docId" element={<SharedFolderPage />} />
           {/* Trang log KPI của member — link riêng, member edit ẩn danh */}
           <Route path="/share/kpi/:token" element={<KpiSharePage />} />
+          {/* Estimate của member: task các app được gán + bảng của từng task */}
+          <Route path="/share/kpi/:token/estimates" element={<KpiEstimateListPage />} />
           {/* Bảng break task & estimate — member tham gia mở từ trang KPI của mình */}
           <Route path="/share/est/:id" element={<EstimateSharePage />} />
           {/* Bảng tổng kết KPI tháng — share chỉ xem */}

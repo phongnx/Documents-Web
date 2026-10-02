@@ -47,6 +47,11 @@ export interface EstimateMeta {
   appId?: string;
   appName?: string;
   version?: string;
+  /** Task của leader mà bảng này estimate (1 task ↔ tối đa 1 bảng, mọi member làm task
+   *  đó dùng chung). Bảng cũ theo phase/release không có field này. */
+  taskId?: string;
+  /** Tiêu đề task lúc gắn (denormalized — task bị xóa vẫn hiện được tên). */
+  taskTitle?: string;
   /** ISO 'yyyy-mm-dd'. */
   startDate?: string;
   endDate?: string;
@@ -68,6 +73,8 @@ export interface EstIndexItem {
   title: string;
   appId?: string;
   version?: string;
+  /** Task được estimate (xem EstimateMeta.taskId). */
+  taskId?: string;
   /** memberId các member tham gia — nguồn tính mục "Estimate" trên sheet KPI. */
   participantIds?: string[];
   createdAt: string;
@@ -221,4 +228,39 @@ export function estProgress(groups?: Record<string, EstGroup>): {
     }
   }
   return { pct: sum > 0 ? Math.round((done / sum) * 100) : 0, doneCount, total };
+}
+
+/** Tóm tắt 1 bảng cho dòng danh sách: state, tiến độ, Σ est / Σ thực tế. */
+export interface EstSummary {
+  state: EstState;
+  locked: boolean;
+  pct: number;
+  doneCount: number;
+  total: number;
+  estHours: number;
+  actualMin: number;
+}
+
+export function estSummaryOf(
+  meta: EstimateMeta,
+  groups?: Record<string, EstGroup>,
+  logs?: EstLogs,
+): EstSummary {
+  const p = estProgress(groups);
+  let estHours = 0;
+  let actualMin = 0;
+  for (const g of sortedGroups(groups))
+    for (const t of sortedTasks(g)) {
+      estHours += t.estHours ?? 0;
+      actualMin += actualMinOf(logs, t.id);
+    }
+  return {
+    state: meta.state,
+    locked: meta.locked === true,
+    pct: p.pct,
+    doneCount: p.doneCount,
+    total: p.total,
+    estHours: Number(estHours.toFixed(2)),
+    actualMin,
+  };
 }
