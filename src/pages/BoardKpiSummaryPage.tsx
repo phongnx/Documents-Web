@@ -5,17 +5,37 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { get, ref } from 'firebase/database';
+import { v4 as uuidv4 } from 'uuid';
 import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import KpiSummaryTable from '../components/board/KpiSummaryTable';
+import KpiSummaryAddMemberDialog from '../components/board/KpiSummaryAddMemberDialog';
 import { useUnsavedGuard } from '../hooks/useUnsavedGuard';
 import { db } from '../lib/firebase';
-import { normalizeSummaryRead, optimizeSummaryMembers } from '../lib/kpiSummary';
-import type { KpiSummary, KpiSummaryMember, KpiSummaryMeta } from '../kpiTypes';
+import {
+  normalizeSummaryRead,
+  optimizeSummaryMembers,
+  optimizeSummaryRows,
+} from '../lib/kpiSummary';
+import {
+  KPI_MONTH_BASE,
+  type KpiMember,
+  type KpiSummary,
+  type KpiSummaryMember,
+  type KpiSummaryMeta,
+} from '../kpiTypes';
 
 export default function BoardKpiSummaryPage() {
   const { monthKey = '' } = useParams();
-  const { meta, ensureKpiSummary, saveKpiSummary, rebuildKpiSummaryMembers } = usePm();
+  const { meta, members, ensureKpiSummary, saveKpiSummary, rebuildKpiSummaryMembers } =
+    usePm();
+  const [adding, setAdding] = useState(false);
+  // memberId khối đang tổng hợp riêng (chặn bấm 2 lần trong lúc chờ đọc log).
+  const [busyMember, setBusyMember] = useState<string | null>(null);
+
+  // Khối có thuộc 1 KPI member còn tồn tại không — khối nhập tay (VD dữ liệu chuyển từ
+  // Excel) hoặc member đã bị xóa thì không có log để tổng hợp.
+  const isKpiMember = (m: KpiSummaryMember) => members.some((x) => x.id === m.memberId);
 
   const [id, setId] = useState<string | null>(null);
   const [summary, setSummary] = useState<KpiSummary | null>(null);
@@ -93,22 +113,132 @@ export default function BoardKpiSummaryPage() {
     }
   };
 
-  // Tổng hợp lại từ log hiện tại: thay toàn bộ khối member (giữ Nghỉ lễ chung),
-  // chỉ đổi trên form — bấm 💾 Lưu mới ghi đè bản cũ.
+  // Tổng hợp lại từ log hiện tại: thay khối của mọi KPI member (giữ Nghỉ lễ chung) —
+  // khối THÊM TAY (không thuộc KPI member nào) giữ nguyên, nối cuối bảng, vì chúng không
+  // có log để dựng lại. Chỉ đổi trên form — bấm 💾 Lưu mới ghi đè bản cũ.
   const onRebuild = async () => {
     if (!summary) return;
+    const manual = summary.members.filter((m) => !isKpiMember(m));
     if (
       !window.confirm(
-        'Tổng hợp lại từ log sẽ THAY THẾ toàn bộ nội dung đã sửa tay (trừ ô Nghỉ lễ chung). Tiếp tục?',
+        'Tổng hợp lại từ log sẽ THAY THẾ nội dung đã sửa tay của mọi KPI member (trừ ô Nghỉ lễ chung).' +
+          (manual.length
+            ? `\n${manual.length} khối thêm tay (${manual.map((m) => m.name).join(', ')}) được giữ nguyên.`
+            : '') +
+          '\nTiếp tục?',
       )
     )
       return;
     setRebuilding(true);
-    const members = await rebuildKpiSummaryMembers(monthKey);
+    const rebuilt = await rebuildKpiSummaryMembers(monthKey);
     setRebuilding(false);
-    setSummary({ ...summary, members });
+    setSummary({ ...summary, members: [...rebuilt, ...manual] });
     setDirty(true);
     setNotice('Đã tổng hợp lại từ log — kiểm tra rồi bấm 💾 Lưu để chốt.');
+  };
+
+  // Khối trống KPI 100 — cho member không có log trong tháng / khối nhập tay.
+  const emptyBlock = (memberId: string, name: string, withRow: boolean): KpiSummaryMember => ({
+    memberId,
+    name,
+    kpiScore: KPI_MONTH_BASE,
+    order: 0,
+    rows: withRow ? [{ id: uuidv4(), order: 0 }] : [],
+  });
+
+  // Đọc log tháng của 1 KPI member → khối tổng hợp (null = tháng này không có log/nghỉ).
+  const buildOne = async (m: KpiMember): Promise<KpiSummaryMember | null> => {
+    const res = await rebuildKpiSummaryMembers(monthKey, [m.id]);
+    return res[0] ?? null;
+  };
+
+  // 🔄 Riêng 1 khối: đọc log TRƯỚC rồi mới hỏi, để câu hỏi nói đúng kết quả sẽ thay.
+  const onRebuildMember = async (mi: number) => {
+    if (!summary || busyMember) return;
+    const cur = summary.members[mi];
+    const kpiMember = members.find((x) => x.id === cur.memberId);
+    if (!kpiMember) return;
+    setBusyMember(cur.memberId);
+    let block: KpiSummaryMember | null;
+    try {
+      block = await buildOne(kpiMember);
+    } finally {
+      setBusyMember(null);
+    }
+    const msg = block
+      ? `Tổng hợp lại khối "${cur.name}" từ log: ${block.rows.length} đầu mục, KPI tháng ${block.kpiScore}.\nThay các dòng, KPI tháng và ngày nghỉ đã sửa tay của khối này?`
+      : `"${cur.name}" không có log/nghỉ phép nào trong tháng — khối sẽ về rỗng, KPI ${KPI_MONTH_BASE}. Tiếp tục?`;
+    if (!window.confirm(msg)) return;
+    const next = block ?? emptyBlock(cur.memberId, kpiMember.name, false);
+    // Thay theo memberId (không theo vị trí mi): trong lúc chờ đọc log, bảng có thể đã
+    // bị thêm/xóa khối khiến chỉ số lệch.
+    setSummary((s) =>
+      s
+        ? {
+            ...s,
+            members: s.members.map((m) =>
+              m.memberId === cur.memberId ? { ...next, order: m.order } : m,
+            ),
+          }
+        : s,
+    );
+    setDirty(true);
+    setNotice(`Đã tổng hợp lại khối "${cur.name}" — kiểm tra rồi bấm 💾 Lưu để chốt.`);
+  };
+
+  // 🧹 Riêng 1 khối — cùng luật với nút tối ưu toàn bảng.
+  const onOptimizeMember = (mi: number) => {
+    if (!summary) return;
+    const cur = summary.members[mi];
+    const before = (cur.rows ?? []).length;
+    const rows = optimizeSummaryRows(cur.rows ?? []);
+    if (rows.length === before) {
+      setNotice(`Khối "${cur.name}" không có dòng nào gộp được (khác App / Giai đoạn / Mốc).`);
+      return;
+    }
+    if (!window.confirm(`Gộp ${before} dòng của "${cur.name}" còn ${rows.length} dòng?`)) return;
+    setSummary({
+      ...summary,
+      members: summary.members.map((m, i) => (i === mi ? { ...m, rows } : m)),
+    });
+    setDirty(true);
+    setNotice(`Đã gộp "${cur.name}": ${before} → ${rows.length} dòng — bấm 💾 Lưu để chốt.`);
+  };
+
+  // ＋ Thêm member có sẵn: tổng hợp luôn từ log, nối cuối bảng.
+  const onPickExisting = async (m: KpiMember) => {
+    if (!summary) return;
+    setBusyMember(m.id);
+    let block: KpiSummaryMember | null;
+    try {
+      block = await buildOne(m);
+    } finally {
+      setBusyMember(null);
+    }
+    const next = block ?? emptyBlock(m.id, m.name, false);
+    // Mở dialog thêm lần nữa trong lúc đang đọc log → có thể chọn trùng; chặn ở đây.
+    setSummary((s) =>
+      s && !s.members.some((x) => x.memberId === m.id)
+        ? { ...s, members: [...s.members, next] }
+        : s,
+    );
+    setDirty(true);
+    setNotice(
+      block
+        ? `Đã thêm "${m.name}" (${block.rows.length} đầu mục từ log) — bấm 💾 Lưu để chốt.`
+        : `Đã thêm "${m.name}" — tháng này không có log nên khối trống, KPI ${KPI_MONTH_BASE}.`,
+    );
+  };
+
+  // ＋ Nhập tay: memberId riêng (không trùng KPI member nào) → khối được giữ khi 🔄 toàn bảng.
+  const onAddManual = (name: string) => {
+    if (!summary) return;
+    setSummary({
+      ...summary,
+      members: [...summary.members, emptyBlock(`manual-${uuidv4()}`, name, true)],
+    });
+    setDirty(true);
+    setNotice(`Đã thêm khối "${name}" — điền các dòng rồi bấm 💾 Lưu để chốt.`);
   };
 
   // Tối ưu bảng HIỆN TẠI (không đọc lại log): gộp các dòng cùng App+Giai đoạn+Mốc —
@@ -159,6 +289,14 @@ export default function BoardKpiSummaryPage() {
         <strong className="cal-title">📊 Tổng kết KPI tháng {monthLabel}</strong>
         {state === 'ready' && (
           <div className="plan-toolbar">
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              disabled={!!busyMember}
+              title="Thêm khối member: chọn KPI member có sẵn hoặc nhập tay"
+            >
+              {busyMember ? '⏳ Đang đọc log…' : '＋ Thêm member'}
+            </button>
             <button
               type="button"
               onClick={onRebuild}
@@ -217,6 +355,9 @@ export default function BoardKpiSummaryPage() {
             summary={summary}
             categories={meta.kpiRules.map((g) => g.label)}
             onChange={onEdit}
+            onRebuildMember={onRebuildMember}
+            canRebuildMember={isKpiMember}
+            onOptimizeMember={onOptimizeMember}
           />
           <p className="muted kpi-share-hint">
             Bảng là bản CHỐT tại thời điểm tổng hợp — log đổi sau đó không tự cập nhật
@@ -224,6 +365,18 @@ export default function BoardKpiSummaryPage() {
             sửa được.
           </p>
         </>
+      )}
+
+      {adding && summary && (
+        <KpiSummaryAddMemberDialog
+          available={members.filter(
+            (m) => !summary.members.some((x) => x.memberId === m.id),
+          )}
+          existingNames={summary.members.map((m) => m.name)}
+          onPickExisting={onPickExisting}
+          onAddManual={onAddManual}
+          onClose={() => setAdding(false)}
+        />
       )}
     </div>
   );

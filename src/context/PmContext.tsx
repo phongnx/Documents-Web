@@ -296,7 +296,11 @@ interface PmState {
   /** Ghi đè cả bảng tổng kết (sau khi leader sửa) — trả false nếu ghi lỗi. */
   saveKpiSummary: (id: string, summary: KpiSummary) => Promise<boolean>;
   /** Tổng hợp lại khối member từ log hiện tại (dùng cho nút 🔄, chưa ghi DB). */
-  rebuildKpiSummaryMembers: (monthKey: string) => Promise<KpiSummaryMember[]>;
+  /** memberIds = chỉ tổng hợp các member này (nút 🔄 từng khối); bỏ trống = mọi member. */
+  rebuildKpiSummaryMembers: (
+    monthKey: string,
+    memberIds?: string[],
+  ) => Promise<KpiSummaryMember[]>;
 }
 
 /** Input meta bảng estimate (leader nhập ở dialog tạo/sửa). */
@@ -1588,8 +1592,11 @@ export function PmProvider({ children }: { children: ReactNode }) {
   );
 
   const rebuildKpiSummaryMembers = useCallback(
-    (monthKey: string): Promise<KpiSummaryMember[]> =>
-      aggregateKpiSummaryMembers(stateRef.current.members, monthKey),
+    (monthKey: string, memberIds?: string[]): Promise<KpiSummaryMember[]> => {
+      const all = stateRef.current.members;
+      const list = memberIds ? all.filter((m) => memberIds.includes(m.id)) : all;
+      return aggregateKpiSummaryMembers(list, monthKey);
+    },
     [],
   );
 

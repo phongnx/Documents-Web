@@ -3656,3 +3656,53 @@ a.kpi-rel-chip:hover {
   margin-top: 6px;
   font-size: 12.5px;
 }
+
+/* Tổng kết KPI tháng: thu gọn/mở rộng khối member + nút 🔄 🧹 🗑️ trong ô Tên. */
+.ksum-toggle {
+  margin-right: 4px;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.ksum-toggle:hover {
+  color: var(--primary);
+}
+.ksum-name-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 6px;
+}
+.ksum-name-actions .doc-action:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.ksum-collapsed-info {
+  font-size: 13px;
+  font-style: italic;
+}
+.ksum-collapse-all {
+  margin-left: auto;
+}
+/* Dialog thêm member. */
+.ksum-add-dialog {
+  max-width: 460px;
+}
+.ksum-add-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ksum-add-body {
+  margin: 6px 0 0 24px;
+}
+.ksum-add-hint {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+}

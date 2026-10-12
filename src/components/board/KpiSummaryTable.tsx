@@ -2,6 +2,9 @@
 // - editable (trang leader): sửa inline từng ô, thêm/xóa dòng, xóa member.
 // - readonly (trang share): render text thuần, không input.
 // Mỗi member 1 tbody: cột Tên / Ngày nghỉ / KPI tháng rowspan các dòng đầu mục.
+// Thu gọn/mở rộng từng khối + cả bảng (chỉ là trạng thái hiển thị, không lưu, mặc định
+// mở hết — người xem link share luôn thấy đủ); trang leader có thêm 🔄/🧹 từng khối.
+import { useState } from 'react';
 import {
   kpiScoreClass,
   type KpiSummary,
@@ -17,6 +20,12 @@ interface Props {
   /** Danh mục giai đoạn (datalist cho ô Category — chỉ dùng khi editable). */
   categories?: string[];
   onChange?: (next: KpiSummary) => void;
+  /** 🔄 Tổng hợp lại riêng khối này từ log (trang leader). */
+  onRebuildMember?: (mi: number) => void;
+  /** Khối có log để tổng hợp không (khối nhập tay / member đã xóa → false, khóa nút 🔄). */
+  canRebuildMember?: (m: KpiSummaryMember) => boolean;
+  /** 🧹 Tối ưu riêng khối này (trang leader). */
+  onOptimizeMember?: (mi: number) => void;
 }
 
 /** Render text Tasks nhiều dòng: dòng '#' đậm (heading), còn lại giữ nguyên. */
@@ -42,8 +51,34 @@ export default function KpiSummaryTable({
   readonly: ro,
   categories,
   onChange,
+  onRebuildMember,
+  canRebuildMember,
+  onOptimizeMember,
 }: Props) {
   const editable = !ro && !!onChange;
+
+  // memberId các khối đang thu gọn. memberId lạ (khối đã xóa) chỉ nằm thừa trong set,
+  // không ảnh hưởng render; khối mới thêm không có trong set nên luôn ở trạng thái mở.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleCollapse = (id: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const allCollapsed =
+    summary.members.length > 0 && summary.members.every((m) => collapsed.has(m.memberId));
+
+  // Bấm chip tên ở thanh tổng quan: mở khối đó trước (nếu đang thu gọn) rồi mới cuộn tới.
+  const goToMember = (id: string) => {
+    if (collapsed.has(id)) toggleCollapse(id);
+    window.requestAnimationFrame(() =>
+      document
+        .getElementById(`ksum-m-${id}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    );
+  };
 
   const patchMember = (mi: number, patch: Partial<KpiSummaryMember>) =>
     onChange?.({
@@ -210,15 +245,23 @@ export default function KpiSummaryTable({
               type="button"
               className="ksum-ov-chip"
               title="Cuộn tới phần của member trong bảng"
-              onClick={() =>
-                document
-                  .getElementById(`ksum-m-${m.memberId}`)
-                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }
+              onClick={() => goToMember(m.memberId)}
             >
               {m.name} <strong className={scoreCls(m.kpiScore)}>{m.kpiScore}</strong>
             </button>
           ))}
+          <button
+            type="button"
+            className="doc-action ksum-collapse-all"
+            title={allCollapsed ? 'Mở rộng mọi member' : 'Thu gọn mọi member về 1 dòng'}
+            onClick={() =>
+              setCollapsed(
+                allCollapsed ? new Set() : new Set(summary.members.map((m) => m.memberId)),
+              )
+            }
+          >
+            {allCollapsed ? '⊞ Mở tất cả' : '⊟ Thu gọn tất cả'}
+          </button>
         </div>
       )}
     <div className="kpi-table-wrap">
@@ -264,26 +307,65 @@ export default function KpiSummaryTable({
         </thead>
         {summary.members.map((m, mi) => {
           const rows = m.rows ?? [];
-          const span = Math.max(rows.length, 1);
-          // Ô Tên dùng chung cho 2 nhánh render (member không có đầu mục / có đầu mục).
+          const isCollapsed = collapsed.has(m.memberId);
+          const span = isCollapsed ? 1 : Math.max(rows.length, 1);
+          const canRebuild = canRebuildMember ? canRebuildMember(m) : true;
+          // Ô Tên dùng chung cho mọi nhánh render (thu gọn / không đầu mục / có đầu mục).
           const nameCell = (rowSpan: number) => (
             <td className="ksum-name" rowSpan={rowSpan}>
+              <button
+                type="button"
+                className="ksum-toggle"
+                title={isCollapsed ? 'Mở rộng các đầu mục' : 'Thu gọn về 1 dòng'}
+                onClick={() => toggleCollapse(m.memberId)}
+              >
+                {isCollapsed ? '▸' : '▾'}
+              </button>
               <strong className="ksum-name-title">{m.name}</strong>
-              {editable && (
-                <button
-                  type="button"
-                  className="doc-action danger"
-                  title="Bỏ member khỏi bảng"
-                  onClick={() => deleteMember(mi)}
-                >
-                  🗑️
-                </button>
-              )}
               <div className={`ksum-name-score ${scoreCls(m.kpiScore)}`}>
                 KPI tháng: {m.kpiScore}
               </div>
+              {editable && (
+                <div className="ksum-name-actions">
+                  {onRebuildMember && (
+                    <button
+                      type="button"
+                      className="doc-action"
+                      disabled={!canRebuild}
+                      title={
+                        canRebuild
+                          ? 'Tổng hợp lại riêng khối này từ log KPI'
+                          : 'Không có log để tổng hợp (khối nhập tay hoặc member đã bị xóa)'
+                      }
+                      onClick={() => onRebuildMember(mi)}
+                    >
+                      🔄
+                    </button>
+                  )}
+                  {onOptimizeMember && (
+                    <button
+                      type="button"
+                      className="doc-action"
+                      title="Gộp các dòng cùng App + Giai đoạn + Mốc trong khối này"
+                      onClick={() => onOptimizeMember(mi)}
+                    >
+                      🧹
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="doc-action danger"
+                    title="Bỏ member khỏi bảng"
+                    onClick={() => deleteMember(mi)}
+                  >
+                    🗑️
+                  </button>
+                </div>
+              )}
             </td>
           );
+          // Dòng tóm tắt khi thu gọn: số đầu mục + Σ ngày (ngày nghỉ & KPI tháng vẫn ở cột riêng).
+          const totalDays = rows.reduce((s, r) => s + (typeof r.days === 'number' ? r.days : 0), 0);
           const memberCells = (
             <>
               <td className="ksum-leave" rowSpan={span}>
@@ -319,8 +401,23 @@ export default function KpiSummaryTable({
             </>
           );
           return (
-            <tbody key={m.memberId} id={`ksum-m-${m.memberId}`}>
-              {rows.length === 0 ? (
+            <tbody
+              key={m.memberId}
+              id={`ksum-m-${m.memberId}`}
+              className={isCollapsed ? 'ksum-collapsed' : undefined}
+            >
+              {isCollapsed ? (
+                <tr>
+                  {nameCell(1)}
+                  <td colSpan={8} className="muted ksum-collapsed-info">
+                    {rows.length} đầu mục
+                    {totalDays > 0 ? ` · Σ ${Number(totalDays.toFixed(2))} ngày` : ''} — bấm ▸
+                    để mở
+                  </td>
+                  {memberCells}
+                  {editable && <td className="ksum-row-actions" />}
+                </tr>
+              ) : rows.length === 0 ? (
                 <tr>
                   {nameCell(1)}
                   <td colSpan={8} className="muted">
@@ -351,7 +448,7 @@ export default function KpiSummaryTable({
                   </tr>
                 ))
               )}
-              {editable && (
+              {editable && !isCollapsed && (
                 <tr className="ksum-add-row">
                   <td colSpan={totalCols}>
                     <button type="button" className="doc-action" onClick={() => addRow(mi)}>
