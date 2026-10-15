@@ -9,7 +9,8 @@
 - Tạo / sửa / xem tài liệu — **2 loại**: `note` (rich-text, lưu HTML) và `markdown` (lưu chữ thuần, có tab Edit/Preview).
 - Tự lưu khi gõ (auto-save có debounce ~600ms).
 - **Folder (thư mục)**: tạo / đổi tên / xóa folder; gom tài liệu vào folder bằng **kéo-thả** trên trang chủ.
-- Chia sẻ tài liệu công khai qua link cho người xem ẩn danh (chỉ đọc).
+- Chia sẻ tài liệu công khai qua link cho người xem ẩn danh (chỉ đọc). Nút **Chia sẻ** chờ server xác nhận lưu (`⏳ Đang bật…`) rồi mới đưa link ra — tránh link "không tồn tại" khi lệnh ghi chưa tới server.
+- Banner trạng thái lưu ở khu tài liệu: ⚠️ mất kết nối (kèm số thay đổi chưa lưu), ⏳ đang lưu lâu, ❌ server từ chối (thay đổi đã bị hoàn tác). Còn thay đổi chưa lưu mà đóng tab/F5 → trình duyệt hỏi lại.
 - **Bảng dự án (`/board`)**: quản lý app + task/release của team — tổng quan tiến độ tuần & biểu đồ, **Plan tuần** (tạo tự động từ dữ liệu thật), **Báo cáo ngày** (sync tiến độ), Lịch release, **KPI member log** (page log task chia sẻ theo link riêng, member tự log & tự chấm), và **Import JSON** để nạp dữ liệu hàng loạt.
 
 ## Công nghệ

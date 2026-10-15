@@ -7,11 +7,12 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { ref, onValue, set, update } from 'firebase/database';
+import { ref, onValue, update } from 'firebase/database';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../lib/firebase';
 import { useAuth } from '../auth/useAuth';
 import type { DocItem, DocumentType, Folder } from '../types';
+import DocsSyncBanner from '../components/DocsSyncBanner';
 
 type DocUpdates = Partial<Pick<DocItem, 'title' | 'content' | 'type'>>;
 
@@ -41,7 +42,8 @@ interface DocumentsState {
   ) => DocItem[];
   updateDocument: (id: string, updates: DocUpdates) => void;
   deleteDocument: (id: string) => void;
-  toggleShareDocument: (id: string) => void;
+  /** Trả true khi server ĐÃ xác nhận lưu (link share dùng được), false nếu bị từ chối. */
+  toggleShareDocument: (id: string) => Promise<boolean>;
   /** parentId có giá trị ⇒ tạo sub-folder (chỉ 1 cấp; parent phải là folder gốc) */
   addFolder: (name?: string, parentId?: string) => Folder | null;
   renameFolder: (id: string, name: string) => void;
@@ -49,6 +51,13 @@ interface DocumentsState {
   toggleShareFolder: (id: string) => void;
   /** folderId = undefined ⇒ đưa tài liệu ra ngoài (không folder) */
   moveDocument: (id: string, folderId: string | undefined) => void;
+  /** Đang có kết nối tới Realtime Database (theo `.info/connected`). */
+  connected: boolean;
+  /** Số lệnh ghi đã gửi nhưng server CHƯA xác nhận. */
+  pendingWrites: number;
+  /** Lỗi của lệnh ghi bị server từ chối gần nhất (null = không có). */
+  writeError: string | null;
+  clearWriteError: () => void;
 }
 
 const DocumentsContext = createContext<DocumentsState | null>(null);
@@ -74,6 +83,47 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
   });
   stateRef.current.documents = documents;
   stateRef.current.folders = folders;
+
+  // Trạng thái đồng bộ lên server. Firebase hiện thay đổi trên UI NGAY (trước khi
+  // server xác nhận) nên nếu mất kết nối / bị từ chối mà không theo dõi thì người
+  // dùng tưởng đã lưu — đúng lỗi link share "không tồn tại" dù app báo đang chia sẻ.
+  const [connected, setConnected] = useState(true);
+  const [pendingWrites, setPendingWrites] = useState(0);
+  const [writeError, setWriteError] = useState<string | null>(null);
+  const clearWriteError = useCallback(() => setWriteError(null), []);
+
+  useEffect(() => {
+    if (!db) return;
+    return onValue(ref(db, '.info/connected'), (snap) => {
+      setConnected(snap.val() === true);
+    });
+  }, []);
+
+  // Còn lệnh ghi chưa lên server mà đóng tab / F5 ⇒ mất thay đổi → hỏi lại.
+  useEffect(() => {
+    if (pendingWrites === 0) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [pendingWrites]);
+
+  // Mọi lệnh ghi đi qua đây: multi-path update từ gốc, đếm lệnh đang chờ và bắt
+  // lỗi. Trả true khi server đã xác nhận, false khi bị từ chối (Firebase tự hoàn
+  // tác thay đổi trên UI, lỗi được đưa lên banner).
+  const commit = useCallback((writes: Record<string, unknown>): Promise<boolean> => {
+    if (!db) return Promise.resolve(false);
+    setPendingWrites((n) => n + 1);
+    return update(ref(db), writes)
+      .then(() => true)
+      .catch((e: unknown) => {
+        setWriteError(e instanceof Error ? e.message : String(e));
+        return false;
+      })
+      .finally(() => setPendingWrites((n) => n - 1));
+  }, []);
 
   useEffect(() => {
     if (!db || !uid) {
@@ -139,10 +189,10 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
       if (findSharedFolder(stateRef.current.folders, folderId)) {
         writes[`shared/f/${folderId}/documents/${created.id}`] = created;
       }
-      update(ref(db), writes);
+      void commit(writes);
       return created;
     },
-    [uid],
+    [uid, commit],
   );
 
   const addDocuments = useCallback(
@@ -178,10 +228,10 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
           writes[`shared/f/${folderId}/documents/${doc.id}`] = doc;
         }
       });
-      update(ref(db), writes);
+      void commit(writes);
       return created;
     },
-    [uid],
+    [uid, commit],
   );
 
   const updateDocument = useCallback(
@@ -206,9 +256,9 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
         const merged: DocItem = { ...cur, ...updates, updatedAt: now };
         writes[`shared/f/${cur.folderId}/documents/${id}`] = merged;
       }
-      update(ref(db), writes);
+      void commit(writes);
     },
-    [uid],
+    [uid, commit],
   );
 
   const deleteDocument = useCallback(
@@ -224,16 +274,16 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
       if (cur && findSharedFolder(stateRef.current.folders, cur.folderId)) {
         writes[`shared/f/${cur.folderId}/documents/${id}`] = null;
       }
-      update(ref(db), writes);
+      void commit(writes);
     },
-    [uid],
+    [uid, commit],
   );
 
   const toggleShareDocument = useCallback(
-    (id: string) => {
-      if (!db || !uid) return;
+    (id: string): Promise<boolean> => {
+      if (!db || !uid) return Promise.resolve(false);
       const cur = stateRef.current.documents.find((d) => d.id === id);
-      if (!cur) return;
+      if (!cur) return Promise.resolve(false);
       const enabling = !cur.isShared;
       const writes: Record<string, unknown> = {
         [`users/${uid}/documents/${id}/isShared`]: enabling,
@@ -245,9 +295,10 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
         // Tắt chia sẻ → xóa bản công khai.
         writes[`shared/d/${id}`] = null;
       }
-      update(ref(db), writes);
+      // Trả promise để nút Chia sẻ chỉ đưa ra link khi server đã lưu thật.
+      return commit(writes);
     },
-    [uid],
+    [uid, commit],
   );
 
   const addFolder = useCallback(
@@ -274,10 +325,10 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
         createdAt: now,
         ...(pid ? { parentId: pid } : {}),
       };
-      set(ref(db, `users/${uid}/folders/${created.id}`), created);
+      void commit({ [`users/${uid}/folders/${created.id}`]: created });
       return created;
     },
-    [uid],
+    [uid, commit],
   );
 
   const renameFolder = useCallback(
@@ -290,9 +341,9 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
       if (findSharedFolder(stateRef.current.folders, id)) {
         writes[`shared/f/${id}/folder/name`] = name;
       }
-      update(ref(db), writes);
+      void commit(writes);
     },
-    [uid],
+    [uid, commit],
   );
 
   const deleteFolder = useCallback(
@@ -320,9 +371,9 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
           if (d.isShared) writes[`shared/d/${d.id}`] = null;
         }
       }
-      update(ref(db), writes);
+      void commit(writes);
     },
-    [uid],
+    [uid, commit],
   );
 
   const toggleShareFolder = useCallback(
@@ -349,9 +400,9 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
         // Tắt chia sẻ → xóa cả cụm công khai.
         writes[`shared/f/${id}`] = null;
       }
-      update(ref(db), writes);
+      void commit(writes);
     },
-    [uid],
+    [uid, commit],
   );
 
   const moveDocument = useCallback(
@@ -392,9 +443,9 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
         };
         writes[`shared/f/${folderId}/documents/${id}`] = moved;
       }
-      update(ref(db), writes);
+      void commit(writes);
     },
-    [uid],
+    [uid, commit],
   );
 
   return (
@@ -413,9 +464,15 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
         deleteFolder,
         toggleShareFolder,
         moveDocument,
+        connected,
+        pendingWrites,
+        writeError,
+        clearWriteError,
       }}
     >
       {children}
+      {/* Banner trạng thái lưu — gắn ở provider để hiện ở mọi nơi có dùng tài liệu */}
+      <DocsSyncBanner />
     </DocumentsContext.Provider>
   );
 }

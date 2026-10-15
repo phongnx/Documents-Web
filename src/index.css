@@ -581,6 +581,37 @@ a:hover {
   border-radius: 12px;
 }
 
+/* ---------- Banner trạng thái lưu lên server (DocsSyncBanner) ---------- */
+.sync-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  font-size: 14px;
+}
+.sync-banner-offline {
+  border-color: #d97706;
+}
+.sync-banner-error {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.sync-banner button {
+  padding: 2px 8px;
+}
+
 /* ---------- Xem toàn màn hình (maximize trong trang) ---------- */
 .fs-wrap {
   position: relative;

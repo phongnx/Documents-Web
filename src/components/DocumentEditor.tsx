@@ -28,6 +28,19 @@ export default function DocumentEditor({ doc }: { doc: DocItem }) {
     doc.content.trim() ? 'preview' : 'edit',
   );
   const [copied, setCopied] = useState(false);
+  // Đang chờ server xác nhận bật/tắt chia sẻ — chưa đưa link ra trong lúc này.
+  const [sharing, setSharing] = useState(false);
+
+  const onToggleShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      // Thất bại thì Firebase tự hoàn tác isShared, banner báo lỗi — không cần làm gì thêm.
+      await toggleShareDocument(doc.id);
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const shareUrl = `${window.location.origin}/share/d/${doc.id}`;
 
@@ -150,17 +163,29 @@ export default function DocumentEditor({ doc }: { doc: DocItem }) {
         <button
           type="button"
           className={doc.isShared ? 'primary' : ''}
-          onClick={() => toggleShareDocument(doc.id)}
+          onClick={onToggleShare}
+          disabled={sharing}
           title="Bật/tắt chia sẻ công khai"
         >
-          {doc.isShared ? '🔗 Đang chia sẻ' : 'Chia sẻ'}
+          {sharing
+            ? doc.isShared
+              ? '⏳ Đang bật…'
+              : '⏳ Đang tắt…'
+            : doc.isShared
+              ? '🔗 Đang chia sẻ'
+              : 'Chia sẻ'}
         </button>
         <button type="button" className="danger" onClick={onDelete}>
           Xóa
         </button>
       </div>
 
-      {doc.isShared && (
+      {doc.isShared && sharing && (
+        <div className="share-bar">
+          <span className="muted">⏳ Đang lưu lên server, link chưa dùng được…</span>
+        </div>
+      )}
+      {doc.isShared && !sharing && (
         <div className="share-bar">
           <span className="muted">Link công khai (ai có link đều xem được):</span>
           <input className="share-url" readOnly value={shareUrl} onFocus={(e) => e.target.select()} />

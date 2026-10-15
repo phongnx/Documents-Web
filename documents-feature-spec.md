@@ -471,10 +471,10 @@ Hàm bật/tắt chia sẻ (`toggleShareDocument`): bật thì ghi payload `{ do
 
 ```typescript
 const toggleShareDocument = useCallback(
-  (id: string) => {
-    if (!db || !uid) return;
+  (id: string): Promise<boolean> => {
+    if (!db || !uid) return Promise.resolve(false);
     const cur = stateRef.current.documents.find((d) => d.id === id);
-    if (!cur) return;
+    if (!cur) return Promise.resolve(false);
     const enabling = !cur.isShared;
     const writes: Record<string, unknown> = {
       [`users/${uid}/documents/${id}/isShared`]: enabling,
@@ -485,11 +485,13 @@ const toggleShareDocument = useCallback(
     } else {
       writes[`shared/d/${id}`] = null; // tắt chia sẻ → xóa bản công khai
     }
-    update(ref(db), writes);
+    return commit(writes); // true khi server đã xác nhận
   },
-  [uid],
+  [uid, commit],
 );
 ```
+
+> **Mọi lệnh ghi đi qua `commit(writes)`** (multi-path `update` từ gốc + đếm lệnh đang chờ + bắt lỗi), không gọi `update(ref(db), …)` trực tiếp. Lý do: Firebase hiện thay đổi trên UI ngay trước khi server xác nhận — mất kết nối hoặc bị từ chối mà không theo dõi thì app báo "đang chia sẻ" trong khi `shared/d/{id}` chưa hề tồn tại (link share báo "không tồn tại"). Context xuất `connected` (`.info/connected`), `pendingWrites`, `writeError` cho `DocsSyncBanner`; `DocumentEditor` chờ promise của `toggleShareDocument` xong mới hiện link.
 
 > **Phải đồng bộ bản công khai ở MỌI mutator chạm tới tài liệu đang chia sẻ:** `updateDocument`, `moveDocument`, `deleteDocument`, `deleteFolder` đều kiểm tra `isShared` và cập nhật/xóa `shared/d/{id}` tương ứng. Quên một chỗ là bản công khai sẽ lệch với bản gốc.
 
