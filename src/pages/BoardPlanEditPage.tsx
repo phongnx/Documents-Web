@@ -128,10 +128,23 @@ export default function BoardPlanEditPage() {
     patchProjects([...form.projects, { name: 'Dự án mới', workstreams: [] }]);
     openNewProject();
   };
+  // App đang được dự án nào trong plan gắn — khóa option để không thêm/gắn trùng.
+  const usedAppIds = new Set(form.projects.map((p) => p.appId).filter(Boolean));
   // Thêm dự án gắn với 1 app có sẵn (để chọn task khi thêm nhánh).
   const addProjectFromApp = (appId: string) => {
     const app = apps.find((a) => a.id === appId);
-    if (!app) return;
+    if (!app || usedAppIds.has(app.id)) return;
+    // Dự án nhập tay chưa gắn app nhưng trùng tên → có thể là cùng dự án, hỏi lại.
+    const sameName = form.projects.find(
+      (p) => !p.appId && p.name.trim().toLowerCase() === app.name.trim().toLowerCase(),
+    );
+    if (
+      sameName &&
+      !window.confirm(
+        `Plan đã có dự án «${sameName.name}» (chưa gắn app). Vẫn thêm dự án mới?`,
+      )
+    )
+      return;
     patchProjects([...form.projects, { name: app.name, appId: app.id, workstreams: [] }]);
     openNewProject();
   };
@@ -561,11 +574,16 @@ export default function BoardPlanEditPage() {
               {p.appId && !apps.some((a) => a.id === p.appId) && (
                 <option value={p.appId}>(app không tồn tại)</option>
               )}
-              {apps.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} · {a.platform}
-                </option>
-              ))}
+              {apps.map((a) => {
+                // Khóa app đã gắn ở dự án KHÁC; app của chính dự án này vẫn chọn được.
+                const taken = a.id !== p.appId && usedAppIds.has(a.id);
+                return (
+                  <option key={a.id} value={a.id} disabled={taken}>
+                    {a.name} · {a.platform}
+                    {taken ? ' · đã có' : ''}
+                  </option>
+                );
+              })}
             </select>
             <button
               type="button"
@@ -768,8 +786,9 @@ export default function BoardPlanEditPage() {
         >
           <option value="">＋ Thêm dự án từ app…</option>
           {apps.map((a) => (
-            <option key={a.id} value={a.id}>
+            <option key={a.id} value={a.id} disabled={usedAppIds.has(a.id)}>
               {a.name} · {a.platform}
+              {usedAppIds.has(a.id) ? ' · đã có' : ''}
             </option>
           ))}
         </select>
