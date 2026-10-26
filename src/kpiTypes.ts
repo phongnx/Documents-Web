@@ -2,6 +2,7 @@
 // (share link, member edit ẩn danh), chấm điểm KPI theo từng dòng task.
 // Dữ liệu sheet tại shared/kpi/{token}; danh sách member tại users/{uid}/pm/members.
 import { addDays } from './lib/pmDates';
+import { DONE_STATUS } from './pmTypes';
 import type { KpiEstRef } from './estTypes';
 
 /** 1 dòng log của member — shared/kpi/{token}/entries/{entryId}.
@@ -16,6 +17,9 @@ export interface KpiEntry {
   /** Giai đoạn (nhãn từ meta.categories — snapshot của kpiRules). */
   category?: string;
   project?: string;
+  /** Id app của project (từ meta.projectIds) — giữ liên kết khi leader đổi tên app.
+   *  Log cũ chỉ có tên. */
+  appId?: string;
   feature?: string;
   /** Mô tả task. */
   task?: string;
@@ -25,11 +29,96 @@ export interface KpiEntry {
   /** Link về sub task estimate (pick từ bảng estimate) — giờ của dòng này được cộng
    *  vào actual của sub task đó (shared/est/{estId}/logs). */
   estRef?: KpiEstRef;
-  /** Mốc release/milestone mà task thuộc về (denormalized — mốc bị xóa khỏi snapshot
-   *  vẫn hiển thị đúng khi tổng hợp tháng). label VD "AppLock v1.114". */
-  rel?: { label: string; date?: string };
+  /** Mốc release/milestone mà task thuộc về. */
+  rel?: KpiEntryRel;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Mốc của 1 dòng log. label/date là bản denormalized để hiển thị (task bị xóa vẫn đọc
+ *  được); taskId/appId/version là liên kết thật về page Task — bảng tổng kết gom theo
+ *  đây nên leader đổi tên app/version không làm tách nhóm. Log cũ chỉ có label. */
+export interface KpiEntryRel {
+  /** VD "AppLock2 v1.118"; việc ngoài release = NO_MILESTONE. */
+  label: string;
+  date?: string;
+  /** Task đại diện của mốc (task Release cùng version nếu có). */
+  taskId?: string;
+  appId?: string;
+  version?: string;
+}
+
+/** 1 lựa chọn ở ô Mốc: các task cùng app + version gộp 1 mốc; task không có version là
+ *  1 mốc riêng. */
+export interface KpiMilestoneOption {
+  /** Khóa gom: 'v:{appId}|{version chuẩn hóa}' hoặc 't:{taskId}'. */
+  key: string;
+  label: string;
+  date?: string;
+  taskId: string;
+  appId: string;
+  version?: string;
+}
+
+/** Task đã xong vẫn chọn được tới ngày plan (hoặc ngày kết thúc) + số ngày này —
+ *  để log việc chốt/hậu release. Task chưa xong luôn chọn được. */
+export const MILESTONE_DONE_GRACE_DAYS = 2;
+
+/** Khóa version để so khớp: thường hóa + bỏ khoảng trắng ('V1.50 ' ≡ 'v1.50'). */
+export const versionKey = (v?: string): string => (v ?? '').toLowerCase().replace(/\s+/g, '');
+
+/** Khóa gom mốc của 1 task: cùng app + version là 1 mốc; không có version → theo task. */
+export const milestoneKeyOf = (t: { id: string; appId: string; version?: string }): string =>
+  versionKey(t.version) ? `v:${t.appId}|${versionKey(t.version)}` : `t:${t.id}`;
+
+/** Nhãn mốc: 'App v1.50'; task không có version → 'App – tiêu đề task'. */
+export function milestoneLabelOf(t: { appName: string; title: string; version?: string }): string {
+  if (t.version?.trim()) return `${t.appName} ${t.version.trim()}`;
+  const title = t.title.trim();
+  return `${t.appName} – ${title.length > 60 ? `${title.slice(0, 59).trimEnd()}…` : title}`;
+}
+
+/**
+ * Danh sách mốc chọn được cho 1 app (ô Mốc của dòng log): task chưa xong (bất kể ngày
+ * plan — ngày plan hay bị cũ khi release trễ) + task đã xong trong vòng
+ * MILESTONE_DONE_GRACE_DAYS ngày sau ngày plan/kết thúc. Sắp theo ngày tăng dần.
+ */
+export function milestoneOptionsOf(
+  tasks: KpiTaskSnap[],
+  appId: string,
+  today: string,
+): KpiMilestoneOption[] {
+  const open = (t: KpiTaskSnap): boolean => {
+    if (t.status !== DONE_STATUS) return true;
+    const d = t.planDate || t.endDate;
+    return !!d && addDays(d, MILESTONE_DONE_GRACE_DAYS) >= today;
+  };
+  const groups = new Map<string, KpiTaskSnap[]>();
+  for (const t of tasks.filter((x) => x.appId === appId).sort((a, b) => a.order - b.order)) {
+    const k = milestoneKeyOf(t);
+    const g = groups.get(k);
+    if (g) g.push(t);
+    else groups.set(k, [t]);
+  }
+  const out: KpiMilestoneOption[] = [];
+  for (const [key, g] of groups) {
+    // Mốc còn mở khi còn ít nhất 1 task của nó chưa xong / mới xong.
+    if (!g.some(open)) continue;
+    // Đại diện: task Release của version đó (nếu có), không thì task đầu theo thứ tự.
+    const rep = g.find((t) => /release/i.test(t.type ?? '')) ?? g[0];
+    const date = rep.planDate || g.map((t) => t.planDate ?? '').sort().pop() || undefined;
+    out.push({
+      key,
+      label: milestoneLabelOf(rep),
+      ...(date ? { date } : {}),
+      taskId: rep.id,
+      appId: rep.appId,
+      ...(rep.version?.trim() ? { version: rep.version.trim() } : {}),
+    });
+  }
+  return out.sort(
+    (a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999') || a.label.localeCompare(b.label),
+  );
 }
 
 /** Class màu cho điểm KPI THÁNG: đúng mốc 100 = xanh dương (đạt chuẩn, không hơn
@@ -136,6 +225,8 @@ export interface KpiSheetMeta {
   categories?: string[];
   /** Danh sách tên project cho ô Project: đã gán → chỉ các project gán; chưa gán → gợi ý tất cả app. */
   projectNames?: string[];
+  /** Id app tương ứng từng phần tử projectNames (cùng thứ tự) — dòng log lưu appId. */
+  projectIds?: string[];
   /** true = member CHỈ được chọn project trong projectNames (đã gán); false/thiếu = nhập tự do. */
   strictProjects?: boolean;
   /** Snapshot quy chế chấm điểm (member xem preview — thiếu thì fallback DEFAULT_KPI_RULES). */

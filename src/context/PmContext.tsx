@@ -1092,7 +1092,13 @@ export function PmProvider({ children }: { children: ReactNode }) {
       member?: KpiMember,
     ): Pick<
       KpiSheetMeta,
-      'categories' | 'projectNames' | 'strictProjects' | 'rules' | 'releases' | 'estimates'
+      | 'categories'
+      | 'projectNames'
+      | 'projectIds'
+      | 'strictProjects'
+      | 'rules'
+      | 'releases'
+      | 'estimates'
     > => {
       const apps = stateRef.current.apps;
       const assigned = (member?.projectIds ?? [])
@@ -1101,6 +1107,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
       return {
         categories: stateRef.current.meta.kpiRules.map((g) => g.label),
         projectNames: assigned.map((a) => a.name),
+        // Cùng thứ tự projectNames — dòng log lưu appId để không đứt liên kết khi đổi tên app.
+        projectIds: assigned.map((a) => a.id),
         strictProjects: true,
         // Snapshot quy chế để member xem preview (ẩn danh không đọc được meta của leader).
         rules: stateRef.current.meta.kpiRules,
@@ -1314,6 +1322,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
           ? cleanIds
           : null,
         [`shared/kpi/${cur.token}/meta/projectNames`]: snapshot.projectNames,
+        [`shared/kpi/${cur.token}/meta/projectIds`]: snapshot.projectIds,
         [`shared/kpi/${cur.token}/meta/strictProjects`]: snapshot.strictProjects,
         [`shared/kpi/${cur.token}/meta/releases`]: snapshot.releases?.length
           ? snapshot.releases
@@ -1538,6 +1547,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
       const membersData = await aggregateKpiSummaryMembers(
         stateRef.current.members,
         monthKey,
+        { apps: stateRef.current.apps, tasks: stateRef.current.tasks },
       );
       const id = uuidv4();
       const now = new Date().toISOString();
@@ -1595,7 +1605,10 @@ export function PmProvider({ children }: { children: ReactNode }) {
     (monthKey: string, memberIds?: string[]): Promise<KpiSummaryMember[]> => {
       const all = stateRef.current.members;
       const list = memberIds ? all.filter((m) => memberIds.includes(m.id)) : all;
-      return aggregateKpiSummaryMembers(list, monthKey);
+      return aggregateKpiSummaryMembers(list, monthKey, {
+        apps: stateRef.current.apps,
+        tasks: stateRef.current.tasks,
+      });
     },
     [],
   );

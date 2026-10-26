@@ -189,12 +189,13 @@ export default function KpiSharePage() {
             onMonthChange={setMonthKey}
             categories={sheet.meta?.categories ?? []}
             projectNames={sheet.meta?.projectNames ?? []}
+            projectIds={sheet.meta?.projectIds}
             strictProjects={sheet.meta?.strictProjects === true}
             leaves={sheet.leaves}
             weekPlans={sheet.weekPlans}
             onSaveWeekPlan={sheet.setWeekPlan}
             estimates={sheet.meta?.estimates}
-            releases={sheet.meta?.releases}
+            tasks={sheet.tasks}
             kpiMemberId={sheet.meta?.memberId}
             kpiMemberName={sheet.meta?.memberName}
             onCompleteEst={onCompleteEst}

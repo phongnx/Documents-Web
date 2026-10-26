@@ -1,19 +1,25 @@
 // Tổng hợp bảng "Tổng kết KPI tháng" từ log của tất cả member (cấu trúc theo file
-// Excel mẫu: mỗi member các đầu mục lớn nhóm theo project + category, cột Tasks gộp
+// Excel mẫu: mỗi member các đầu mục lớn nhóm theo mốc release (page Task) × giai đoạn, cột Tasks gộp
 // '# feature' + '- task', Start/End/days, KPI nhóm = Σ điểm log, KPI tháng = 100 + Σ).
 // Các hàm build là pure (test được); aggregate đọc sheet qua get() 1 lần, không subscribe.
 import { fetchMonthSheet } from './kpiFetch';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './firebase';
 import { totalWorkDays } from '../estTypes';
+import { normName } from './pmText';
 import {
   durationMin,
   fmtDelta,
   KPI_MONTH_BASE,
   leavePortionsOf,
+  milestoneKeyOf,
+  milestoneLabelOf,
+  NO_MILESTONE,
   parseHm,
   totalOf,
+  versionKey,
   type KpiEntry,
+  type KpiEntryRel,
   type KpiLeave,
   type KpiMember,
   type KpiScore,
@@ -114,25 +120,6 @@ function spansOfDates(dates: string[]): { from: string; to: string }[] {
 const fmtSpans = (runs: { from: string; to: string }[]): string =>
   runs.map((r) => (r.from === r.to ? ddmm(r.from) : `${ddmm(r.from)}–${ddmm(r.to)}`)).join(' · ');
 
-/** Mốc release CHỦ ĐẠO của 1 đoạn = nhãn rel xuất hiện nhiều nhất trong các dòng
- *  CHỦ ĐẠO (không tính dòng lẻ — nếu không, đoạn 'ManyAI/Phát triển' sẽ bị gán mốc
- *  của Weather365 chỉ vì có 1 dòng lẻ thuộc app đó). */
-function mainMilestone(dominant: KpiEntry[]): string {
-  const count = new Map<string, number>();
-  for (const e of dominant) {
-    const label = e.rel?.label?.trim();
-    if (label) count.set(label, (count.get(label) ?? 0) + 1);
-  }
-  let best = '';
-  let bestN = 0;
-  for (const [label, n] of count)
-    if (n > bestN) {
-      best = label;
-      bestN = n;
-    }
-  return best;
-}
-
 /** Giới hạn để cột Tasks là TỔNG HỢP, không phải liệt kê chi tiết. */
 const BULLET_CAP = 3; // số việc liệt kê tối đa mỗi feature (nhóm thường)
 const BULLET_MAX_LEN = 90; // cắt bullet dài
@@ -167,8 +154,6 @@ const fixbugCountLabel = (tickets: number, others: number): string => {
   return parts.join(' + ') || '0 việc';
 };
 
-/** Số item lẻ (khác loại chủ đạo) liệt kê tối đa trong 1 đoạn. */
-const MINOR_CAP = 5;
 /** Số nhóm feature liệt kê tối đa trong 1 đoạn (giữ nhóm nhiều việc nhất). */
 const FEATURE_CAP = 8;
 
@@ -179,9 +164,6 @@ const normKey = (s: string): string => s.toLowerCase().replace(/\s+/g, ' ').trim
 
 /** Bỏ dấu gạch/bullet member tự gõ ở đầu ô Task — không thì bảng in ra '- - việc'. */
 const stripBullet = (s: string): string => s.replace(/^\s*[-•*+]+\s*/, '').trim();
-
-const keyOfEntry = (e: KpiEntry): string =>
-  `${(e.project ?? '').trim()}|${(e.category ?? '').trim()}`;
 
 /** 1 nhóm feature trong đoạn: tên hiển thị + danh sách việc (đã bỏ trùng). */
 interface FeatureBucket {
@@ -448,86 +430,18 @@ function dominantText(list: KpiEntry[]): string[] {
   return text;
 }
 
-/** Dựng 1 dòng đầu mục từ 1 ĐOẠN timeline: dominant = loại chủ đạo (điền cột
- *  Giai đoạn/App + phần tổng hợp), minor = item lẻ loại khác trong cùng những ngày
- *  đó — liệt kê rõ '- (Loại) task' cuối ô Tasks. KPI/lý do tính trên MỌI dòng log. */
-function rowFromSegment(
-  dominant: KpiEntry[],
-  minor: KpiEntry[],
+/** Dựng 1 dòng đầu mục từ các dòng log của 1 nhóm (cùng mốc + giai đoạn, hoặc cùng
+ *  project + giai đoạn khi không thuộc mốc). Ngày công truyền vào từ ngoài vì được
+ *  quy đổi theo tỷ lệ giờ trên CẢ tháng của member. */
+function rowFromGroup(
+  list: KpiEntry[],
   scores: Record<string, KpiScore>,
+  head: { category?: string; app?: string; milestone?: string; days: number },
 ): KpiSummaryRow {
-  const text = dominantText(dominant);
+  const all = [...list].sort(byTime);
+  const text = dominantText(all);
 
-  // Item lẻ: gom theo NHÃN (project khác dominant thì kèm cả project) — mỗi nhãn 1
-  // dòng, tối đa MINOR_CAP nhãn. Fix bugs đếm ticket; loại khác liệt kê gọn.
-  const domProject = (dominant[0]?.project ?? '').trim();
-  const minorLabel = (e: KpiEntry): string => {
-    const parts: string[] = [];
-    if ((e.project ?? '').trim() && (e.project ?? '').trim() !== domProject)
-      parts.push((e.project ?? '').trim());
-    if ((e.category ?? '').trim()) parts.push((e.category ?? '').trim());
-    return parts.join(' · ') || 'Khác';
-  };
-  interface MinorGroup {
-    fix: boolean;
-    tickets: number;
-    others: number;
-    lines: string[];
-    seen: Set<string>;
-  }
-  const minorGroups = new Map<string, MinorGroup>();
-  for (const e of minor) {
-    const t = (e.task ?? '').trim();
-    if (!t) continue;
-    const label = minorLabel(e);
-    let g = minorGroups.get(label);
-    if (!g)
-      minorGroups.set(
-        label,
-        (g = {
-          fix: isFixCategory(e.category),
-          tickets: 0,
-          others: 0,
-          lines: [],
-          seen: new Set(),
-        }),
-      );
-    if (isFixCategory(e.category)) {
-      // Ticket ghi ở Feature được ưu tiên; không có thì đếm từ Task.
-      const n = ticketCountIn((e.feature ?? '').trim()) || ticketCountIn(t);
-      if (n > 0) g.tickets += n;
-      else g.others += 1;
-    } else {
-      const tk = normKey(t);
-      if (!g.seen.has(tk)) {
-        g.seen.add(tk);
-        g.lines.push(t);
-      }
-    }
-  }
-  const resolved: string[] = [];
-  for (const [label, g] of minorGroups) {
-    if (g.fix || g.lines.length === 0) {
-      resolved.push(`- (${label}) — ${fixbugCountLabel(g.tickets, g.others)}`);
-    } else if (g.lines.length === 1) {
-      resolved.push(`- (${label}) ${truncateLine(g.lines[0])}`);
-    } else {
-      resolved.push(
-        truncateLine(`- (${label}) — ${g.lines.length} việc: ${g.lines.join('; ')}`),
-      );
-    }
-  }
-  text.push(...resolved.slice(0, MINOR_CAP));
-  if (resolved.length > MINOR_CAP)
-    text.push(`- … và ${resolved.length - MINOR_CAP} mục khác`);
-
-  // KPI + lý do: trên TẤT CẢ dòng log của đoạn (kể cả item lẻ).
-  const all = [...dominant, ...minor].sort(
-    (a, b) =>
-      a.date.localeCompare(b.date) ||
-      (parseHm(a.start) ?? 0) - (parseHm(b.start) ?? 0) ||
-      a.createdAt.localeCompare(b.createdAt),
-  );
+  // Lý do ±: mỗi dòng log điểm ≠ 0 một dòng (lý do leader ghi, không có thì text task).
   const notes: string[] = [];
   for (const e of all) {
     const s = scores[e.id];
@@ -537,29 +451,20 @@ function rowFromSegment(
     notes.push(why ? `${fmtDelta(d)} — ${truncateTo(why, KPI_NOTE_MAX_LEN)}` : fmtDelta(d));
   }
 
-  // Mốc release/milestone: gom nhãn duy nhất từ MỌI dòng log trong đoạn.
-  const milestones: string[] = [];
-  for (const e of all)
-    if (e.rel?.label && !milestones.includes(e.rel.label)) milestones.push(e.rel.label);
-
-  // Ngày công tính trên RIÊNG các khoảng có log (đầu mục gộp nhiều đợt rời nhau thì
-  // ngày trống ở giữa không được tính); spans chỉ hiện khi có >1 khoảng.
+  // Các đợt có log (nối qua T7/CN) — chỉ hiện khi có >1 đợt.
   const runs = spansOfDates(all.map((e) => e.date));
-  const days = runs.reduce((s, r) => s + (totalWorkDays(r.from, r.to, 0) ?? 0), 0);
-  const start = all[0].date;
-  const end = all[all.length - 1].date;
   const delta = totalOf(all, scores).delta;
   return {
     id: uuidv4(),
-    order: 0, // gán lại sau theo thứ tự đoạn
-    start,
-    end,
-    days,
+    order: 0, // gán lại sau theo thứ tự nhóm
+    start: all[0].date,
+    end: all[all.length - 1].date,
+    days: head.days,
     ...(runs.length > 1 ? { spans: fmtSpans(runs) } : {}),
     tasks: text.join('\n') || undefined,
-    category: dominant[0]?.category || undefined,
-    app: dominant[0]?.project || undefined,
-    milestone: milestones.join(' · ') || undefined,
+    category: head.category || undefined,
+    app: head.app || undefined,
+    milestone: head.milestone || undefined,
     kpi: delta !== 0 ? fmtDelta(delta) : undefined,
     kpiNote:
       (notes.length > KPI_NOTE_CAP
@@ -569,98 +474,201 @@ function rowFromSegment(
   };
 }
 
+const byTime = (a: KpiEntry, b: KpiEntry): number =>
+  a.date.localeCompare(b.date) ||
+  (parseHm(a.start) ?? 0) - (parseHm(b.start) ?? 0) ||
+  a.createdAt.localeCompare(b.createdAt);
+
+/** Dữ liệu page Task của leader để khớp mốc của dòng log về task thật. */
+export interface SummaryTaskContext {
+  apps: { id: string; name: string }[];
+  tasks: { id: string; appId?: string; title: string; version?: string }[];
+}
+
+/** Mốc đã khớp của 1 dòng log. */
+interface ResolvedMs {
+  key: string;
+  label: string;
+  appId: string;
+}
+
+/** Hậu tố gắn vào cột Mốc khi nhãn của log không khớp được task nào trên page Task. */
+export const UNLINKED_SUFFIX = ' (chưa liên kết)';
+
 /**
- * Gom entries 1 tháng của 1 member thành các đầu mục PHÂN VÙNG THEO DÒNG THỜI GIAN
- * (không chồng lấn — mỗi ngày thuộc đúng 1 đoạn):
- * 1. Mỗi ngày xác định loại việc CHỦ ĐẠO (project + category): tổng phút log lớn
- *    nhất thắng; hòa → nhiều dòng hơn; vẫn hòa → nối mạch loại của ngày trước.
- * 2. Các ngày liên tiếp cùng loại chủ đạo gộp thành 1 đoạn (ngày trống không cắt).
- * 3. Item lẻ loại khác trong đoạn được note rõ '- (Loại) task' cuối ô Tasks;
- *    KPI + lý do ± của đoạn tính trên mọi dòng log trong các ngày đó.
+ * Bộ khớp mốc dòng log → mốc trên page Task, theo thứ tự:
+ * 1. rel.taskId còn tồn tại → mốc của task đó (tên app + version HIỆN TẠI).
+ * 2. rel.appId + rel.version (task đã bị xóa) → mốc app + version.
+ * 3. Log cũ chỉ có nhãn: trùng nhãn hiện tại 'App vX'; không trùng (app đã đổi tên)
+ *    → tìm task cùng version trong các app được gán của member; có cả iOS lẫn Android
+ *    thì chọn theo chữ 'iOS' trong nhãn; vẫn nhiều app → không khớp.
+ */
+function milestoneResolver(ctx: SummaryTaskContext, assignedAppIds: string[]) {
+  const appName = new Map(ctx.apps.map((a) => [a.id, a.name]));
+  const tasks = ctx.tasks.filter(
+    (t): t is { id: string; appId: string; title: string; version?: string } =>
+      !!t.appId && appName.has(t.appId),
+  );
+  const taskById = new Map(tasks.map((t) => [t.id, t]));
+  const msOfTask = (t: { id: string; appId: string; title: string; version?: string }): ResolvedMs => ({
+    key: milestoneKeyOf(t),
+    label: milestoneLabelOf({ ...t, appName: appName.get(t.appId)! }),
+    appId: t.appId,
+  });
+  const byLabel = new Map<string, ResolvedMs>();
+  for (const t of tasks) {
+    const ms = msOfTask(t);
+    if (!byLabel.has(normKey(ms.label))) byLabel.set(normKey(ms.label), ms);
+  }
+  const assigned = new Set(assignedAppIds);
+
+  return (rel: KpiEntryRel): ResolvedMs | null => {
+    const t = rel.taskId ? taskById.get(rel.taskId) : undefined;
+    if (t) return msOfTask(t);
+    if (rel.appId && appName.has(rel.appId) && versionKey(rel.version)) {
+      return {
+        key: `v:${rel.appId}|${versionKey(rel.version)}`,
+        label: `${appName.get(rel.appId)} ${rel.version!.trim()}`,
+        appId: rel.appId,
+      };
+    }
+    const exact = byLabel.get(normKey(rel.label));
+    if (exact) return exact;
+    const ver = rel.label.match(/\bv\d+(?:\.\d+)+\b/i)?.[0];
+    if (!ver) return null;
+    let hits = tasks.filter((x) => assigned.has(x.appId) && versionKey(x.version) === versionKey(ver));
+    // Nhiều app cùng version: ưu tiên app có tên nằm trong nhãn ('QRCode - Release v1.64'),
+    // rồi tới chữ 'iOS' (bản iOS/Android cùng tên gốc đã đổi tên).
+    const narrow = (keep: (appId: string) => boolean) => {
+      if (new Set(hits.map((x) => x.appId)).size <= 1) return;
+      const f = hits.filter((x) => keep(x.appId));
+      if (f.length > 0) hits = f;
+    };
+    narrow((id) => normName(rel.label).includes(normName(appName.get(id)!)));
+    narrow((id) => /ios/i.test(appName.get(id)!) === /ios/i.test(rel.label));
+    return new Set(hits.map((x) => x.appId)).size === 1 ? msOfTask(hits[0]) : null;
+  };
+}
+
+/**
+ * Gom entries 1 tháng của 1 member thành các đầu mục theo MỐC của TỪNG dòng log
+ * (mục tiêu: gom trọn task member log theo mốc release đặt cho dự án ở page Task):
+ * - Dòng có mốc khớp page Task → nhóm (mốc × giai đoạn); cột App/Mốc lấy tên app +
+ *   version HIỆN TẠI (đổi tên app không làm tách nhóm).
+ * - "Không thuộc mốc" / chưa chọn mốc (log trước 04/09/2026) → nhóm (project × giai
+ *   đoạn). Tên project cũ được quy về app hiện tại nếu đa số dòng cùng tên đó đã khớp
+ *   mốc của 1 app (VD 'AppLock' → 'AppLock2').
+ * - Nhãn mốc không khớp task nào → nhóm theo nhãn × giai đoạn, cột Mốc ghi kèm
+ *   "(chưa liên kết)".
+ * Ngày công = quy đổi theo TỶ LỆ GIỜ trong từng ngày T2–T6 (sáng mốc A, chiều mốc B →
+ * mỗi mốc 0.5 ngày), nên tổng cột Ngày = số ngày làm việc có log, không đếm trùng.
+ * Thứ tự: mốc theo dòng log đầu tiên của mốc; các giai đoạn của cùng mốc đứng liền nhau.
  */
 export function buildMemberRows(
   entries: KpiEntry[],
   scores: Record<string, KpiScore>,
+  ctx: SummaryTaskContext = { apps: [], tasks: [] },
+  assignedAppIds: string[] = [],
 ): KpiSummaryRow[] {
-  const sorted = [...entries].sort(
-    (a, b) =>
-      a.date.localeCompare(b.date) ||
-      (parseHm(a.start) ?? 0) - (parseHm(b.start) ?? 0) ||
-      a.createdAt.localeCompare(b.createdAt),
-  );
+  const sorted = [...entries].sort(byTime);
+  const resolve = milestoneResolver(ctx, assignedAppIds);
+  const appName = new Map(ctx.apps.map((a) => [a.id, a.name]));
+  const appIdByName = new Map(ctx.apps.map((a) => [normKey(a.name), a.id]));
 
-  // Gom theo ngày (giữ thứ tự tăng dần vì sorted).
-  const byDay = new Map<string, KpiEntry[]>();
+  // Lượt 1: khớp mốc từng dòng + học tên project cũ → app (theo dòng đã khớp mốc).
+  const resolved = new Map<string, ResolvedMs | null>();
+  const votes = new Map<string, Map<string, number>>();
   for (const e of sorted) {
-    const list = byDay.get(e.date);
-    if (list) list.push(e);
-    else byDay.set(e.date, [e]);
+    const rel = e.rel?.label && e.rel.label !== NO_MILESTONE ? e.rel : undefined;
+    const ms = rel ? resolve(rel) : null;
+    resolved.set(e.id, ms);
+    const p = normKey(e.project ?? '');
+    if (ms && p && !appIdByName.has(p)) {
+      const v = votes.get(p) ?? new Map<string, number>();
+      v.set(ms.appId, (v.get(ms.appId) ?? 0) + 1);
+      votes.set(p, v);
+    }
   }
+  const aliasOf = (p: string): string | undefined => {
+    const v = votes.get(p);
+    if (!v) return undefined;
+    const total = [...v.values()].reduce((s, n) => s + n, 0);
+    const [best, n] = [...v.entries()].sort((a, b) => b[1] - a[1])[0];
+    return n * 2 > total ? best : undefined; // đa số tuyệt đối
+  };
+  /** App của dòng log: appId lưu kèm → tên trùng app hiện tại → tên cũ đã học. */
+  const appOf = (e: KpiEntry): { key: string; name: string } => {
+    const raw = (e.project ?? '').trim();
+    const id =
+      (e.appId && appName.has(e.appId) ? e.appId : undefined) ??
+      appIdByName.get(normKey(raw)) ??
+      aliasOf(normKey(raw));
+    return id ? { key: `a:${id}`, name: appName.get(id)! } : { key: `p:${normKey(raw)}`, name: raw };
+  };
 
-  // Phân đoạn: dominant từng ngày → gộp ngày liên tiếp cùng dominant.
-  interface Segment {
-    key: string;
+  // Lượt 2: chia nhóm.
+  interface Group {
+    head: { category?: string; app?: string; milestone?: string };
+    /** Khóa mốc (không kèm giai đoạn) — các giai đoạn của cùng mốc đứng liền nhau. */
+    msKey: string;
     entries: KpiEntry[];
   }
-  const segments: Segment[] = [];
-  let prevKey: string | null = null;
-  for (const list of byDay.values()) {
-    // Thống kê phút + số dòng theo loại việc trong ngày.
-    const stats = new Map<string, { min: number; count: number }>();
-    for (const e of list) {
-      const k = keyOfEntry(e);
-      let st = stats.get(k);
-      if (!st) stats.set(k, (st = { min: 0, count: 0 }));
-      st.min += durationMin(e) ?? 0;
-      st.count += 1;
-    }
-    let best: string | null = null;
-    for (const [k, st] of stats) {
-      if (best === null) {
-        best = k;
-        continue;
+  const groups = new Map<string, Group>();
+  const msOrder = new Map<string, number>();
+  for (const e of sorted) {
+    const cat = (e.category ?? '').trim();
+    const ms = resolved.get(e.id);
+    let msKey: string;
+    let head: Group['head'];
+    if (ms) {
+      msKey = `ms:${ms.key}`;
+      head = { category: cat, app: appName.get(ms.appId), milestone: ms.label };
+    } else {
+      const app = appOf(e);
+      const label = e.rel?.label?.trim() ?? '';
+      if (label && label !== NO_MILESTONE) {
+        msKey = `lbl:${normKey(label)}`;
+        head = { category: cat, app: app.name, milestone: `${label}${UNLINKED_SUFFIX}` };
+      } else {
+        // "Không thuộc mốc" và log chưa có mốc gom chung theo project × giai đoạn.
+        msKey = `none:${app.key}`;
+        head = { category: cat, app: app.name, milestone: label || undefined };
       }
-      const b = stats.get(best)!;
-      const cmp = st.min - b.min || st.count - b.count;
-      // Hòa cả phút lẫn số dòng → ưu tiên nối mạch loại của ngày trước.
-      if (cmp > 0 || (cmp === 0 && k === prevKey)) best = k;
     }
-    const key: string = best!;
-    const last = segments[segments.length - 1];
-    if (last && last.key === key) last.entries.push(...list);
-    else segments.push({ key, entries: [...list] });
-    prevKey = key;
+    if (!msOrder.has(msKey)) msOrder.set(msKey, msOrder.size);
+    const gk = `${msKey}|${normKey(cat)}`;
+    const g = groups.get(gk);
+    if (g) g.entries.push(e);
+    else groups.set(gk, { head, msKey, entries: [e] });
   }
 
-  // Gộp các đoạn CÙNG (project | giai đoạn | mốc release chủ đạo) — kể cả không liền
-  // kề: 4 đợt fix bugs rải rác cho cùng 1 mốc release là MỘT đầu mục, các đợt hiện ở
-  // cột Ngày dưới dạng '12/08–14/08 · 18/08 · 25/08–28/08'. Mốc khác nhau (v1.116 vs
-  // v1.117) vẫn là 2 đầu mục riêng.
-  interface MergedSegment {
-    key: string;
-    entries: KpiEntry[];
+  // Ngày công quy đổi: phần của nhóm trong 1 ngày = phút của nhóm / phút cả ngày
+  // (ngày không có giờ hợp lệ → chia theo số dòng). Chỉ tính T2–T6 như trước.
+  const dayMin = new Map<string, { min: number; count: number }>();
+  for (const e of sorted) {
+    const d = dayMin.get(e.date) ?? { min: 0, count: 0 };
+    d.min += durationMin(e) ?? 0;
+    d.count += 1;
+    dayMin.set(e.date, d);
   }
-  const groups = new Map<string, MergedSegment>();
-  const groupOrder: string[] = [];
-  for (const s of segments) {
-    const dom = s.entries.filter((e) => keyOfEntry(e) === s.key);
-    const gk = `${s.key}|${mainMilestone(dom)}`;
-    let g = groups.get(gk);
-    if (!g) {
-      groups.set(gk, (g = { key: s.key, entries: [] }));
-      groupOrder.push(gk);
+  const isWeekday = (iso: string): boolean => {
+    const dow = new Date(iso + 'T00:00:00').getDay();
+    return dow !== 0 && dow !== 6;
+  };
+  const daysOf = (list: KpiEntry[]): number => {
+    let sum = 0;
+    for (const e of list) {
+      if (!isWeekday(e.date)) continue;
+      const d = dayMin.get(e.date)!;
+      sum += d.min > 0 ? (durationMin(e) ?? 0) / d.min : 1 / d.count;
     }
-    g.entries.push(...s.entries);
-  }
+    return Number(sum.toFixed(1));
+  };
 
-  const rows = groupOrder.map((gk) => {
-    const g = groups.get(gk)!;
-    return rowFromSegment(
-      g.entries.filter((e) => keyOfEntry(e) === g.key),
-      g.entries.filter((e) => keyOfEntry(e) !== g.key),
-      scores,
-    );
-  });
+  // Mốc theo lần log đầu tiên; trong 1 mốc, giai đoạn theo lần log đầu tiên (sort ổn định).
+  const rows = [...groups.values()]
+    .sort((a, b) => msOrder.get(a.msKey)! - msOrder.get(b.msKey)!)
+    .map((g) => rowFromGroup(g.entries, scores, { ...g.head, days: daysOf(g.entries) }));
   rows.forEach((r, i) => {
     r.order = i;
   });
@@ -670,10 +678,12 @@ export function buildMemberRows(
 /**
  * Đọc sheet KPI của từng member (get 1 lần) và dựng khối tổng kết tháng.
  * Chỉ đưa vào member có log HOẶC có nghỉ phép trong tháng.
+ * `ctx` = app + task hiện tại của leader để khớp mốc về page Task.
  */
 export async function aggregateKpiSummaryMembers(
   members: KpiMember[],
   monthKey: string,
+  ctx: SummaryTaskContext,
 ): Promise<KpiSummaryMember[]> {
   if (!db) return [];
   const out: KpiSummaryMember[] = [];
@@ -695,7 +705,7 @@ export async function aggregateKpiSummaryMembers(
             (KPI_MONTH_BASE + totalOf(monthEntries, scores).delta).toFixed(2),
           ),
           ...(leaveNote ? { leaveNote } : {}),
-          rows: buildMemberRows(monthEntries, scores),
+          rows: buildMemberRows(monthEntries, scores, ctx, m.projectIds ?? []),
         });
       } catch {
         // Sheet lỗi/bị xóa — bỏ qua member đó.
@@ -756,7 +766,7 @@ function datesOfRow(r: KpiSummaryRow): string[] {
 }
 
 /** '+2' / '−0.5' / '-1' → số; không phải số → null (giữ nguyên text, không cộng bừa). */
-function parseDelta(s?: string): number | null {
+export function parseDelta(s?: string): number | null {
   const t = (s ?? '').trim().replace('−', '-').replace('+', '');
   if (!t) return 0;
   const n = Number(t);
@@ -806,52 +816,64 @@ export function optimizeSummaryRows(rows: KpiSummaryRow[]): KpiSummaryRow[] {
 
   return order.map((key, idx) => {
     const g = groups.get(key)!;
-    const first = g[0];
-    if (g.length === 1) return { ...first, order: idx };
-
-    // Ngày: union tập ngày của mọi dòng → các đợt (nối qua T7/CN) → tổng ngày công.
-    const dates = g.flatMap(datesOfRow);
-    const runs = spansOfDates(dates);
-    const starts = g.map((r) => r.start).filter((d): d is string => !!d);
-    const ends = g.map((r) => r.end || r.start).filter((d): d is string => !!d);
-    const start = starts.length > 0 ? starts.sort((a, b) => a.localeCompare(b))[0] : undefined;
-    const end =
-      ends.length > 0 ? ends.sort((a, b) => b.localeCompare(a))[0] : undefined;
-    const days =
-      runs.length > 0
-        ? runs.reduce((s, r) => s + (totalWorkDays(r.from, r.to, 0) ?? 0), 0)
-        : g.reduce((s, r) => s + (typeof r.days === 'number' ? r.days : 0), 0);
-
-    // KPI: cộng được thì cộng, có ô gõ tay không phải số thì nối để không mất chữ.
-    const deltas = g.map((r) => parseDelta(r.kpi));
-    const kpi = deltas.every((d) => d !== null)
-      ? (() => {
-          const sum = Number(
-            (deltas as number[]).reduce((s, d) => s + d, 0).toFixed(2),
-          );
-          return sum !== 0 ? fmtDelta(sum) : undefined;
-        })()
-      : g
-          .map((r) => (r.kpi ?? '').trim())
-          .filter(Boolean)
-          .join(' · ') || undefined;
-
-    return {
-      id: first.id,
-      order: idx,
-      category: first.category,
-      app: first.app,
-      milestone: first.milestone,
-      tasks: uniqLines(g.map((r) => r.tasks)),
-      ...(start ? { start } : {}),
-      ...(end ? { end } : {}),
-      ...(days > 0 ? { days } : {}),
-      ...(runs.length > 1 ? { spans: fmtSpans(runs) } : {}),
-      progress: uniqLines(g.map((r) => r.progress)),
-      kpi,
-      kpiNote: uniqLines(g.map((r) => r.kpiNote)),
-    };
+    return g.length === 1 ? { ...g[0], order: idx } : { ...mergeSummaryRows(g), order: idx };
   });
+}
+
+/**
+ * Gộp nhiều dòng bảng tổng kết thành 1 (dùng chung cho Tối ưu bảng và dialog Gộp tay):
+ * - Giai đoạn/App/Mốc: của dòng NHIỀU NGÀY nhất (hòa → dòng đứng trước).
+ * - Start/End: sớm nhất/muộn nhất; đợt = hợp tập ngày các dòng (nối qua T7/CN).
+ * - Ngày: min(Σ Ngày các dòng, ngày công của hợp các đợt) — Ngày giờ là quy đổi theo tỷ
+ *   lệ giờ nên Σ mới đúng; min chặn đếm trùng khi các dòng chồng ngày. Có dòng chưa có
+ *   Ngày → dùng hợp các đợt.
+ * - Tasks/Tiến độ/Lý do ±: nối theo thứ tự dòng, bỏ dòng trùng.
+ * - KPI: cộng được thì cộng, có ô gõ tay không phải số thì nối bằng ' · '.
+ * Giữ id + order của dòng đầu tiên.
+ */
+export function mergeSummaryRows(g: KpiSummaryRow[]): KpiSummaryRow {
+  const first = g[0];
+  const head = g.reduce((best, r) => ((r.days ?? 0) > (best.days ?? 0) ? r : best), first);
+
+  const dates = g.flatMap(datesOfRow);
+  const runs = spansOfDates(dates);
+  const starts = g.map((r) => r.start).filter((d): d is string => !!d);
+  const ends = g.map((r) => r.end || r.start).filter((d): d is string => !!d);
+  const start = starts.length > 0 ? starts.sort((a, b) => a.localeCompare(b))[0] : undefined;
+  const end = ends.length > 0 ? ends.sort((a, b) => b.localeCompare(a))[0] : undefined;
+  const unionDays = runs.reduce((s, r) => s + (totalWorkDays(r.from, r.to, 0) ?? 0), 0);
+  const sumDays = g.reduce((s, r) => s + (typeof r.days === 'number' ? r.days : 0), 0);
+  const allHaveDays = g.every((r) => typeof r.days === 'number');
+  const days = Number(
+    (runs.length === 0 ? sumDays : allHaveDays ? Math.min(sumDays, unionDays) : unionDays).toFixed(1),
+  );
+
+  const deltas = g.map((r) => parseDelta(r.kpi));
+  const kpi = deltas.every((d) => d !== null)
+    ? (() => {
+        const sum = Number((deltas as number[]).reduce((s, d) => s + d, 0).toFixed(2));
+        return sum !== 0 ? fmtDelta(sum) : undefined;
+      })()
+    : g
+        .map((r) => (r.kpi ?? '').trim())
+        .filter(Boolean)
+        .join(' · ') || undefined;
+
+  return {
+    id: first.id,
+    order: first.order,
+    category: head.category,
+    app: head.app,
+    milestone: head.milestone,
+    tasks: uniqLines(g.map((r) => r.tasks)),
+    ...(start ? { start } : {}),
+    ...(end ? { end } : {}),
+    ...(days > 0 ? { days } : {}),
+    ...(runs.length > 1 ? { spans: fmtSpans(runs) } : {}),
+    progress: uniqLines(g.map((r) => r.progress)),
+    kpi,
+    kpiNote: uniqLines(g.map((r) => r.kpiNote)),
+  };
 }
 
 /** Áp `optimizeSummaryRows` cho mọi member; trả kèm số dòng trước/sau để báo UI. */
@@ -906,4 +928,122 @@ export function normalizeSummaryMembers(members: KpiSummaryMember[]): unknown {
       ...(r.kpiNote?.trim() ? { kpiNote: r.kpiNote } : {}),
     })),
   }));
+}
+
+// ---------- Hiển thị (trang Tổng kết + trang share) ----------
+
+/** Số ± để hiển thị: '+2', '−0.5' (dấu trừ chuẩn), '0'. Làm tròn 2 chữ số. */
+export function fmtSigned(n: number): string {
+  const r = Number(n.toFixed(2));
+  if (r > 0) return `+${r}`;
+  if (r < 0) return `−${Math.abs(r)}`;
+  return '0';
+}
+
+/** Lớp màu cho số ± của dòng / lý do. */
+export function pmClass(n: number): 'pos' | 'neg' | 'zero' {
+  return n > 0 ? 'pos' : n < 0 ? 'neg' : 'zero';
+}
+
+/** 1 lý do cộng/trừ điểm tách từ kpiNote. `value` null = dòng không theo dạng '±x — lý do'. */
+export interface KpiReason {
+  value: number | null;
+  text: string;
+}
+
+/**
+ * Tách kpiNote (mỗi dòng 1 lý do, dạng '+1 — Vượt tiến độ' hoặc chỉ '-0.5') thành danh
+ * sách. Dòng không theo dạng đó (VD '… và 3 mục nữa', hoặc leader gõ tay tự do) vẫn giữ
+ * nguyên chữ, value = null để UI hiện dấu '•'.
+ */
+export function parseKpiReasons(note?: string): KpiReason[] {
+  if (!note) return [];
+  return note
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const m = l.match(/^([+\-−]?\d+(?:\.\d+)?)\s*(?:—\s*(.*))?$/);
+      if (!m) return { value: null, text: l };
+      return { value: Number(m[1].replace('−', '-')), text: (m[2] ?? '').trim() };
+    });
+}
+
+/**
+ * Σ ± các dòng của 1 khối. Có ô KPI không phải số (sau khi gộp/gõ tay) → null: không
+ * tính được nên KHÔNG so lệch với KPI tháng (tránh cảnh báo sai).
+ */
+export function sumRowKpi(rows: KpiSummaryRow[]): number | null {
+  let sum = 0;
+  for (const r of rows) {
+    const d = parseDelta(r.kpi);
+    if (d === null) return null;
+    sum += d;
+  }
+  return Number(sum.toFixed(2));
+}
+
+/** KPI tháng lệch 100 + Σ ± dòng → trả giá trị kỳ vọng để hiện cảnh báo; khớp/không tính được → null. */
+export function kpiScoreMismatch(m: KpiSummaryMember): number | null {
+  const sum = sumRowKpi(m.rows ?? []);
+  if (sum === null) return null;
+  const expected = Number((KPI_MONTH_BASE + sum).toFixed(2));
+  return Math.abs(m.kpiScore - expected) > 0.005 ? expected : null;
+}
+
+/** Xem trước 🧹 Tối ưu: số dòng trước/sau của từng khối (chỉ khối có gộp) + tổng. */
+export function optimizePreviewByMember(members: KpiSummaryMember[]): {
+  members: KpiSummaryMember[];
+  before: number;
+  after: number;
+  changed: { memberId: string; name: string; before: number; after: number }[];
+} {
+  const res = optimizeSummaryMembers(members);
+  const changed = members
+    .map((m, i) => ({
+      memberId: m.memberId,
+      name: m.name,
+      before: (m.rows ?? []).length,
+      after: res.members[i].rows.length,
+    }))
+    .filter((x) => x.after !== x.before);
+  return { ...res, changed };
+}
+
+/** Số liệu cho 4 ô tổng quan ở trang share. */
+export function summaryStats(members: KpiSummaryMember[]) {
+  const scores = members.map((m) => m.kpiScore);
+  const n = scores.length;
+  const avg = n ? Number((scores.reduce((s, x) => s + x, 0) / n).toFixed(1)) : 0;
+  return {
+    members: n,
+    withReasons: members.filter((m) =>
+      (m.rows ?? []).some((r) => parseKpiReasons(r.kpiNote).length > 0),
+    ).length,
+    avg,
+    min: n ? Math.min(...scores) : 0,
+    max: n ? Math.max(...scores) : 0,
+    pos: scores.filter((s) => s > KPI_MONTH_BASE).length,
+    base: scores.filter((s) => s === KPI_MONTH_BASE).length,
+    neg: scores.filter((s) => s < KPI_MONTH_BASE).length,
+    rows: members.reduce((s, m) => s + (m.rows ?? []).length, 0),
+    days: Number(
+      members
+        .reduce(
+          (s, m) =>
+            s + (m.rows ?? []).reduce((a, r) => a + (typeof r.days === 'number' ? r.days : 0), 0),
+          0,
+        )
+        .toFixed(2),
+    ),
+  };
+}
+
+/** ISO → 'HH:mm · dd/mm/yyyy' (giờ máy người xem); ISO lỗi → ''. */
+export function fmtDateTime(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())} · ${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }

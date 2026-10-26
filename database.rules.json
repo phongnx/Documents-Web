@@ -32,6 +32,7 @@
               "end": { ".validate": "newData.val().matches(/^[0-9]{2}:[0-9]{2}$/)" },
               "category": { ".validate": "newData.isString() && newData.val().length <= 200" },
               "project": { ".validate": "newData.isString() && newData.val().length <= 200" },
+              "appId": { ".validate": "newData.isString() && newData.val().length <= 60" },
               "feature": { ".validate": "newData.isString() && newData.val().length <= 500" },
               "task": { ".validate": "newData.isString() && newData.val().length <= 2000" },
               "note": { ".validate": "newData.isString() && newData.val().length <= 2000" },
@@ -50,9 +51,12 @@
                 ".validate": "newData.hasChild('label')",
                 "label": { ".validate": "newData.isString() && newData.val().length <= 200" },
                 "date": { ".validate": "newData.isString() && newData.val().length <= 40" },
-                "$other": { ".validate": "$other.matches(/^(label|date)$/)" }
+                "taskId": { ".validate": "newData.isString() && newData.val().length <= 60" },
+                "appId": { ".validate": "newData.isString() && newData.val().length <= 60" },
+                "version": { ".validate": "newData.isString() && newData.val().length <= 100" },
+                "$other": { ".validate": "$other.matches(/^(label|date|taskId|appId|version)$/)" }
               },
-              "$other": { ".validate": "$other.matches(/^(id|date|start|end|category|project|feature|task|note|selfDelta|estRef|rel|createdAt|updatedAt)$/)" }
+              "$other": { ".validate": "$other.matches(/^(id|date|start|end|category|project|appId|feature|task|note|selfDelta|estRef|rel|createdAt|updatedAt)$/)" }
             }
           },
           "scores": {

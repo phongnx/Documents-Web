@@ -21,6 +21,7 @@ import {
   type KpiLeave,
   type KpiScore,
   type KpiSheetMeta,
+  type KpiTaskSnap,
   type KpiWeekPlan,
 } from '../kpiTypes';
 
@@ -35,6 +36,8 @@ export interface KpiSheet {
   leaves: KpiLeave[];
   /** Plan chung theo tuần (key = thứ 2 của tuần 'yyyy-mm-dd'). */
   weekPlans: Record<string, KpiWeekPlan>;
+  /** Snapshot task các app được gán (leader sync) — nguồn danh sách ô Mốc. */
+  tasks: KpiTaskSnap[];
   /** Ticket đã leader rà soát và BỎ QUA nghi vấn reopen (key = entryId dòng mới nhất). */
   reopenChecks: Record<string, boolean>;
   /** Leader: đánh dấu bỏ qua nghi vấn reopen (không phải reopen, nguyên nhân khác). */
@@ -76,6 +79,7 @@ function normalizeEntry(e: KpiEntry): KpiEntry {
     ...(e.end ? { end: e.end } : {}),
     ...(e.category ? { category: e.category } : {}),
     ...(e.project ? { project: e.project } : {}),
+    ...(e.appId ? { appId: e.appId } : {}),
     ...(e.feature ? { feature: e.feature } : {}),
     ...(e.task ? { task: e.task } : {}),
     ...(e.note ? { note: e.note } : {}),
@@ -95,6 +99,9 @@ function normalizeEntry(e: KpiEntry): KpiEntry {
           rel: {
             label: e.rel.label,
             ...(e.rel.date ? { date: e.rel.date } : {}),
+            ...(e.rel.taskId ? { taskId: e.rel.taskId } : {}),
+            ...(e.rel.appId ? { appId: e.rel.appId } : {}),
+            ...(e.rel.version ? { version: e.rel.version } : {}),
           },
         }
       : {}),
@@ -125,6 +132,7 @@ export function useKpiSheet(
   const [leaves, setLeaves] = useState<KpiLeave[]>([]);
   const [weekPlans, setWeekPlans] = useState<Record<string, KpiWeekPlan>>({});
   const [reopenChecks, setReopenChecks] = useState<Record<string, boolean>>({});
+  const [tasks, setTasks] = useState<KpiTaskSnap[]>([]);
 
   // Các nhánh NHỎ (meta/scores/leaves/weekPlans/reopenChecks) subscribe cả node —
   // chúng không lọc được theo tháng (không có index) nhưng tổng chỉ vài chục KB.
@@ -148,6 +156,7 @@ export function useKpiSheet(
             setLeaves([]);
             setWeekPlans({});
             setReopenChecks({});
+            setTasks([]);
             setState('notfound');
             return;
           }
@@ -172,6 +181,10 @@ export function useKpiSheet(
       ),
       onValue(ref(db, `${base}/reopenChecks`), (snap) =>
         setReopenChecks((snap.val() as Record<string, boolean> | null) ?? {}),
+      ),
+      // Snapshot task (2–69 KB/member) — đổi khi leader sửa task trên page Task.
+      onValue(ref(db, `${base}/tasks`), (snap) =>
+        setTasks(Object.values((snap.val() as Record<string, KpiTaskSnap> | null) ?? {})),
       ),
     ];
     return () => subs.forEach((u) => u());
@@ -428,5 +441,6 @@ export function useKpiSheet(
     setWeekPlan,
     reopenChecks,
     dismissReopen,
+    tasks,
   };
 }
