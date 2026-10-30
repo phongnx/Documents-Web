@@ -226,3 +226,55 @@ export const IcList = ({ size }: P) => (
     <path d="M5 6h6M5 8.5h6M5 11h3.5" />
   </Svg>
 );
+
+// ---------- Bổ sung cho màn Estimate ----------
+/** Đường đi lên — thực tế vượt est. */
+export const IcTrendUp = ({ size = 12 }: P) => (
+  <Svg size={size} width={1.8}>
+    <path d="M2.5 11.5l4-4 2.5 2.5 4.5-4.5" />
+    <path d="M10 5.5h3.5V9" />
+  </Svg>
+);
+export const IcUsers = ({ size = 13 }: P) => (
+  <Svg size={size}>
+    <circle cx="6" cy="5.5" r="2.5" />
+    <path d="M1.5 13.5c.5-2.5 2.3-4 4.5-4s4 1.5 4.5 4M11 3a2.5 2.5 0 0 1 0 5M12.5 9.7c1.2.5 2 1.8 2.2 3.8" />
+  </Svg>
+);
+/** Mũi tên quay lại — "Mở lại Draft". */
+export const IcUndo = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M5 4L2.5 6.5 5 9" />
+    <path d="M2.5 6.5h7a3.5 3.5 0 0 1 0 7H7" />
+  </Svg>
+);
+export const IcUnlock = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" />
+    <path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.7" />
+  </Svg>
+);
+/** Trạng thái sub task: vòng tròn rỗng / nửa đặc / có dấu tích. */
+export const IcStTodo = ({ size }: P) => (
+  <Svg size={size}>
+    <circle cx="8" cy="8" r="5.5" />
+  </Svg>
+);
+export const IcStDoing = ({ size }: P) => (
+  <Svg size={size}>
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor" />
+  </Svg>
+);
+export const IcStDone = ({ size }: P) => (
+  <Svg size={size}>
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M5.6 8.2l1.7 1.7 3.2-3.6" />
+  </Svg>
+);
+export const IcSearch = ({ size }: P) => (
+  <Svg size={size}>
+    <circle cx="7" cy="7" r="4.5" />
+    <path d="M10.5 10.5l3 3" />
+  </Svg>
+);

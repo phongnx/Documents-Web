@@ -213,21 +213,83 @@ export function estProgress(groups?: Record<string, EstGroup>): {
   pct: number;
   doneCount: number;
   total: number;
+  /** Số sub task có est (> 0). */
+  withEst: number;
 } {
   let done = 0;
   let sum = 0;
   let doneCount = 0;
   let total = 0;
+  let withEst = 0;
   for (const g of sortedGroups(groups)) {
     for (const t of sortedTasks(g)) {
       total++;
       if (t.status === 'done') doneCount++;
       if (!t.estHours) continue;
+      withEst++;
       sum += t.estHours;
       if (t.status === 'done') done += t.estHours;
     }
   }
-  return { pct: sum > 0 ? Math.round((done / sum) * 100) : 0, doneCount, total };
+  return {
+    pct: sum > 0 ? Math.round((done / sum) * 100) : 0,
+    doneCount,
+    total,
+    withEst,
+  };
+}
+
+/**
+ * Chữ hiển thị tiến độ. Mọi sub task đều có est → số chính là % theo est. Còn sub task
+ * thiếu est → % theo est không phản ánh đúng (sub task thiếu est không được tính), nên số
+ * chính là % sub task xong, % theo est xuống dòng phụ.
+ */
+export function estProgressText(p: {
+  pct: number;
+  doneCount: number;
+  total: number;
+  withEst: number;
+}): { mainPct: number; mainSub: string; secText: string | null } {
+  if (p.total === 0) return { mainPct: 0, mainSub: 'chưa có sub task', secText: null };
+  const ratio = `${p.doneCount}/${p.total}`;
+  if (p.withEst >= p.total)
+    return { mainPct: p.pct, mainSub: `theo est · ${ratio} sub task xong`, secText: null };
+  return {
+    mainPct: Math.round((p.doneCount / p.total) * 100),
+    mainSub: `sub task xong (${ratio})`,
+    secText:
+      p.withEst > 0
+        ? `${p.pct}% theo est · ${p.withEst}/${p.total} sub task có est`
+        : 'chưa có est',
+  };
+}
+
+/**
+ * Xem trước kết quả khi chuyển sub task sang Xong (menu trạng thái, dialog sửa) — cùng
+ * căn cứ với suggestDelta mà completeEstTask dùng lúc chốt thật.
+ */
+export function estDonePreview(
+  estHours: number | undefined,
+  actualMin: number,
+): { delta: number | null; lines: [string, string] } {
+  const delta = suggestDelta(estHours, actualMin);
+  if (actualMin <= 0)
+    return {
+      delta,
+      lines: ['Chưa có giờ log — không gợi ý điểm.', 'Leader đối chiếu khi chấm.'],
+    };
+  if (!estHours || estHours <= 0)
+    return {
+      delta,
+      lines: ['Chưa có est — không gợi ý điểm.', `Thực tế ${fmtMin(actualMin)}.`],
+    };
+  return {
+    delta,
+    lines: [
+      'Điền vào dòng log KPI mới nhất gắn sub task này.',
+      `Thực tế ${fmtMin(actualMin)} / est ${fmtEstHours(estHours)}. Dòng đã được leader chấm thì giữ điểm.`,
+    ],
+  };
 }
 
 /** Tóm tắt 1 bảng cho dòng danh sách: state, tiến độ, Σ est / Σ thực tế. */
@@ -237,6 +299,7 @@ export interface EstSummary {
   pct: number;
   doneCount: number;
   total: number;
+  withEst: number;
   estHours: number;
   actualMin: number;
 }
@@ -260,6 +323,7 @@ export function estSummaryOf(
     pct: p.pct,
     doneCount: p.doneCount,
     total: p.total,
+    withEst: p.withEst,
     estHours: Number(estHours.toFixed(2)),
     actualMin,
   };

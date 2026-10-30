@@ -1,33 +1,35 @@
 // Trang bảng Break task & Estimate cho MEMBER — truy cập ẩn danh qua link trong trang
 // KPI riêng của member (/share/est/:id?t={kpiToken}). Draft: member tự break task +
-// điền est; Approved: chỉ đổi status/note sub task của mình; tick done → dòng log chốt
+// điền est; Approved: chỉ đổi status/note sub task của mình; chọn Xong → dòng log chốt
 // bên bảng KPI tự nhận điểm gợi ý (completeEstTask).
+// Bản redesign Material 3: header gọn, chip trạng thái, banner, thông báo dạng snackbar.
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { get, ref } from 'firebase/database';
 import ThemeToggle from '../components/ThemeToggle';
-import EstSheetTable from '../components/board/EstSheetTable';
+import EstSheetTable, {
+  EstHeader,
+  EstNotFound,
+  EstSheetSkeleton,
+  EstSnackbar,
+  useEstNotice,
+} from '../components/board/EstSheetTable';
+import { IcList } from '../components/board/ksumIcons';
 import { useEstSheet } from '../hooks/useEstSheet';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { completeEstMessage, completeEstTask } from '../lib/estKpiSync';
 import { db } from '../lib/firebase';
 import type { KpiSheetMeta } from '../kpiTypes';
-import { estAutoEndDate, type EstSubTask, type EstTaskStatus } from '../estTypes';
-import { formatDateVi } from '../lib/reportFormat';
+import type { EstSubTask, EstTaskStatus } from '../estTypes';
 
 export default function EstimateSharePage() {
   const { id = '' } = useParams();
   const [params] = useSearchParams();
   const kpiToken = params.get('t') ?? undefined;
+  const narrow = useMediaQuery('(max-width: 839px)');
 
-  const [writeError, setWriteError] = useState('');
-  useEffect(() => {
-    if (!writeError) return;
-    const t = window.setTimeout(() => setWriteError(''), 5000);
-    return () => window.clearTimeout(t);
-  }, [writeError]);
-  const [notice, setNotice] = useState('');
-
-  const sheet = useEstSheet(id, setWriteError);
+  const { notice, notify } = useEstNotice();
+  const sheet = useEstSheet(id, (text) => notify({ text, kind: 'error' }));
 
   // Nhận diện member đang xem qua token KPI (?t) — để UI chỉ mở phần của họ.
   const [viewer, setViewer] = useState<{ id?: string; name?: string }>({});
@@ -63,16 +65,22 @@ export default function EstimateSharePage() {
       sheet.setTaskStatus(gid, tid, status);
       return;
     }
-    const result = await completeEstTask({
-      estId: id,
-      groupId: gid,
-      taskId: tid,
-      task,
-      logs: sheet.logs,
-      kpiToken,
-    });
-    setNotice(completeEstMessage(result));
-    window.setTimeout(() => setNotice(''), 6000);
+    try {
+      const result = await completeEstTask({
+        estId: id,
+        groupId: gid,
+        taskId: tid,
+        task,
+        logs: sheet.logs,
+        kpiToken,
+      });
+      notify({ text: completeEstMessage(result) }, 8000);
+    } catch {
+      notify({
+        text: 'Không lưu được: bảng đã được duyệt/khóa hoặc link không còn hiệu lực.',
+        kind: 'error',
+      });
+    }
   };
 
   if (!db) {
@@ -83,86 +91,68 @@ export default function EstimateSharePage() {
     );
   }
 
-  const meta = sheet.meta;
-  const draft = meta?.state === 'draft';
-  // End tay thắng; trống → End dự kiến từ tổng est (max theo assignee, 8h/ngày).
-  const autoEnd = meta?.endDate
-    ? null
-    : estAutoEndDate(meta?.startDate, meta?.holidays, sheet.groups);
+  const back = kpiToken
+    ? { to: `/share/kpi/${kpiToken}/estimates`, label: 'Estimate của tôi' }
+    : undefined;
+  const kpiLink = kpiToken
+    ? narrow
+      ? (
+          <Link
+            to={`/share/kpi/${kpiToken}`}
+            className="kml-iconbtn"
+            aria-label="Bảng KPI của tôi"
+            title="Bảng KPI của tôi"
+          >
+            <IcList size={22} />
+          </Link>
+        )
+      : (
+          <Link to={`/share/kpi/${kpiToken}`} className="kml-btn kml-btn-text">
+            <IcList size={16} />
+            Bảng KPI của tôi
+          </Link>
+        )
+    : null;
 
   return (
-    <div className="container kpi-share-view">
-      <header className="share-header">
-        <span className="brand">
-          📐 Estimate{meta ? ` · ${meta.title}` : ''}
-          {meta?.version && <span className="task-badge ver">{meta.version}</span>}
-        </span>
-        <div className="share-header-actions">
-          {kpiToken && (
-            <Link to={`/share/kpi/${kpiToken}/estimates`} className="board-docs-link">
-              ← Estimate của tôi
-            </Link>
-          )}
-          {kpiToken && (
-            <Link to={`/share/kpi/${kpiToken}`} className="board-docs-link">
-              📝 Bảng KPI của tôi
-            </Link>
-          )}
-          <ThemeToggle />
-        </div>
-      </header>
+    <div className="container kml-page est-page">
+      <EstHeader
+        meta={sheet.state === 'ready' ? sheet.meta : null}
+        groups={sheet.groups}
+        narrow={narrow}
+        back={back}
+        actions={
+          <>
+            {kpiLink}
+            <ThemeToggle className="kml-iconbtn" />
+          </>
+        }
+      />
 
-      {sheet.state === 'loading' && <p className="muted">Đang tải…</p>}
+      {sheet.state === 'loading' && <EstSheetSkeleton />}
       {sheet.state === 'notfound' && (
-        <p className="muted empty">
-          Bảng không tồn tại hoặc đã bị xóa. Liên hệ leader để lấy link mới.
-        </p>
+        <EstNotFound
+          title="Bảng không tồn tại hoặc đã bị xoá"
+          text="Liên hệ leader để lấy link mới."
+          back={back}
+        />
       )}
-      {sheet.state === 'ready' && meta && (
-        <>
-          <p className="muted est-range">
-            <span className={`task-badge ${draft ? 'st-doing' : 'st-done'}`}>
-              {draft
-                ? 'Draft — tự break task + điền est, leader sẽ duyệt & chốt'
-                : 'Đã duyệt — est đóng băng, chỉ cập nhật status/note task của bạn'}
-            </span>
-            {meta.locked && <span className="task-badge st-block">🔒 Đã khóa — chỉ xem</span>}
-            {(meta.startDate || meta.endDate) && (
-              <>
-                {' '}
-                · {meta.startDate ? formatDateVi(meta.startDate) : '…'} –{' '}
-                {meta.endDate
-                  ? formatDateVi(meta.endDate)
-                  : autoEnd
-                    ? `${formatDateVi(autoEnd)} (dự kiến)`
-                    : '…'}
-              </>
-            )}
-            {meta.appName && ` · ${meta.appName}`}
-          </p>
-
-          {writeError && <p className="warn kpi-write-error">{writeError}</p>}
-          {notice && <p className="muted kpi-locked-banner">{notice}</p>}
-
-          <EstSheetTable
-            mode="member"
-            meta={meta}
-            groups={sheet.groups}
-            logs={sheet.logs}
-            sheet={sheet}
-            viewerId={viewer.id}
-            viewerName={viewer.name}
-            onSetStatus={onSetStatus}
-          />
-
-          <p className="muted kpi-share-hint">
-            Giờ "Thực tế" tự cộng từ các dòng log trên bảng KPI có 📐 pick task của bảng
-            này. Tick ✅ Xong → dòng log chốt tự nhận điểm KPI gợi ý (nhanh hơn est ≥20%
-            = +1 · đạt (đến chậm ≤10%) = 0 · chậm 10–20% = −0.5 · chậm &gt;20% = −1) —
-            leader xác nhận khi chấm.
-          </p>
-        </>
+      {sheet.state === 'ready' && sheet.meta && (
+        <EstSheetTable
+          mode="member"
+          meta={sheet.meta}
+          groups={sheet.groups}
+          logs={sheet.logs}
+          sheet={sheet}
+          viewerId={viewer.id}
+          viewerName={viewer.name}
+          narrow={narrow}
+          onSetStatus={onSetStatus}
+          notify={notify}
+        />
       )}
+
+      <EstSnackbar notice={notice} onClose={() => notify(null)} />
     </div>
   );
 }

@@ -1,16 +1,36 @@
 // Editor bảng Break task & Estimate (leader): toàn quyền sửa + duyệt/mở lại/khóa.
-// Tick done 1 sub task → chạy cùng flow completeEstTask như member (dòng log chốt bên
+// Chọn Xong 1 sub task → chạy cùng flow completeEstTask như member (dòng log chốt bên
 // bảng KPI của assignee nhận điểm gợi ý) — token tra từ danh sách member riêng tư.
+// Bản redesign Material 3: header gọn + chip trạng thái, Duyệt & chốt qua dialog xác nhận,
+// thông báo dạng snackbar.
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
 import EstMetaDialog from '../components/board/EstMetaDialog';
-import EstSheetTable from '../components/board/EstSheetTable';
+import EstSheetTable, {
+  EstHeader,
+  EstNotFound,
+  EstSheetSkeleton,
+  EstSnackbar,
+  useEstNotice,
+} from '../components/board/EstSheetTable';
+import KsumConfirmDialog from '../components/board/KsumConfirmDialog';
+import { IcCheck, IcEdit, IcLock, IcUndo, IcUnlock } from '../components/board/ksumIcons';
 import { useEstSheet } from '../hooks/useEstSheet';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { completeEstMessage, completeEstTask } from '../lib/estKpiSync';
-import { estAutoEndDate, type EstSubTask, type EstTaskStatus } from '../estTypes';
-import { formatDateVi } from '../lib/reportFormat';
+import {
+  estProgress,
+  estProgressText,
+  fmtEstHours,
+  sortedGroups,
+  sortedTasks,
+  type EstSubTask,
+  type EstTaskStatus,
+} from '../estTypes';
+
+const BACK = { to: '/board/estimates', label: 'Danh sách bảng' };
 
 export default function BoardEstimateEditPage() {
   const { id = '' } = useParams();
@@ -23,10 +43,11 @@ export default function BoardEstimateEditPage() {
     setEstimateLocked,
     updateEstimateMeta,
   } = usePm();
-  const [writeError, setWriteError] = useState('');
-  const sheet = useEstSheet(id, setWriteError);
+  const narrow = useMediaQuery('(max-width: 839px)');
+  const { notice, notify } = useEstNotice();
+  const sheet = useEstSheet(id, (text) => notify({ text, kind: 'error' }));
   const [metaOpen, setMetaOpen] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [approveOpen, setApproveOpen] = useState(false);
 
   const meta = sheet.meta;
 
@@ -45,116 +66,133 @@ export default function BoardEstimateEditPage() {
       return;
     }
     const token = members.find((m) => m.id === task.assigneeId)?.token;
-    const result = await completeEstTask({
-      estId: id,
-      groupId: gid,
-      taskId: tid,
-      task,
-      logs: sheet.logs,
-      kpiToken: token,
-    });
-    setNotice(completeEstMessage(result));
-    window.setTimeout(() => setNotice(''), 5000);
+    try {
+      const result = await completeEstTask({
+        estId: id,
+        groupId: gid,
+        taskId: tid,
+        task,
+        logs: sheet.logs,
+        kpiToken: token,
+      });
+      notify({ text: completeEstMessage(result) }, 8000);
+    } catch {
+      notify({ text: 'Không lưu được trạng thái sub task. Thử lại sau.', kind: 'error' });
+    }
   };
 
   if (sheet.state === 'loading') {
     return (
-      <div className="container">
+      <div className="container kml-page est-page">
         <BoardNav />
-        <p className="muted">Đang tải…</p>
+        <EstHeader meta={null} groups={{}} narrow={narrow} back={BACK} />
+        <EstSheetSkeleton />
       </div>
     );
   }
   if (sheet.state === 'notfound' || !meta) {
     return (
-      <div className="container">
+      <div className="container kml-page est-page">
         <BoardNav />
-        <p className="muted empty">Không tìm thấy bảng estimate này.</p>
-        <Link to="/board/estimates" className="board-docs-link">
-          ← Danh sách bảng
-        </Link>
+        <EstHeader meta={null} groups={{}} narrow={narrow} back={BACK} />
+        <EstNotFound
+          title="Không tìm thấy bảng estimate này"
+          text="Bảng có thể đã bị xoá. Quay lại danh sách để mở bảng khác."
+          back={BACK}
+        />
       </div>
     );
   }
 
   const draft = meta.state === 'draft';
-  // End tay thắng; trống → End dự kiến từ tổng est (max theo assignee, 8h/ngày).
-  const autoEnd = meta.endDate
-    ? null
-    : estAutoEndDate(meta.startDate, meta.holidays, sheet.groups);
+  const locked = meta.locked === true;
+
+  const infoBtn = (
+    <button
+      type="button"
+      className={`kml-btn ${narrow ? 'kml-btn-outlined' : 'kml-btn-text'}`}
+      onClick={() => setMetaOpen(true)}
+    >
+      {!narrow && <IcEdit size={16} />}
+      Thông tin
+    </button>
+  );
+  const stateBtn = draft ? (
+    <button
+      type="button"
+      className="kml-btn kml-btn-filled"
+      title="Chốt est — member chỉ còn đổi trạng thái / ghi chú"
+      onClick={() => setApproveOpen(true)}
+    >
+      <IcCheck size={16} />
+      Duyệt &amp; chốt
+    </button>
+  ) : (
+    <button
+      type="button"
+      className="kml-btn kml-btn-outlined"
+      title="Mở lại cho member sửa cấu trúc / est"
+      onClick={() => setEstimateState(id, 'draft')}
+    >
+      <IcUndo size={16} />
+      Mở lại Draft
+    </button>
+  );
+  const lockBtn = (
+    <button
+      type="button"
+      className="kml-iconbtn est-lockbtn"
+      aria-label="Khoá bảng (chỉ xem)"
+      title="Khoá bảng (chỉ xem)"
+      onClick={() => setEstimateLocked(id, true)}
+    >
+      <IcLock size={20} />
+    </button>
+  );
+  const unlockBtn = (
+    <button type="button" className="kml-btn kml-btn-tonal" onClick={() => setEstimateLocked(id, false)}>
+      <IcUnlock size={16} />
+      Mở khoá
+    </button>
+  );
+  // Màn hẹp: nút trạng thái (Duyệt / Mở lại) đứng đầu, giãn hết chiều ngang còn lại.
+  const actions = locked ? (
+    unlockBtn
+  ) : narrow ? (
+    <>
+      {stateBtn}
+      {infoBtn}
+      {lockBtn}
+    </>
+  ) : (
+    <>
+      {infoBtn}
+      {stateBtn}
+      {lockBtn}
+    </>
+  );
+
+  // Số liệu cho dialog Duyệt & chốt.
+  const progress = estProgress(sheet.groups);
+  const ptext = estProgressText(progress);
+  const estTotal = sortedGroups(sheet.groups).reduce(
+    (s, g) => s + sortedTasks(g).reduce((a, t) => a + (t.estHours ?? 0), 0),
+    0,
+  );
 
   return (
-    <div className="container">
+    <div className="container kml-page est-page">
       <BoardNav />
 
-      <div className="board-add-row est-head-row">
-        <Link to="/board/estimates" className="board-docs-link">
-          ←
-        </Link>
-        <strong className="est-page-title">
-          📐 {meta.title}
-          {meta.appName && <span className="muted"> · {meta.appName}</span>}
-          {meta.version && <span className="task-badge ver">{meta.version}</span>}
-          <span className={`task-badge ${draft ? 'st-doing' : 'st-done'}`}>
-            {draft ? 'Draft — member đang tự fill' : 'Đã duyệt — est đóng băng'}
-          </span>
-          {meta.locked && <span className="task-badge st-block">🔒 Đã khóa</span>}
-        </strong>
-        <div className="doc-line-actions">
-          <button type="button" className="doc-action" onClick={() => setMetaOpen(true)}>
-            ✏️ Thông tin
-          </button>
-          {draft ? (
-            <button
-              type="button"
-              className="primary"
-              title="Chốt est — member chỉ còn đổi status/note"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    'Duyệt & chốt bảng? Sau khi chốt member không sửa được cấu trúc/est nữa (chỉ status + note).',
-                  )
-                )
-                  setEstimateState(id, 'approved');
-              }}
-            >
-              ✅ Duyệt & chốt
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="doc-action"
-              title="Mở lại cho member sửa cấu trúc/est"
-              onClick={() => setEstimateState(id, 'draft')}
-            >
-              ↩ Mở lại Draft
-            </button>
-          )}
-          <button
-            type="button"
-            className="doc-action"
-            title={meta.locked ? 'Mở khóa bảng' : 'Khóa hẳn (chỉ xem)'}
-            onClick={() => setEstimateLocked(id, !meta.locked)}
-          >
-            {meta.locked ? '🔓' : '🔒'}
-          </button>
-        </div>
-      </div>
-
-      {(meta.startDate || meta.endDate) && (
-        <p className="muted est-range">
-          {meta.startDate ? formatDateVi(meta.startDate) : '…'} –{' '}
-          {meta.endDate
-            ? formatDateVi(meta.endDate)
-            : autoEnd
-              ? `${formatDateVi(autoEnd)} (dự kiến)`
-              : '…'}
-          {' · '}👥 {(meta.participants ?? []).map((p) => p.name).join(', ') || 'chưa gán'}
-        </p>
-      )}
-
-      {writeError && <p className="warn kpi-write-error">{writeError}</p>}
-      {notice && <p className="muted kpi-locked-banner">{notice}</p>}
+      <EstHeader
+        meta={meta}
+        groups={sheet.groups}
+        narrow={narrow}
+        back={BACK}
+        showTask
+        actions={narrow ? undefined : actions}
+        below={narrow ? actions : undefined}
+      />
 
       <EstSheetTable
         mode="leader"
@@ -162,12 +200,55 @@ export default function BoardEstimateEditPage() {
         groups={sheet.groups}
         logs={sheet.logs}
         sheet={sheet}
+        narrow={narrow}
         onSetStatus={onSetStatus}
+        notify={notify}
       />
+
+      {approveOpen && (
+        <KsumConfirmDialog
+          tone="info"
+          icon={<IcCheck size={20} />}
+          title="Duyệt & chốt bảng?"
+          confirmLabel="Duyệt & chốt"
+          onCancel={() => setApproveOpen(false)}
+          onConfirm={() => {
+            setEstimateState(id, 'approved');
+            setApproveOpen(false);
+          }}
+        >
+          <p className="est-confirm-text">
+            Est sẽ đóng băng. Member chỉ đổi được trạng thái và ghi chú sub task của mình. Có
+            thể mở lại Draft sau.
+          </p>
+          <div className="est-sum">
+            <span className="kml-mstat">
+              <b>{progress.total}</b> sub task
+            </span>
+            <span className="kml-mstat">
+              est <b>{fmtEstHours(estTotal)}</b>
+            </span>
+            <span className="kml-mstat">
+              <b>{(meta.participants ?? []).length}</b> người tham gia
+            </span>
+          </div>
+          <div className="est-sum-prog">
+            <span className="kml-stat-label">Tiến độ</span>
+            <div className="kml-stat-row">
+              <span className="kml-stat-value">{ptext.mainPct}%</span>
+              <span className="kml-stat-sub">{ptext.mainSub}</span>
+            </div>
+            <div className="est-bar">
+              <i style={{ width: `${ptext.mainPct}%` }} />
+            </div>
+            {ptext.secText && <span className="kml-stat-sub">{ptext.secText}</span>}
+          </div>
+        </KsumConfirmDialog>
+      )}
 
       {metaOpen && (
         <EstMetaDialog
-          title="✏️ Thông tin bảng"
+          title="Thông tin bảng"
           apps={apps}
           members={members}
           tasks={tasks}
@@ -192,6 +273,8 @@ export default function BoardEstimateEditPage() {
           onClose={() => setMetaOpen(false)}
         />
       )}
+
+      <EstSnackbar notice={notice} onClose={() => notify(null)} />
     </div>
   );
 }
