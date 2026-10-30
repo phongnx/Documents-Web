@@ -31,6 +31,8 @@ export interface KpiSheet {
   state: KpiSheetState;
   meta: KpiSheetMeta | null;
   entries: KpiEntry[];
+  /** true khi đang chờ entries của tháng vừa chọn (đổi tháng) — UI hiện khung tải. */
+  entriesLoading: boolean;
   scores: Record<string, KpiScore>;
   /** Các đợt nghỉ phép (leader quản lý, member đọc để hiển thị + validate giờ log). */
   leaves: KpiLeave[];
@@ -128,6 +130,7 @@ export function useKpiSheet(
   const [state, setState] = useState<KpiSheetState>('loading');
   const [meta, setMeta] = useState<KpiSheetMeta | null>(null);
   const [entries, setEntries] = useState<KpiEntry[]>([]);
+  const [entriesLoading, setEntriesLoading] = useState(true);
   const [scores, setScores] = useState<Record<string, KpiScore>>({});
   const [leaves, setLeaves] = useState<KpiLeave[]>([]);
   const [weekPlans, setWeekPlans] = useState<Record<string, KpiWeekPlan>>({});
@@ -195,6 +198,7 @@ export function useKpiSheet(
   // Khoảng ngày tường minh: date 'yyyy-mm-dd' so sánh chuỗi nên '-01'..'-31' bao trọn tháng.
   useEffect(() => {
     if (!db || !token) return;
+    setEntriesLoading(true);
     const entriesRef = ref(db, `shared/kpi/${token}/entries`);
     const q = monthKey
       ? query(
@@ -206,8 +210,14 @@ export function useKpiSheet(
       : entriesRef;
     return onValue(
       q,
-      (snap) => setEntries(Object.values((snap.val() as Record<string, KpiEntry> | null) ?? {})),
-      () => setEntries([]),
+      (snap) => {
+        setEntries(Object.values((snap.val() as Record<string, KpiEntry> | null) ?? {}));
+        setEntriesLoading(false);
+      },
+      () => {
+        setEntries([]);
+        setEntriesLoading(false);
+      },
     );
   }, [token, monthKey]);
 
@@ -426,6 +436,7 @@ export function useKpiSheet(
     state,
     meta,
     entries,
+    entriesLoading,
     scores,
     leaves,
     addEntry,

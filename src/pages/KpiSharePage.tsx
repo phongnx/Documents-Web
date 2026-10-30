@@ -1,42 +1,53 @@
 // Trang log KPI của member — truy cập công khai qua link riêng /share/kpi/:token
 // (capability URL, KHÔNG cần đăng nhập). Member tự thêm/sửa dòng log của mình;
 // dòng đã được leader chấm điểm sẽ bị khóa (rule chặn cả phía server).
-import { useEffect, useState } from 'react';
+// Bản redesign Material 3: header gọn, dải release dạng chip, thông báo dạng snackbar.
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
-import KpiLogTable from '../components/board/KpiLogTable';
+import KpiMemberLog, { type KpiNotice } from '../components/board/KpiMemberLog';
 import KpiReleaseInfoDialog from '../components/board/KpiReleaseInfoDialog';
 import KpiRulesPreviewDialog from '../components/board/KpiRulesPreviewDialog';
+import { shortDay } from '../components/board/KpiLogEditor';
+import {
+  IcAlert,
+  IcChevronDown,
+  IcChevronUp,
+  IcClose,
+  IcLinkOff,
+  IcLock,
+  IcRocket,
+  IcRuler,
+  IcRules,
+} from '../components/board/ksumIcons';
 import { get, ref } from 'firebase/database';
 import { useKpiSheet } from '../hooks/useKpiSheet';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { db } from '../lib/firebase';
 import { completeEstMessage, completeEstTask } from '../lib/estKpiSync';
 import type { EstGroup, EstLogs, KpiEstRef } from '../estTypes';
-import { addDays, isoLocal, mondayOf, weekdayVN } from '../lib/pmDates';
-import { formatDateVi } from '../lib/reportFormat';
+import { addDays, isoLocal, mondayOf } from '../lib/pmDates';
 import { DEFAULT_KPI_RULES, type KpiRelease } from '../kpiTypes';
 
 export default function KpiSharePage() {
   const { token } = useParams();
+  const narrow = useMediaQuery('(max-width: 839px)');
   const [monthKey, setMonthKey] = useState(isoLocal(new Date()).slice(0, 7));
-  // Thông báo lỗi ghi (dòng đã chấm/sheet khóa/link hết hiệu lực) — tự ẩn sau 4s.
-  const [writeError, setWriteError] = useState('');
-  useEffect(() => {
-    if (!writeError) return;
-    const t = window.setTimeout(() => setWriteError(''), 4000);
-    return () => window.clearTimeout(t);
-  }, [writeError]);
 
-  const sheet = useKpiSheet(token, setWriteError, monthKey);
+  // Snackbar: lỗi ghi giữ tới khi đóng; thông báo thường tự ẩn sau 5s (chốt estimate 8s).
+  const [notice, setNotice] = useState<KpiNotice | null>(null);
+  const noticeTimer = useRef<number | undefined>(undefined);
+  const notify = (n: KpiNotice | null) => {
+    window.clearTimeout(noticeTimer.current);
+    setNotice(n);
+    if (n && !n.persistent && n.kind !== 'error')
+      noticeTimer.current = window.setTimeout(() => setNotice(null), 5000);
+  };
+  useEffect(() => () => window.clearTimeout(noticeTimer.current), []);
+  const onWriteError = (text: string) => notify({ text, kind: 'error' });
+
+  const sheet = useKpiSheet(token, onWriteError, monthKey);
   const locked = sheet.meta?.locked === true;
-
-  // Thông báo kết quả chốt task estimate (done + điểm gợi ý) — tự ẩn sau 6s.
-  const [estNotice, setEstNotice] = useState('');
-  useEffect(() => {
-    if (!estNotice) return;
-    const t = window.setTimeout(() => setEstNotice(''), 6000);
-    return () => window.clearTimeout(t);
-  }, [estNotice]);
 
   // Tick "Hoàn thành task estimate" trên dòng log → dòng đó là DÒNG CHỐT:
   // set sub task done + điền điểm gợi ý vào chính dòng này (1 update nguyên tử).
@@ -64,9 +75,11 @@ export default function KpiSharePage() {
         entryId,
         entryMin,
       });
-      setEstNotice(completeEstMessage(result));
+      window.clearTimeout(noticeTimer.current);
+      setNotice({ text: completeEstMessage(result) });
+      noticeTimer.current = window.setTimeout(() => setNotice(null), 8000);
     } catch {
-      setWriteError('Không chốt được task estimate (bảng có thể đã khóa).');
+      notify({ text: 'Không chốt được task estimate (bảng có thể đã khóa).', kind: 'error' });
     }
   };
   // Dialog xem quy chế (chỉ đọc) — sheet cũ chưa có snapshot thì fallback quy chế gốc.
@@ -77,7 +90,8 @@ export default function KpiSharePage() {
       : DEFAULT_KPI_RULES;
 
   // Mốc release sắp tới của các app được gán (snapshot trong meta.releases):
-  // lọc lại từ hôm nay lúc render (snapshot có thể cũ), mặc định hiện 2 mốc gần nhất.
+  // lọc lại từ hôm nay lúc render (snapshot có thể cũ). Mặc định hiện 3 mốc gần nhất
+  // (màn hẹp 1 mốc), bấm "+N" để xem hết.
   const [relOpen, setRelOpen] = useState(false);
   // Mốc đang xem chi tiết trong dialog (null = đóng).
   const [relDetail, setRelDetail] = useState<KpiRelease | null>(null);
@@ -85,7 +99,8 @@ export default function KpiSharePage() {
   const weekStart = mondayOf(today);
   const weekEnd = addDays(weekStart, 6);
   const releases = (sheet.meta?.releases ?? []).filter((r) => r.date >= today);
-  const visibleReleases = relOpen ? releases : releases.slice(0, 2);
+  const relLimit = narrow ? 1 : 3;
+  const visibleReleases = relOpen ? releases : releases.slice(0, relLimit);
 
   // Tiêu đề tab theo tên member.
   useEffect(() => {
@@ -104,86 +119,118 @@ export default function KpiSharePage() {
     );
   }
 
+  const ready = sheet.state === 'ready';
+
   return (
-    <div className="container kpi-share-view">
-      <header className="share-header">
-        <span className="brand">📝 KPI log{sheet.meta ? ` · ${sheet.meta.memberName}` : ''}</span>
-        <div className="share-header-actions">
-          {sheet.state === 'ready' && token && (
+    <div className="container kml-page">
+      <header className="kml-topbar">
+        <div className="kml-topbar-title">
+          <h1>{sheet.meta ? `KPI log của ${sheet.meta.memberName}` : 'KPI log'}</h1>
+          {ready && (
+            <p>
+              <IcLock size={13} />
+              {narrow ? 'Link riêng — không chia sẻ' : 'Link riêng — không chia sẻ cho người khác'}
+            </p>
+          )}
+        </div>
+        <div className="kml-topbar-actions">
+          {ready &&
+            token &&
             // Lối vào LUÔN có (kể cả chưa tham gia bảng nào) — trang Estimate liệt kê task
             // các app được gán, task nào leader đã mở bảng thì click vào được.
-            <Link
-              to={`/share/kpi/${token}/estimates`}
-              className="doc-action"
-              title="Task các app được gán + bảng estimate của từng task"
-            >
-              📐 Estimate của tôi
-            </Link>
-          )}
-          {sheet.state === 'ready' && (
-            <button
-              type="button"
-              className="doc-action"
-              title="Xem quy chế chấm điểm KPI"
-              onClick={() => setRulesOpen(true)}
-            >
-              ℹ️ Quy chế
-            </button>
-          )}
-          <ThemeToggle />
-          <span className="badge badge-shared">Link riêng — không chia sẻ cho người khác</span>
+            (narrow ? (
+              <Link
+                to={`/share/kpi/${token}/estimates`}
+                className="kml-iconbtn"
+                aria-label="Estimate của tôi"
+                title="Task các app được gán + bảng estimate của từng task"
+              >
+                <IcRuler size={20} />
+              </Link>
+            ) : (
+              <Link
+                to={`/share/kpi/${token}/estimates`}
+                className="kml-btn kml-btn-text"
+                title="Task các app được gán + bảng estimate của từng task"
+              >
+                <IcRuler size={16} />
+                Estimate của tôi
+              </Link>
+            ))}
+          {ready &&
+            (narrow ? (
+              <button
+                type="button"
+                className="kml-iconbtn"
+                aria-label="Quy chế chấm điểm"
+                onClick={() => setRulesOpen(true)}
+              >
+                <IcRules size={20} />
+              </button>
+            ) : (
+              <button type="button" className="kml-btn kml-btn-text" onClick={() => setRulesOpen(true)}>
+                <IcRules size={16} />
+                Quy chế
+              </button>
+            ))}
+          <ThemeToggle className="kml-iconbtn" />
         </div>
       </header>
 
-      {sheet.state === 'loading' && <p className="muted">Đang tải…</p>}
+      {sheet.state === 'loading' && <p className="k-muted">Đang tải…</p>}
       {sheet.state === 'notfound' && (
-        <p className="muted empty">
-          Trang không tồn tại hoặc leader đã ngừng chia sẻ. Liên hệ leader để lấy link mới.
-        </p>
+        <div className="kml-card kml-empty">
+          <span className="kml-empty-ic">
+            <IcLinkOff size={32} />
+          </span>
+          <h2>Không mở được trang này</h2>
+          <p>Trang không tồn tại hoặc leader đã ngừng chia sẻ. Liên hệ leader để lấy link mới.</p>
+        </div>
       )}
-      {sheet.state === 'ready' && (
+      {ready && (
         <>
           {releases.length > 0 && (
-            <div className="kpi-releases">
-              <span className="muted">🚀 Release sắp tới:</span>
+            <div className={`kml-rels${relOpen ? ' is-open' : ''}`} role="group" aria-label="Release sắp tới">
+              <span className={narrow ? 'k-sr' : 'kml-rels-label'}>Release sắp tới</span>
               {visibleReleases.map((r, i) => (
                 <button
                   type="button"
                   key={`${r.app}-${r.date}-${i}`}
-                  className={
-                    // Mốc nằm trong tuần hiện tại → highlight khác biệt.
-                    r.date >= weekStart && r.date <= weekEnd
-                      ? 'kpi-rel-chip kpi-rel-week'
-                      : 'kpi-rel-chip'
-                  }
+                  // Mốc nằm trong tuần hiện tại → tô nền khác biệt.
+                  className={`kml-chip${r.date >= weekStart && r.date <= weekEnd ? ' is-week' : ''}`}
                   title="Xem chi tiết các task trong release"
                   onClick={() => setRelDetail(r)}
                 >
-                  {r.app}
-                  {r.version ? ` ${r.version}` : ''} · {weekdayVN(r.date)} {formatDateVi(r.date)}
+                  <IcRocket size={15} />
+                  <span className="kml-ellipsis">
+                    {r.app}
+                    {r.version ? ` ${r.version}` : ''}
+                  </span>
+                  <span className="kml-chip-sub">{shortDay(r.date)}</span>
                 </button>
               ))}
-              {releases.length > 2 && (
+              {releases.length > relLimit && (
                 <button
                   type="button"
-                  className="doc-action kpi-rel-toggle"
+                  className="kml-chip"
+                  aria-expanded={relOpen}
                   onClick={() => setRelOpen((v) => !v)}
                 >
-                  {relOpen ? '▴ Thu gọn' : `+${releases.length - 2} ▾`}
+                  {relOpen ? 'Thu gọn' : `+${releases.length - relLimit}`}
+                  {relOpen ? <IcChevronUp size={14} /> : <IcChevronDown size={14} />}
                 </button>
               )}
             </div>
           )}
           {locked && (
-            <p className="warn kpi-locked-banner">
-              🔒 Trang đã bị khóa — chỉ xem, không sửa được. Liên hệ leader nếu cần mở lại.
-            </p>
+            <div className="kml-banner" role="status">
+              <IcLock size={20} />
+              <span>Trang đã bị khóa — chỉ xem, không sửa được. Liên hệ leader nếu cần mở lại.</span>
+            </div>
           )}
-          {writeError && <p className="warn kpi-write-error">{writeError}</p>}
-          {estNotice && <p className="muted kpi-locked-banner">{estNotice}</p>}
-          <KpiLogTable
-            mode="member"
+          <KpiMemberLog
             entries={sheet.entries}
+            entriesLoading={sheet.entriesLoading}
             scores={sheet.scores}
             monthKey={monthKey}
             onMonthChange={setMonthKey}
@@ -203,12 +250,27 @@ export default function KpiSharePage() {
             onAdd={sheet.addEntry}
             onUpdate={sheet.updateEntry}
             onDelete={sheet.deleteEntry}
+            notify={notify}
           />
-          <p className="muted kpi-share-hint">
-            Dòng có badge điểm là đã được leader chấm — bị khóa sửa. Điểm tháng = 100 +
-            tổng điểm cộng/trừ trong tháng (xem chi tiết ở nút "ℹ️ Quy chế").
-          </p>
         </>
+      )}
+
+      {notice && (
+        <div className={`kml-snack${notice.kind === 'error' ? ' is-error' : ''}`} role={notice.kind === 'error' ? 'alert' : 'status'}>
+          {notice.kind === 'error' && <IcAlert size={18} />}
+          <span className="kml-snack-text">{notice.text}</span>
+          <button
+            type="button"
+            className="kml-iconbtn is-inverse"
+            aria-label="Đóng thông báo"
+            onClick={() => {
+              window.clearTimeout(noticeTimer.current);
+              setNotice(null);
+            }}
+          >
+            <IcClose size={18} />
+          </button>
+        </div>
       )}
 
       {rulesOpen && (

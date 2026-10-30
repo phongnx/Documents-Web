@@ -17,6 +17,8 @@ import {
   type EstLogs,
   type KpiEstRef,
 } from '../../estTypes';
+import KpiDialog from './KpiDialog';
+import { IcRuler } from './ksumIcons';
 
 export interface EstPickResult {
   estRef: KpiEstRef;
@@ -91,96 +93,93 @@ export default function KpiEstPickerDialog({
     (!memberId && !!memberName && t.assigneeName === memberName);
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-dialog task-picker" role="dialog" aria-modal="true">
-        <div className="modal-header">
-          <strong>📐 Pick task từ estimate</strong>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Đóng">
-            ✕
-          </button>
-        </div>
-
-        <div className="picker-list">
-          {loaded === null ? (
-            <p className="muted">Đang tải…</p>
-          ) : loaded.length === 0 ? (
-            <p className="muted">Không đọc được bảng estimate nào.</p>
-          ) : (
-            loaded.map((est) => {
-              const rows = sortedGroups(est.groups).flatMap((g) =>
-                sortedTasks(g)
-                  .filter((t) => mine(t))
-                  .map((t) => ({ g, t })),
-              );
-              if (rows.length === 0) return null;
-              return (
-                <div key={est.id} className="picker-task">
-                  <div className="picker-task-head">
-                    <span className="picker-task-title">📐 {est.meta.title}</span>
-                    {est.meta.version && (
-                      <span className="task-badge ver">{est.meta.version}</span>
-                    )}
-                  </div>
-                  <ul className="picker-lines est-pick-lines">
-                    {rows.map(({ g, t }) => {
-                      const logged = actualMinOf(est.logs, t.id);
-                      const st = EST_STATUS_META[t.status];
-                      return (
-                        <li key={t.id}>
-                          <button
-                            type="button"
-                            className={`est-pick-btn${t.status === 'done' ? ' est-pick-done' : ''}`}
-                            onClick={() =>
-                              onPick({
-                                estRef: {
-                                  estId: est.id,
-                                  groupId: g.id,
-                                  taskId: t.id,
-                                  title: t.title,
-                                },
-                                taskText: t.title,
-                                featureText: g.title,
-                                projectText: est.meta.appName,
-                              })
-                            }
-                          >
-                            <span className="est-pick-title">
-                              {st.icon} {g.title ? `${g.title} · ` : ''}
-                              {t.title}
-                            </span>
-                            <span className="muted est-pick-meta">
-                              {t.estHours ? `est ${fmtEstHours(t.estHours)}` : 'chưa est'}
-                              {logged > 0 && ` · đã log ${fmtMin(logged)}`}
-                              {` · ${st.label}`}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              );
-            })
-          )}
-          {loaded !== null &&
-            loaded.length > 0 &&
-            loaded.every((est) =>
-              sortedGroups(est.groups).every(
-                (g) => sortedTasks(g).filter((t) => mine(t)).length === 0,
-              ),
-            ) && (
-              <p className="muted">
-                Chưa có sub task nào được assign cho bạn trong các bảng estimate.
-              </p>
-            )}
-        </div>
-
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>
-            Đóng
-          </button>
-        </div>
-      </div>
-    </div>
+    <KpiDialog
+      icon={<IcRuler size={18} />}
+      title="Chọn task từ estimate"
+      subtitle="Sub task được giao cho bạn. Chọn xong sẽ điền Task, Feature và Project."
+      scrollBody
+      onClose={onClose}
+      actions={
+        <button type="button" className="k-btn" onClick={onClose}>
+          Hủy
+        </button>
+      }
+    >
+      {loaded === null ? (
+        <p className="k-muted">Đang tải…</p>
+      ) : loaded.length === 0 ? (
+        <p className="k-muted">Không đọc được bảng estimate nào.</p>
+      ) : (
+        loaded.map((est) => {
+          const rows = sortedGroups(est.groups).flatMap((g) =>
+            sortedTasks(g)
+              .filter((t) => mine(t))
+              .map((t) => ({ g, t })),
+          );
+          if (rows.length === 0) return null;
+          return (
+            <div key={est.id} className="kml-est-board">
+              <div className="kml-est-board-h">
+                <IcRuler />
+                <span>{est.meta.title}</span>
+                {est.meta.version && (
+                  <span className="task-badge ver">{est.meta.version}</span>
+                )}
+              </div>
+              <ul>
+                {rows.map(({ g, t }) => {
+                  const logged = actualMinOf(est.logs, t.id);
+                  const st = EST_STATUS_META[t.status];
+                  return (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        className={`kml-est-item${t.status === 'done' ? ' is-done' : ''}`}
+                        onClick={() =>
+                          onPick({
+                            estRef: {
+                              estId: est.id,
+                              groupId: g.id,
+                              taskId: t.id,
+                              title: t.title,
+                            },
+                            taskText: t.title,
+                            featureText: g.title,
+                            projectText: est.meta.appName,
+                          })
+                        }
+                      >
+                        <span className="kml-est-item-text">
+                          <span>
+                            {g.title ? `${g.title}: ` : ''}
+                            {t.title}
+                          </span>
+                          <span className="k-muted">
+                            {t.estHours ? `est ${fmtEstHours(t.estHours)}` : 'chưa est'}
+                            {logged > 0 && ` · đã log ${fmtMin(logged)}`}
+                          </span>
+                        </span>
+                        <span className={`task-badge ${st.badgeClass}`}>{st.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })
+      )}
+      {loaded !== null &&
+        loaded.length > 0 &&
+        loaded.every((est) =>
+          sortedGroups(est.groups).every(
+            (g) => sortedTasks(g).filter((t) => mine(t)).length === 0,
+          ),
+        ) && (
+          <p className="k-muted">
+            Chưa có sub task nào được assign cho bạn trong các bảng estimate.
+          </p>
+        )}
+    </KpiDialog>
   );
 }

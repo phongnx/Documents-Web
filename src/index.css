@@ -3971,3 +3971,425 @@ a.kpi-rel-chip:hover {
   /* Màn hẹp không có chức năng gộp (dòng chỉ hiện bản chỉ xem) */
   .k-mode-leader .k-bh-merge { display: none; }
 }
+
+/* ==========================================================================
+   Log KPI của member (/share/kpi/:token) — redesign Material 3, prefix kml-.
+   Dùng token màu sẵn có; trang leader vẫn dùng .kpi-* cũ (không đụng).
+   ========================================================================== */
+.kml-page {
+  padding-bottom: 96px; font-size: 14px; line-height: 20px;
+}
+.kml-spacer { flex: 1; }
+.kml-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.kml-c-pos { color: var(--pos); }
+.kml-c-neg { color: var(--neg); }
+.kml-c-base { color: var(--base); }
+
+/* ---------- Nút (M3: filled / tonal / outlined / text / icon) ---------- */
+.kml-btn {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; padding: 0 20px; border: 1px solid transparent; border-radius: 999px;
+  background: transparent; color: var(--primary);
+  font: inherit; font-size: 14px; font-weight: 600; letter-spacing: 0.1px;
+  white-space: nowrap; cursor: pointer; text-decoration: none; flex: none;
+}
+.kml-btn:hover { text-decoration: none; background: var(--base-bg); }
+.kml-btn:focus-visible, .kml-iconbtn:focus-visible, .kml-chip:focus-visible,
+.kml-row:focus-visible, .kml-mrow:focus-visible, .kml-menu-item:focus-visible, .kml-fab:focus-visible {
+  outline: 3px solid var(--primary); outline-offset: 2px;
+}
+.kml-btn[disabled] { opacity: 0.45; cursor: default; background: transparent; }
+.kml-btn-filled { background: var(--primary-solid); color: var(--on-solid); padding-left: 16px; }
+.kml-btn-filled:hover { background: var(--primary-hover); box-shadow: 0 1px 3px var(--shadow); }
+.kml-btn-filled[disabled] { background: var(--hover-bg); color: var(--muted); }
+.kml-btn-tonal { background: var(--base-bg); color: var(--text); padding-left: 16px; }
+.kml-btn-tonal:hover { background: var(--hover-bg); }
+.kml-btn-outlined { border-color: var(--border-strong); color: var(--text); padding: 0 12px 0 16px; }
+.kml-btn-outlined:hover { background: var(--hover-bg); }
+.kml-btn-text { padding: 0 12px; }
+.kml-btn-text.is-danger { color: var(--danger); }
+.kml-btn-text.is-danger:hover { background: var(--danger-bg); }
+
+.kml-iconbtn {
+  display: inline-grid; place-items: center; flex: none;
+  width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px;
+  background: transparent; color: var(--muted); cursor: pointer; text-decoration: none;
+}
+.kml-iconbtn:hover { background: var(--hover-bg); color: var(--text); text-decoration: none; }
+.kml-iconbtn.is-danger:hover { background: var(--danger-bg); color: var(--danger); }
+.kml-iconbtn.is-xs { width: 28px; height: 28px; }
+.kml-iconbtn.is-inverse { color: inherit; }
+.kml-iconbtn.is-inverse:hover { background: rgba(127, 127, 127, 0.2); color: inherit; }
+.kml-iconslot { display: inline-block; width: 40px; height: 40px; }
+
+/* ---------- Header ---------- */
+.kml-topbar { display: flex; align-items: center; gap: 8px; min-height: 64px; margin-bottom: 4px; }
+.kml-topbar-title { flex: 1; min-width: 0; }
+.kml-topbar-title h1 {
+  margin: 0; font-size: 22px; line-height: 28px; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.kml-topbar-title p {
+  margin: 2px 0 0; display: flex; align-items: center; gap: 4px;
+  font-size: 12px; line-height: 16px; color: var(--muted);
+}
+.kml-topbar-actions { display: flex; align-items: center; gap: 4px; }
+
+/* ---------- Dải release sắp tới ---------- */
+.kml-rels { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.kml-rels-label { font-weight: 600; color: var(--muted); margin-right: 4px; }
+.kml-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  height: 32px; padding: 0 12px 0 8px; border: 1px solid var(--border-strong); border-radius: 8px;
+  background: transparent; color: var(--text); font: inherit; font-size: 13.5px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.kml-chip svg { color: var(--primary); flex: none; }
+.kml-chip:hover { background: var(--hover-bg); }
+.kml-chip-sub { font-weight: 400; color: var(--muted); flex: none; }
+.kml-chip.is-week { background: var(--base-bg); border-color: transparent; }
+
+/* ---------- Banner ---------- */
+.kml-banner {
+  display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; margin-bottom: 12px;
+  border-radius: 12px; background: var(--hover-bg); color: var(--text);
+}
+.kml-banner svg { flex: none; color: var(--muted); }
+.kml-banner.is-warn { background: var(--warn-bg); }
+.kml-banner.is-warn svg { color: var(--warn); }
+
+/* ---------- Thanh tháng (dính đầu trang khi cuộn) ---------- */
+.kml-monthbar {
+  position: sticky; top: 0; z-index: 6; background: var(--bg);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; min-height: 64px; padding: 8px 0;
+}
+.kml-month-nav { display: flex; align-items: center; gap: 2px; }
+.kml-month-label { min-width: 120px; text-align: center; font-size: 16px; line-height: 24px; font-weight: 600; }
+.kml-stat { display: flex; flex-direction: column; min-width: 96px; }
+.kml-stat-label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--muted); }
+.kml-stat-row { display: flex; align-items: baseline; gap: 8px; }
+.kml-stat-value { font-size: 22px; line-height: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kml-stat-sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kml-monthbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.kml-mstats { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; order: 3; }
+.kml-mstat {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px;
+  background: var(--hover-bg); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.kml-mstat b { font-size: 14px; color: var(--text); }
+.kml-mstat b.kml-c-pos { color: var(--pos); }
+.kml-mstat b.kml-c-neg { color: var(--neg); }
+.kml-mstat b.kml-c-base { color: var(--base); }
+.kml-skel {
+  display: inline-block; height: 16px; border-radius: 4px; background: var(--hover-bg);
+  vertical-align: middle; animation: kml-pulse 1.4s ease-in-out infinite;
+}
+@keyframes kml-pulse { 50% { opacity: 0.5; } }
+
+/* Menu Plan + popover chú giải điểm */
+.kml-menu-anchor { position: relative; }
+.kml-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; width: 300px; padding: 8px 0;
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--dialog-shadow);
+}
+.kml-menu-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 16px;
+  border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.kml-menu-item svg { color: var(--muted); flex: none; }
+.kml-menu-item > span { display: flex; flex-direction: column; }
+.kml-menu-item small { font-size: 12px; line-height: 16px; color: var(--muted); }
+.kml-menu-item:hover { background: var(--hover-bg); }
+.kml-menu-item[disabled] { cursor: default; background: transparent; }
+.kml-menu-item[disabled] > span > span, .kml-menu-item[disabled] svg { opacity: 0.45; }
+.kml-popover {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; width: 340px; padding: 16px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--dialog-shadow);
+  color: var(--text); font-weight: 400; display: flex; flex-direction: column; gap: 10px;
+}
+
+/* ---------- Plan tuần ---------- */
+.kml-wplans { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.kml-wplan { background: var(--hover-bg); border-radius: 12px; padding: 8px 8px 12px 16px; }
+.kml-wplan-h { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.kml-wplan-h svg { color: var(--muted); flex: none; }
+.kml-wplan-text { white-space: pre-line; padding-right: 8px; }
+
+/* ---------- Tag (nhãn không bấm) & điểm ---------- */
+.kml-tag {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+  height: 24px; padding: 0 8px; border-radius: 6px;
+  font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap;
+}
+.kml-tag svg { flex: none; }
+.kml-tag.is-ms { background: var(--base-bg); color: var(--text); }
+.kml-tag.is-ms svg { color: var(--primary); }
+.kml-tag.is-none { padding-left: 0; color: var(--muted); font-weight: 400; }
+.kml-tag.is-warn, .kml-tag.is-leave { background: var(--warn-bg); color: var(--warn); }
+.kml-tag.is-plan { background: color-mix(in srgb, var(--note) 14%, transparent); color: var(--note); }
+.kml-tag.is-today { background: var(--base-bg); color: var(--base); }
+
+.kml-score {
+  display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px 0 6px; border-radius: 6px;
+  font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.kml-score.pos { background: var(--pos-bg); color: var(--pos); }
+.kml-score.neg { background: var(--neg-bg); color: var(--neg); }
+.kml-score.zero { color: var(--muted); }
+.kml-score.self { border: 1px dashed var(--note); color: var(--note); }
+.kml-day-score { font-size: 13px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kml-day-score.pos { color: var(--pos); }
+.kml-day-score.neg { color: var(--neg); }
+.kml-legend { display: grid; gap: 10px; }
+.kml-legend > div { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; }
+.kml-legend .kml-score { justify-self: start; }
+.kml-legend-box { padding: 12px 16px; border-radius: 12px; background: var(--hover-bg); display: grid; gap: 10px; }
+
+/* ---------- Lưới log (desktop ≥ 840px) ---------- */
+.kml-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; }
+.kml-grid {
+  /* 3 cột đầu giãn theo % bề rộng lưới (có sàn/trần) để màn rộng không dồn hết chỗ cho cột Task */
+  display: grid;
+  grid-template-columns:
+    clamp(112px, 8%, 150px) clamp(96px, 8%, 150px) clamp(216px, 18%, 360px)
+    minmax(0, 1fr) 96px 88px;
+  column-gap: 16px; align-items: start; padding: 0 16px;
+}
+.kml-head {
+  position: sticky; top: var(--pagebar-h, 64px); z-index: 5;
+  min-height: 40px; align-items: center; border-radius: 15px 15px 0 0;
+  background: var(--card); border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 600; color: var(--muted);
+}
+.kml-head-score { position: relative; display: flex; align-items: center; gap: 2px; }
+.kml-day + .kml-day { border-top: 1px solid var(--border); }
+.kml-dayhead { min-height: 48px; align-items: center; background: var(--block-alt); }
+.kml-dayhead-main { grid-column: 1 / 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 4px 0; }
+.kml-day-date { font-weight: 600; }
+.kml-day-hours { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kml-dayhead .kml-c-score { grid-column: 5; }
+.kml-dayhead .kml-c-act { grid-column: 6; }
+.kml-row { min-height: 56px; padding-top: 12px; padding-bottom: 12px; border-top: 1px solid var(--border); }
+.kml-dayhead + .kml-row-wrap > .kml-row { border-top: 0; }
+.kml-row.is-editable { cursor: pointer; }
+.kml-row.is-editable:hover { background: var(--hover-bg); }
+/* Dòng cuối thẻ: bo góc theo thẻ để nền hover không lòi góc vuông */
+.kml-day:last-child .kml-row-wrap:last-child > .kml-row { border-radius: 0 0 15px 15px; }
+.kml-row > div { min-width: 0; }
+.kml-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kml-sub { display: inline-flex; align-items: center; font-size: 12px; line-height: 16px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kml-c-time .kml-sub { display: flex; margin-top: 2px; }
+.kml-c-proj { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; overflow-wrap: anywhere; }
+.kml-feat { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
+.kml-task { white-space: pre-line; overflow-wrap: anywhere; }
+.kml-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; font-size: 12px; line-height: 16px; }
+.kml-meta > span { display: inline-flex; align-items: flex-start; gap: 4px; }
+.kml-meta svg { flex: none; margin-top: 1px; }
+.kml-meta-est { color: var(--primary); }
+.kml-meta-note { color: var(--muted); }
+.kml-c-act { display: flex; justify-content: flex-end; margin: -8px 0; }
+/* Nút nhân bản/xóa chỉ hiện khi rê chuột / focus dòng; màn cảm ứng luôn hiện. */
+.kml-row .kml-c-act .kml-iconbtn { opacity: 0; transition: opacity 120ms; }
+.kml-row:hover .kml-c-act .kml-iconbtn, .kml-row:focus-within .kml-c-act .kml-iconbtn { opacity: 1; }
+@media (hover: none) { .kml-row .kml-c-act .kml-iconbtn { opacity: 1; } }
+
+/* ---------- Khung sửa dòng (desktop) ---------- */
+.kml-editor {
+  margin: 8px; padding: 20px 16px 16px; border: 2px solid var(--primary); border-radius: 12px;
+  background: var(--card); box-shadow: var(--dialog-shadow); scroll-margin: 140px 0 24px;
+}
+.kml-editor-title { display: flex; align-items: center; gap: 8px; margin: -4px 0 16px; }
+.kml-editor-title svg { color: var(--primary); }
+.kml-ed-row1 {
+  display: grid; grid-template-columns: minmax(300px, 360px) minmax(140px, 180px) minmax(160px, 1fr) minmax(200px, 1.3fr);
+  gap: 16px; align-items: start;
+}
+.kml-ed-time { display: grid; grid-template-columns: 1fr 1fr 64px; gap: 12px; align-items: start; }
+.kml-ed-task { margin-top: 16px; }
+.kml-ed-row3 { display: grid; grid-template-columns: 1fr 1fr 136px; gap: 16px; margin-top: 16px; }
+.kml-ed-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.kml-ed-hint { font-size: 12px; color: var(--muted); }
+.kml-alert {
+  display: flex; align-items: flex-start; gap: 8px; padding: 12px 16px; margin-bottom: 16px; border-radius: 8px;
+  background: var(--neg-bg); color: var(--text);
+}
+.kml-alert svg { flex: none; color: var(--neg); margin-top: 2px; }
+.kml-alert.is-neutral { background: var(--hover-bg); margin-bottom: 4px; }
+.kml-alert.is-neutral svg { color: var(--muted); }
+
+/* Ô nhập viền (outlined text field): nhãn nổi trên viền + dòng hỗ trợ/lỗi bên dưới */
+.kml-field { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.kml-field-label {
+  position: absolute; top: -8px; left: 10px; z-index: 1; padding: 0 4px;
+  background: var(--card); font-size: 12px; line-height: 16px; color: var(--muted); white-space: nowrap; pointer-events: none;
+}
+.kml-req { color: var(--neg); margin-left: 2px; }
+.kml-input {
+  width: 100%; min-width: 0; height: 48px; padding: 0 14px;
+  border: 1px solid var(--border-strong); border-radius: 4px; background: var(--card); color: var(--text);
+  font: inherit; font-size: 15px;
+}
+.kml-input:hover { border-color: var(--muted); }
+.kml-input:focus { outline: none; border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.kml-field:focus-within .kml-field-label { color: var(--primary); }
+.kml-input[disabled] { opacity: 0.55; cursor: not-allowed; }
+select.kml-input { cursor: pointer; padding-right: 8px; }
+.kml-num { font-variant-numeric: tabular-nums; }
+.kml-field.is-err .kml-input { border-color: var(--neg); box-shadow: inset 0 0 0 1px var(--neg); }
+.kml-field.is-err .kml-field-label { color: var(--neg); }
+.kml-field-sup { display: flex; align-items: flex-start; gap: 4px; padding: 4px 4px 0 14px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.kml-field-sup.is-err { color: var(--neg); }
+.kml-field-sup svg { flex: none; margin-top: 1px; }
+.kml-dur-box { position: relative; display: flex; flex-direction: column; justify-content: center; height: 48px; }
+.kml-dur-box .kml-field-label { position: static; padding: 0; background: none; }
+.kml-dur-val { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kml-dur-val.is-err { color: var(--neg); }
+.kml-task-box { position: relative; }
+.kml-task-input { height: auto; min-height: 96px; padding: 12px 52px 12px 14px; line-height: 22px; resize: none; overflow: hidden; display: block; }
+.kml-task-est { position: absolute; right: 4px; top: 4px; }
+.kml-est-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 8px; }
+.kml-input-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 32px; padding: 0 2px 0 8px;
+  border: 1px solid var(--border-strong); border-radius: 8px; font-weight: 600;
+}
+.kml-input-chip > svg { color: var(--primary); flex: none; }
+.kml-check { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; cursor: pointer; }
+.kml-check input { width: 18px; height: 18px; accent-color: var(--primary); }
+
+/* ---------- Danh sách thẻ (màn hẹp < 840px) ---------- */
+.kml-mdays { display: flex; flex-direction: column; gap: 8px; }
+.kml-mdayhead {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-height: 48px; padding: 4px 4px 4px 16px;
+  background: var(--block-alt); border: 1px solid var(--border); border-bottom: 0; border-radius: 12px 12px 0 0;
+}
+.kml-mday-tags { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+.kml-mday-sum { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kml-mlist { background: var(--card); border: 1px solid var(--border); border-radius: 0 0 12px 12px; overflow: hidden; }
+.kml-mrow {
+  display: flex; flex-direction: column; gap: 4px; width: 100%; min-height: 72px; padding: 12px 16px;
+  border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.kml-mrow + .kml-mrow { border-top: 1px solid var(--border); }
+.kml-mrow:active { background: var(--hover-bg); }
+.kml-mrow.is-empty { min-height: 48px; color: var(--muted); cursor: default; }
+.kml-mrow-l1 { display: flex; align-items: center; gap: 8px; width: 100%; }
+.kml-mrow-l1 .kml-time { font-weight: 600; }
+.kml-mrow-l2 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.kml-mrow-proj { color: var(--text); font-weight: 600; }
+.kml-mrow-task {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  white-space: pre-line; overflow-wrap: anywhere; margin-top: 2px;
+}
+.kml-feat-inline { font-weight: 600; color: var(--muted); }
+.kml-fab {
+  position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 30;
+  display: inline-flex; align-items: center; gap: 12px; height: 56px; padding: 0 20px 0 16px;
+  border: 0; border-radius: 16px; background: var(--primary-solid); color: var(--on-solid);
+  font: inherit; font-weight: 600; box-shadow: var(--dialog-shadow); cursor: pointer;
+}
+
+/* Dialog toàn màn hình (sửa dòng trên màn hẹp) — dưới k-modal (z 50) để dialog con nổi trên */
+.kml-fullscreen {
+  position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column;
+  background: var(--bg); color: var(--text);
+}
+.kml-fullscreen .kml-field-label, .kml-fullscreen .kml-input { background: var(--bg); }
+.kml-fs-bar {
+  display: flex; align-items: center; gap: 4px; min-height: 64px; padding: 8px 8px 8px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.kml-fs-title { flex: 1; min-width: 0; }
+.kml-fs-title h2 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; }
+.kml-fs-title p { margin: 0; font-size: 12px; line-height: 16px; color: var(--muted); }
+.kml-fs-body { flex: 1; overflow-y: auto; padding: 24px 16px 32px; display: flex; flex-direction: column; gap: 20px; }
+.kml-fs-body .kml-input { height: 56px; }
+.kml-fs-body .kml-task-input { height: auto; }
+.kml-fs-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; }
+.kml-fs-grid2 .kml-dur-box { grid-column: 1 / -1; height: auto; flex-direction: row; gap: 8px; align-items: baseline; padding-left: 14px; }
+.kml-fs-actions { display: flex; gap: 8px; padding-top: 20px; border-top: 1px solid var(--border); }
+
+/* ---------- Khung tải / trạng thái trống ---------- */
+.kml-skel-card { overflow: hidden; }
+.kml-progress { position: relative; height: 4px; overflow: hidden; background: var(--base-bg); }
+.kml-progress::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: -40%; width: 40%;
+  background: var(--primary); animation: kml-progress 1.1s ease-in-out infinite;
+}
+@keyframes kml-progress { to { left: 100%; } }
+.kml-skel-day { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.kml-skel-day + .kml-skel-day { border-top: 1px solid var(--border); }
+.kml-skel-row { display: flex; gap: 16px; }
+.kml-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 24px; text-align: center; }
+.kml-empty h2 { margin: 4px 0 0; font-size: 16px; font-weight: 600; }
+.kml-empty p { margin: 0; color: var(--muted); max-width: 440px; }
+.kml-empty-ic { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: var(--hover-bg); color: var(--muted); }
+
+/* ---------- Snackbar ---------- */
+.kml-snack {
+  position: fixed; left: 24px; bottom: 24px; z-index: 60; max-width: 600px;
+  display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 6px 6px 16px;
+  background: var(--text); color: var(--bg); border-radius: 6px; box-shadow: var(--dialog-shadow);
+}
+.kml-snack.is-error > svg { color: #f87171; flex: none; }
+[data-theme='dark'] .kml-snack.is-error > svg { color: #b91c1c; }
+.kml-snack-text { flex: 1; padding: 8px 0; }
+
+/* ---------- Dialog (khung KpiDialog dùng chung style k-dialog) ---------- */
+.kml-dialog:focus { outline: none; }
+.kml-dialog-titles { min-width: 0; flex: 1; }
+.kml-dialog-scroll {
+  max-height: min(60vh, 560px); overflow-y: auto; padding-top: 16px; padding-bottom: 16px;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-top: 8px;
+}
+.kml-dialog .k-btn svg { flex: none; }
+.kml-rel-tasks { display: flex; flex-direction: column; }
+.kml-rel-task { padding: 12px 0; }
+.kml-rel-task:first-child { padding-top: 0; }
+.kml-rel-task + .kml-rel-task { border-top: 1px solid var(--border); }
+.kml-rel-task-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.kml-rel-task-items { margin: 6px 0 0; padding-left: 20px; color: var(--muted); }
+.kml-rules-group { display: flex; flex-direction: column; gap: 6px; }
+.kml-rules-group ul { display: flex; flex-direction: column; gap: 6px; }
+.kml-rules-group li { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: center; }
+.kml-rules-group .kml-score { justify-self: start; padding-left: 8px; }
+.kml-week-plan-input { height: auto; min-height: 200px; padding: 12px 14px; resize: vertical; line-height: 22px; }
+.kml-est-board-h { display: flex; align-items: center; gap: 8px; padding: 4px 0 8px; font-weight: 600; }
+.kml-est-board-h svg { color: var(--primary); }
+.kml-est-board + .kml-est-board { margin-top: 12px; }
+.kml-est-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 12px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.kml-est-item:hover { background: var(--hover-bg); }
+.kml-est-item.is-done .kml-est-item-text { opacity: 0.6; }
+.kml-est-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.kml-est-item-text .k-muted { font-size: 12px; }
+.kml-detail { margin: 0; display: grid; grid-template-columns: 96px 1fr; gap: 10px 12px; }
+.kml-detail dt { color: var(--muted); }
+.kml-detail dd { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.kml-clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---------- Màn hẹp ---------- */
+@media (max-width: 839px) {
+  .kml-page { padding: 8px 16px 112px; }
+  .kml-topbar { min-height: 56px; }
+  .kml-topbar-title h1 { font-size: 20px; }
+  .kml-iconbtn { width: 48px; height: 48px; }
+  .kml-iconbtn.is-xs { width: 40px; height: 40px; }
+  .kml-rels { flex-wrap: nowrap; }
+  .kml-rels.is-open { flex-wrap: wrap; }
+  .kml-rels .kml-chip { min-width: 0; }
+  .kml-monthbar { gap: 4px 8px; }
+  .kml-month-label { min-width: 0; }
+  .kml-wplans { grid-template-columns: 1fr; }
+  .kml-snack { left: 16px; right: 16px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); max-width: none; }
+  .kml-menu { width: min(300px, calc(100vw - 32px)); }
+  /* Bottom sheet (chi tiết dòng) */
+  .kml-modal.is-sheet { place-items: end center; padding: 0; }
+  .k-dialog.is-sheet { max-width: none; border-radius: 28px 28px 0 0; max-height: 88vh; }
+}
+/* Khổ giữa (840–1100px): cột hẹp lại, khung sửa xếp 2 hàng cho đỡ chật */
+@media (min-width: 840px) and (max-width: 1100px) {
+  .kml-grid { grid-template-columns: 96px 88px 180px minmax(0, 1fr) 80px 88px; column-gap: 12px; }
+  .kml-ed-row1 { grid-template-columns: 1fr 1fr; }
+}

@@ -5,6 +5,8 @@ import { statusMeta } from '../../pmTypes';
 import { weekdayVN } from '../../lib/pmDates';
 import { formatDateVi } from '../../lib/reportFormat';
 import ItemLines from './ItemLines';
+import KpiDialog from './KpiDialog';
+import { IcRocket } from './ksumIcons';
 
 interface Props {
   release: KpiRelease;
@@ -14,53 +16,39 @@ interface Props {
 export default function KpiReleaseInfoDialog({ release, onClose }: Props) {
   const tasks = release.tasks ?? [];
   return (
-    <div className="modal-overlay">
-      <div className="modal-dialog kpi-rel-dialog" role="dialog" aria-modal="true">
-        <div className="modal-header">
-          <strong>
-            🚀 {release.app}
-            {release.version ? ` ${release.version}` : ''}
-          </strong>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Đóng">
-            ✕
-          </button>
-        </div>
-        <p className="muted modal-subtitle">
-          Mốc release: {weekdayVN(release.date)} {formatDateVi(release.date)}
-        </p>
-
-        {tasks.length === 0 ? (
-          <p className="muted kpi-rel-dialog-empty">
-            Chưa có dữ liệu chi tiết — leader mở trang chấm để đồng bộ.
-          </p>
-        ) : (
-          <div className="kpi-rel-dialog-body">
-            {tasks.map((t, i) => (
-              <section key={i} className="kpi-rel-task">
-                <div className="kpi-rel-task-head">
-                  {/* Dòng đánh dấu "… còn N task khác" có status rỗng → ẩn badge. */}
-                  {t.status && (
-                    <span className={`task-badge ${statusMeta(t.status).badgeClass}`}>
-                      {t.status}
-                    </span>
-                  )}
-                  <strong className="kpi-rel-task-title">{t.title}</strong>
-                  {t.type && <span className="muted kpi-rel-task-type">{t.type}</span>}
-                </div>
-                {t.items && t.items.length > 0 && (
-                  <ItemLines items={t.items} className="kpi-rel-task-items" />
+    <KpiDialog
+      icon={<IcRocket size={18} />}
+      title={`${release.app}${release.version ? ` ${release.version}` : ''}`}
+      subtitle={`Mốc release: ${weekdayVN(release.date)} ${formatDateVi(release.date)}`}
+      scrollBody
+      onClose={onClose}
+      actions={
+        <button type="button" className="k-btn" onClick={onClose}>
+          Đóng
+        </button>
+      }
+    >
+      {tasks.length === 0 ? (
+        <p className="k-muted">Chưa có dữ liệu chi tiết — leader mở trang chấm để đồng bộ.</p>
+      ) : (
+        <div className="kml-rel-tasks">
+          {tasks.map((t, i) => (
+            <section key={i} className="kml-rel-task">
+              <div className="kml-rel-task-h">
+                {/* Dòng đánh dấu "… còn N task khác" có status rỗng → ẩn badge. */}
+                {t.status && (
+                  <span className={`task-badge ${statusMeta(t.status).badgeClass}`}>{t.status}</span>
                 )}
-              </section>
-            ))}
-          </div>
-        )}
-
-        <div className="modal-actions">
-          <button type="button" className="primary" onClick={onClose}>
-            Đóng
-          </button>
+                <strong>{t.title}</strong>
+                {t.type && <span className="k-muted">{t.type}</span>}
+              </div>
+              {t.items && t.items.length > 0 && (
+                <ItemLines items={t.items} className="kml-rel-task-items" />
+              )}
+            </section>
+          ))}
         </div>
-      </div>
-    </div>
+      )}
+    </KpiDialog>
   );
 }

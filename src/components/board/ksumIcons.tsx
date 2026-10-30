@@ -1,4 +1,5 @@
-// Bộ icon nét (stroke) cho trang Tổng kết KPI tháng — vẽ lại đúng theo bản redesign.
+// Bộ icon nét (stroke) cho các trang KPI (Tổng kết tháng, Log KPI của member) — vẽ lại
+// theo bản redesign, thay emoji để đồng bộ màu theo theme.
 // Icon trang trí luôn aria-hidden; nút chỉ có icon phải tự gắn aria-label.
 import type { ReactNode } from 'react';
 
@@ -113,5 +114,115 @@ export const IcClose = ({ size }: P) => (
 export const IcPlus = ({ size = 14 }: P) => (
   <Svg size={size} width={1.8}>
     <path d="M8 3v10M3 8h10" />
+  </Svg>
+);
+
+// ---------- Bổ sung cho trang Log KPI của member ----------
+export const IcChevronLeft = ({ size }: P) => (
+  <Svg size={size} width={1.8}>
+    <path d="M10 4L6 8l4 4" />
+  </Svg>
+);
+export const IcChevronUp = ({ size }: P) => (
+  <Svg size={size} width={1.8}>
+    <path d="M4 10l4-4 4 4" />
+  </Svg>
+);
+export const IcRocket = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M9.5 2.5c2.2-.6 3.6-.4 4 0 .4.4.6 1.8 0 4L9 11l-4-4z" />
+    <path d="M5 7L2.5 8l2-3h3M9 11l-1 2.5 3-2V8.5" />
+    <circle cx="10.5" cy="5.5" r=".9" />
+  </Svg>
+);
+export const IcLock = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" />
+    <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+  </Svg>
+);
+export const IcEdit = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M10.5 3l2.5 2.5L6 12.5H3.5V10z" />
+  </Svg>
+);
+export const IcCopy = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+    <path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" />
+  </Svg>
+);
+export const IcNote = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M3 2.5h10v7l-4 4H3z" />
+    <path d="M9 13.5v-4h4M5.5 5.5h5M5.5 8h3" />
+  </Svg>
+);
+/** Thước — "Estimate". */
+export const IcRuler = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M2.5 13.5V2.5l11 11z" />
+    <path d="M2.5 7h2M2.5 10h2M5.5 13.5V12" />
+  </Svg>
+);
+/** Danh sách có dấu tích — "Quy chế". */
+export const IcRules = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M2.5 4l1 1 2-2M2.5 9l1 1 2-2M7.5 4.5h6M7.5 9.5h6M7.5 13h6" />
+  </Svg>
+);
+export const IcSun = ({ size }: P) => (
+  <Svg size={size}>
+    <circle cx="8" cy="8" r="2.75" />
+    <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" />
+  </Svg>
+);
+export const IcMoon = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M13 9.5A5.5 5.5 0 0 1 6.5 3a5.5 5.5 0 1 0 6.5 6.5z" />
+  </Svg>
+);
+/** Lịch có mũi tên — dòng plan / plan hôm sau. */
+export const IcCalendarNext = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M13.5 8V5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 5v7A1.5 1.5 0 0 0 4 13.5h4" />
+    <path d="M2.5 6.5h11M5.5 2v3M10.5 2v3M10 12h4M12.5 10.5l1.5 1.5-1.5 1.5" />
+  </Svg>
+);
+/** Ô che — nghỉ phép. */
+export const IcUmbrella = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M2 8a6 6 0 0 1 12 0z" />
+    <path d="M8 8v4.5a1.5 1.5 0 0 1-3 0" />
+  </Svg>
+);
+export const IcMinus = ({ size }: P) => (
+  <Svg size={size} width={1.8}>
+    <path d="M4 8h8" />
+  </Svg>
+);
+export const IcAlert = ({ size }: P) => (
+  <Svg size={size}>
+    <circle cx="8" cy="8" r="6" />
+    <path d="M8 4.5v4M8 11v.01" />
+  </Svg>
+);
+/** Đồng hồ cát rút gọn — điểm tự chấm chờ leader. */
+export const IcPending = ({ size }: P) => (
+  <Svg size={size}>
+    <circle cx="8" cy="8" r="6" />
+    <path d="M5.5 8h.01M8 8h.01M10.5 8h.01" />
+  </Svg>
+);
+export const IcLinkOff = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M7 9a3 3 0 0 0 4.2 0l1.8-1.8a3 3 0 0 0-4.2-4.2L8 3.8M9 7a3 3 0 0 0-4.2 0L3 8.8a3 3 0 0 0 4.2 4.2L8 12.2" />
+    <path d="M2.5 2.5l11 11" />
+  </Svg>
+);
+export const IcList = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" />
+    <path d="M5 6h6M5 8.5h6M5 11h3.5" />
   </Svg>
 );
