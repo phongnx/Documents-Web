@@ -17,7 +17,7 @@ import {
 import { formatDateVi, parseBody, type ReportLine } from './reportFormat';
 import { hasMarker } from './planItems';
 import { normName as norm } from './pmText';
-import { weekdayVN } from './pmDates';
+import { dateOfWeekday, weekdayVN } from './pmDates';
 
 // Re-export để các nơi đang import từ đây không phải đổi (nguồn thật ở pmTypes).
 export { isGoalWs, isReleaseWs };
@@ -582,6 +582,51 @@ export function reconcileTimeline(
 /** Version trong text milestone ("Build release v1.60." → "v1.60"); không có → ''. */
 export function msVersion(text: string): string {
   return (text.match(/v[0-9][\w.]*/i)?.[0] ?? '').replace(/\.$/, '');
+}
+
+/** Ngày mốc của 1 nhánh (ISO, '' = không có) để xếp nhánh gần nhất lên trên:
+ *  mốc release có dòng timeline đã chọn thứ → ngày của thứ đó trong tuần plan;
+ *  còn lại → Ngày plan (release) sớm nhất của các task nguồn. */
+export function wsMilestoneDate(
+  plan: Pick<WeeklyPlan, 'weekStart' | 'weekEnd' | 'timeline'>,
+  p: PlanProject,
+  w: PlanWorkstream,
+  tasks: TaskItem[],
+  apps: AppItem[],
+  releaseKeys: Set<string>,
+): string {
+  const src = (w.sourceTaskIds ?? [])
+    .map((id) => tasks.find((t) => t.id === id))
+    .filter((t): t is TaskItem => !!t);
+  if (w.milestone && releaseKeys.has(w.milestone.type)) {
+    const appName = (apps.find((a) => a.id === p.appId)?.name ?? p.name).trim();
+    const vers = new Set([msVersion(w.milestone.text), ...src.map((t) => t.version ?? '').filter(Boolean)]);
+    const row = appName
+      ? (plan.timeline ?? []).find((x) => [...vers].some((v) => matchTimelineRow(x.release, appName, v)))
+      : undefined;
+    const iso = row ? dateOfWeekday(row.day, plan.weekStart, plan.weekEnd) : '';
+    if (iso) return iso;
+  }
+  return src.map((t) => t.planDate ?? '').filter(Boolean).sort()[0] ?? '';
+}
+
+/** Bản plan với nhánh trong MỖI dự án xếp theo ngày mốc tăng dần (gần nhất lên trên),
+ *  nhánh không có ngày xuống cuối, cùng ngày giữ thứ tự nhập. Chỉ dùng để HIỂN THỊ /
+ *  EXPORT — không ghi vào dữ liệu (form editor giữ thứ tự người dùng tự sắp). */
+export function sortPlanWorkstreamsByDate<T extends Pick<WeeklyPlan, 'weekStart' | 'weekEnd' | 'timeline' | 'projects'>>(
+  plan: T,
+  tasks: TaskItem[],
+  apps: AppItem[],
+  releaseKeys: Set<string>,
+): T {
+  const projects = (plan.projects ?? []).map((p) => {
+    const ws = p.workstreams ?? [];
+    if (ws.length < 2) return p;
+    const keyed = ws.map((w, i) => ({ w, i, d: wsMilestoneDate(plan, p, w, tasks, apps, releaseKeys) }));
+    keyed.sort((a, b) => (a.d && b.d ? a.d.localeCompare(b.d) : a.d ? -1 : b.d ? 1 : 0) || a.i - b.i);
+    return { ...p, workstreams: keyed.map((k) => k.w) };
+  });
+  return { ...plan, projects };
 }
 
 /** Nhánh release nào trong plan ứng với 1 dòng timeline (để editor hiện "Khớp nhánh X").

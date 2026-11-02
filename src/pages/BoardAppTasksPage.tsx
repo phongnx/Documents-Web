@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { usePm } from '../context/PmContext';
 import { useMultiSelect } from '../hooks/useMultiSelect';
@@ -34,6 +34,12 @@ export default function BoardAppTasksPage() {
   const [fType, setFType] = useState('');
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<TaskItem | null | undefined>(undefined);
+
+  // BrowserRouter không tự cuộn về đầu khi đổi route: vào từ danh sách app đang cuộn sâu thì
+  // trang mở ở giữa list, item đầu khuất trên. Vào trang / đổi app → luôn về đầu trang.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [appId]);
 
   const isNone = appId === UNASSIGNED;
   const app = apps.find((a) => a.id === appId);

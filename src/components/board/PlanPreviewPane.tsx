@@ -18,7 +18,7 @@ import {
 } from '../../pmTypes';
 import { formatDateVi, formatDayMonth } from '../../lib/reportFormat';
 import { dateOfWeekday } from '../../lib/pmDates';
-import { matchTimelineRow, msVersion, releasedInWeek } from '../../lib/planProgress';
+import { matchTimelineRow, msVersion, releasedInWeek, sortPlanWorkstreamsByDate } from '../../lib/planProgress';
 import ItemLines from './ItemLines';
 import {
   IcCalendar,
@@ -329,7 +329,8 @@ export default function PlanPreviewPane({
   clamp,
   onOpenOverview,
 }: Props) {
-  const projects = (plan.projects ?? []).map((p, i) => ({ p, i }));
+  // Nhánh trong mỗi dự án: mốc gần nhất lên trên (chỉ hiển thị, không đổi dữ liệu).
+  const projects = sortPlanWorkstreamsByDate(plan, tasks, apps, releaseKeys).projects.map((p, i) => ({ p, i }));
   const hasRel = (p: PlanProject) => (p.workstreams ?? []).some((w) => isReleaseWs(w, releaseKeys));
   const relProjects = projects.filter(({ p }) => hasRel(p));
   const otherProjects = projects.filter(({ p }) => !hasRel(p));

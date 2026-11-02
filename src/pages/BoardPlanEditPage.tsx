@@ -76,6 +76,7 @@ import {
   mergeLatestState,
   msVersion,
   reconcileTimeline,
+  sortPlanWorkstreamsByDate,
   timelineRowSource,
   tokensOf,
 } from '../lib/planProgress';
@@ -813,7 +814,13 @@ function PlanEditor({ id }: { id: string }) {
       const savedFirst = dirty;
       if (dirty && !(await save())) return;
       const data = toData(form);
-      const full: WeeklyPlan = { ...plan, ...data, projects: mergeLatestState(data.projects, plan.projects) };
+      // Nhánh trong mỗi dự án xếp mốc gần nhất lên trên, khớp khung xem trước (không đổi dữ liệu đã lưu).
+      const full: WeeklyPlan = sortPlanWorkstreamsByDate(
+        { ...plan, ...data, projects: mergeLatestState(data.projects, plan.projects) },
+        tasks,
+        apps,
+        releaseKeys,
+      );
       const html =
         kind === 'detailed'
           ? buildDetailedHtml(full, releaseKeys, tasks)
