@@ -255,9 +255,9 @@ interface PmState {
   ) => void;
   reports: DailyReport[];
   addReport: (data: ReportInput) => DailyReport | null;
-  /** Ghi đè toàn bộ báo cáo ngày (trình sửa lưu cả object). */
-  updateReport: (id: string, data: ReportInput) => void;
-  deleteReport: (id: string) => void;
+  /** Ghi đè toàn bộ báo cáo ngày (trình sửa lưu cả object). Promise reject khi ghi lỗi. */
+  updateReport: (id: string, data: ReportInput) => Promise<void>;
+  deleteReport: (id: string) => Promise<void>;
   // ---------- KPI member log ----------
   members: KpiMember[];
   /** Tạo member + sheet KPI tại shared/kpi/{token} (1 lần ghi nguyên tử). */
@@ -1737,8 +1737,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateReport = useCallback(
-    (id: string, data: ReportInput) => {
-      if (!db || !uid) return;
+    (id: string, data: ReportInput): Promise<void> => {
+      if (!db || !uid) return Promise.resolve();
       const prev = stateRef.current.reports.find((r) => r.id === id);
       const now = new Date().toISOString();
       const next: DailyReport = {
@@ -1749,15 +1749,16 @@ export function PmProvider({ children }: { children: ReactNode }) {
         updatedAt: now,
       };
       // Chuẩn hóa để loại các key undefined (RTDB set sẽ ném lỗi nếu còn undefined).
-      set(ref(db, `users/${uid}/pm/reports/${id}`), normalizeReport(next));
+      // Trả promise để editor hiện "Đang lưu… / Lưu thất bại" thay vì nuốt lỗi.
+      return set(ref(db, `users/${uid}/pm/reports/${id}`), normalizeReport(next));
     },
     [uid],
   );
 
   const deleteReport = useCallback(
-    (id: string) => {
-      if (!db || !uid) return;
-      set(ref(db, `users/${uid}/pm/reports/${id}`), null);
+    (id: string): Promise<void> => {
+      if (!db || !uid) return Promise.resolve();
+      return set(ref(db, `users/${uid}/pm/reports/${id}`), null);
     },
     [uid],
   );

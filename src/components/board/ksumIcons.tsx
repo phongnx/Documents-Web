@@ -278,3 +278,34 @@ export const IcSearch = ({ size }: P) => (
     <path d="M10.5 10.5l3 3" />
   </Svg>
 );
+
+// ---------- Bổ sung cho màn Báo cáo ngày ----------
+export const IcDownload = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10" />
+  </Svg>
+);
+/** Hai mũi tên ngược chiều — sắp xếp. */
+export const IcSort = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M5 2.5v11M2.5 5L5 2.5 7.5 5M11 13.5v-11M8.5 11l2.5 2.5 2.5-2.5" />
+  </Svg>
+);
+/** Tay nắm kéo thả (6 chấm). */
+export const IcGrip = ({ size }: P) => (
+  <Svg size={size} width={2.2}>
+    <path d="M6 4v.01M10 4v.01M6 8v.01M10 8v.01M6 12v.01M10 12v.01" />
+  </Svg>
+);
+/** Ba chấm dọc — menu thao tác. */
+export const IcMoreV = ({ size }: P) => (
+  <Svg size={size} width={2.4}>
+    <path d="M8 3.5v.01M8 8v.01M8 12.5v.01" />
+  </Svg>
+);
+export const IcEye = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" />
+    <circle cx="8" cy="8" r="2" />
+  </Svg>
+);

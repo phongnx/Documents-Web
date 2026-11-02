@@ -83,6 +83,8 @@ export interface KpiNotice {
   kind?: 'error' | 'info';
   /** true = giữ tới khi người dùng đóng. */
   persistent?: boolean;
+  /** Nút hành động trong snackbar (Hoàn tác, Thử lại…). */
+  action?: { label: string; onClick: () => void };
 }
 
 interface Props {

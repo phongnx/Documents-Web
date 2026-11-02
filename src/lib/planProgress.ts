@@ -14,7 +14,7 @@ import {
   type WeeklyPlan,
   type WorkstreamState,
 } from '../pmTypes';
-import { formatDateVi, parseBody } from './reportFormat';
+import { formatDateVi, parseBody, type ReportLine } from './reportFormat';
 import { hasMarker } from './planItems';
 import { normName as norm } from './pmText';
 import { weekdayVN } from './pmDates';
@@ -153,20 +153,26 @@ function pctsOf(t: string): number[] {
 // Nối plan-project ↔ report-project. Đã gắn app → CHỈ khớp appId hoặc tên chính xác
 // (bỏ khớp "chứa nhau" để không dính app tên gần giống: WF3 vs WF3_Radar, Music1 vs Music2).
 // Chưa gắn app → khớp tên chính xác rồi mới tới chứa nhau (như cũ).
+function matchReportProjectIdx(pr: PlanProject, rps: ReportProject[]): number {
+  if (pr.appId) {
+    const i = rps.findIndex((x) => x.appId === pr.appId);
+    return i >= 0 ? i : rps.findIndex((x) => norm(x.name) === norm(pr.name));
+  }
+  const i = rps.findIndex((x) => norm(x.name) === norm(pr.name));
+  if (i >= 0 || norm(pr.name).length === 0) return i;
+  return rps.findIndex((x) => norm(x.name).includes(norm(pr.name)));
+}
 function matchReportProject(pr: PlanProject, report: DailyReport): ReportProject | null {
   const rps = report.projects ?? [];
-  if (pr.appId) {
-    return (
-      rps.find((x) => x.appId === pr.appId) ??
-      rps.find((x) => norm(x.name) === norm(pr.name)) ??
-      null
-    );
-  }
-  return (
-    rps.find((x) => norm(x.name) === norm(pr.name)) ??
-    rps.find((x) => norm(x.name).includes(norm(pr.name)) && norm(pr.name).length > 0) ??
-    null
-  );
+  const i = matchReportProjectIdx(pr, rps);
+  return i >= 0 ? rps[i] : null;
+}
+
+// Dòng '#' thuộc nhánh nào: tiêu đề section và tiêu đề nhánh chứa nhau (đã norm).
+function sectionMatchesWs(sectionText: string, w: PlanWorkstream): boolean {
+  const wsKey = norm(w.title);
+  const sk = norm(sectionText);
+  return wsKey.length > 0 && (sk.includes(wsKey) || wsKey.includes(sk));
 }
 
 // Suy {state, pct} cho 1 nhánh từ 1 report-project; null nếu report không nhắc tới nhánh.
@@ -179,22 +185,30 @@ function inferWorkstream(
   singleWs: boolean,
   rp: ReportProject,
 ): { state: WorkstreamState; pct?: number } | null {
-  const lines = parseBody(rp.body);
+  const inf = inferFromLines(w, singleWs, parseBody(rp.body));
+  return inf && { state: inf.state, pct: inf.pct };
+}
+
+// Lõi của inferWorkstream trên các dòng đã parse; kèm `goalIdx` = chỉ số dòng thô của các
+// dòng '->' dùng làm mốc (chỉ nhánh có milestone) để editor gạch chân.
+function inferFromLines(
+  w: PlanWorkstream,
+  singleWs: boolean,
+  lines: ReportLine[],
+): { state: WorkstreamState; pct?: number; goalIdx: number[] } | null {
   const allArrows = lines.filter((l) => l.kind === 'arrow');
   const contentLines = lines.filter((l) => l.kind !== 'section');
 
   // Dòng liên quan tới nhánh: 1-nhánh → cả body; nhiều-nhánh → theo section khớp title.
-  let relevant: { kind: string; text: string }[];
+  let relevant: ReportLine[];
   if (singleWs) {
     relevant = contentLines;
   } else {
-    const wsKey = norm(w.title);
     let active = false;
-    const chunk: { kind: string; text: string }[] = [];
+    const chunk: ReportLine[] = [];
     for (const ln of lines) {
       if (ln.kind === 'section') {
-        const sk = norm(ln.text);
-        active = wsKey.length > 0 && (sk.includes(wsKey) || wsKey.includes(sk));
+        active = sectionMatchesWs(ln.text, w);
         continue;
       }
       if (active) chunk.push(ln);
@@ -204,7 +218,7 @@ function inferWorkstream(
 
   // Bổ sung các dòng '->' toàn project khớp milestone.text (nếu nhánh có milestone).
   // Khác version với milestone → là mốc của nhánh khác, không lấy.
-  const msLines: { kind: string; text: string }[] = [];
+  const msLines: ReportLine[] = [];
   if (w.milestone) {
     const mKey = norm(w.milestone.text);
     for (const a of allArrows) {
@@ -263,7 +277,7 @@ function inferWorkstream(
     : allPcts.length
       ? Math.max(...allPcts)
       : undefined;
-  return { state, pct };
+  return { state, pct, goalIdx: hasMs ? goalLines.map((l) => l.idx) : [] };
 }
 
 // Suy trạng thái/% cho từng nhánh từ MỌI báo cáo trong tuần (duyệt ngày tăng dần):
@@ -318,6 +332,61 @@ export function suggestFromReports(
       out.push(sug);
     });
   });
+  return out;
+}
+
+// ---- Xem trước sync cho 1 báo cáo (chip trong editor Báo cáo ngày) ----
+
+export interface SyncChip {
+  /** Trạng thái báo cáo này suy ra cho nhánh. */
+  state: WorkstreamState;
+  /** Trạng thái nhánh đang lưu trong plan. */
+  planState: WorkstreamState;
+  wsTitle: string;
+}
+export interface ProjectSync {
+  /** Tên dự án trong plan đã nối được. */
+  planProject: string;
+  /** Plan chỉ có 1 nhánh → chip ở hàng tên dự án; null = báo cáo chưa nhắc gì tới nhánh. */
+  whole: SyncChip | null;
+  /** Plan nhiều nhánh → chip theo dòng '#' (khoá = chỉ số dòng thô); 'none' = nhánh không có trong plan. */
+  sections: Map<number, SyncChip | 'none'>;
+  /** Dòng '->' được dùng làm mốc để xét Xong (chỉ số dòng thô). */
+  goalLines: Set<number>;
+}
+
+// Cùng bộ luật suggestFromReports nhưng CHỈ xét 1 báo cáo: chip = trạng thái báo cáo này
+// suy ra, chưa áp luật "lấy mức cao nhất trong tuần / không hạ cấp".
+// Phần tử undefined = plan không có dự án nào nối được với dự án báo cáo đó.
+export function reportSyncPreview(
+  plan: WeeklyPlan,
+  projects: ReportProject[],
+): (ProjectSync | undefined)[] {
+  const out: (ProjectSync | undefined)[] = projects.map(() => undefined);
+  for (const pr of plan.projects ?? []) {
+    const i = matchReportProjectIdx(pr, projects);
+    // 2 dự án plan cùng nối vào 1 dự án báo cáo → chip theo dự án plan đứng trước.
+    if (i < 0 || out[i]) continue;
+    const wss = pr.workstreams ?? [];
+    const single = wss.length === 1;
+    const lines = parseBody(projects[i].body);
+    const infs = wss.map((w) => inferFromLines(w, single, lines));
+    const chipAt = (wi: number): SyncChip | null => {
+      const inf = infs[wi];
+      return inf && { state: inf.state, planState: wss[wi].state ?? 'todo', wsTitle: wss[wi].title };
+    };
+    const goalLines = new Set(infs.flatMap((inf) => inf?.goalIdx ?? []));
+    const sections = new Map<number, SyncChip | 'none'>();
+    if (wss.length > 1) {
+      for (const ln of lines) {
+        if (ln.kind !== 'section') continue;
+        const wi = wss.findIndex((w) => sectionMatchesWs(ln.text, w));
+        const chip = wi < 0 ? 'none' : chipAt(wi);
+        if (chip) sections.set(ln.idx, chip);
+      }
+    }
+    out[i] = { planProject: pr.name, whole: single ? chipAt(0) : null, sections, goalLines };
+  }
   return out;
 }
 

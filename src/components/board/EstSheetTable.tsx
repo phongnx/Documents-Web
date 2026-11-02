@@ -87,6 +87,20 @@ export function EstSnackbar({
     >
       {err ? <IcAlert size={18} /> : <IcCheck size={18} />}
       <span className="kml-snack-text">{notice.text}</span>
+      {notice.action && (
+        <button
+          type="button"
+          className="kml-btn kml-btn-text kml-snack-action"
+          onClick={() => {
+            // Đóng trước: hành động có thể tự bật snackbar mới (Thử lại → Đã lưu).
+            const run = notice.action?.onClick;
+            onClose();
+            run?.();
+          }}
+        >
+          {notice.action.label}
+        </button>
+      )}
       <button
         type="button"
         className="kml-iconbtn is-inverse"

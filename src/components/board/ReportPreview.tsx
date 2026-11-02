@@ -1,63 +1,51 @@
 import type { DailyReport } from '../../pmTypes';
 import { formatDateVi, parseBody, roman } from '../../lib/reportFormat';
+import { IcArrowRight } from './ksumIcons';
+
+const LINE_CLS = { section: 'l-sec', bullet: 'l-b', arrow: 'l-a', sub: 'l-s', text: 'l-t' } as const;
 
 // Xem nhanh 1 báo cáo ngày: tiêu đề + ngày, các dự án đánh số La Mã, dòng theo marker.
-export default function ReportPreview({ report }: { report: DailyReport }) {
-  const projects = (report.projects ?? []).filter(
-    (p) => p.name.trim() || p.body.trim(),
-  );
+// `highlight` = chỉ số dự án (theo mảng gốc) đang sửa → tô nền; mỗi mục có data-pidx
+// để editor cuộn khung xem trước tới đúng dự án.
+export default function ReportPreview({
+  report,
+  highlight,
+}: {
+  report: DailyReport;
+  highlight?: number;
+}) {
+  // Giữ chỉ số gốc (i) để khớp dự án trong form; dự án trống bị bỏ như bản copy.
+  const projects = (report.projects ?? [])
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => p.name.trim() || p.body.trim());
   return (
-    <div className="report-preview">
-      <div className="rp-head">
-        <strong>{report.title || 'Report Mobile Team'}</strong>{' '}
-        <span className="muted">{formatDateVi(report.date)}</span>
+    <div className="rpv">
+      <div className="rpv-title">
+        {report.title || 'Report Mobile Team'} <span>{formatDateVi(report.date)}</span>
       </div>
 
       {projects.length === 0 ? (
         <p className="muted">Chưa có nội dung.</p>
       ) : (
-        <div className="rp-projects">
-          {projects.map((p, i) => (
-            <div key={i} className="rp-project">
-              <div className="rp-project-name">
-                <span className="rp-roman">{roman(i + 1)} -</span> {p.name}
-              </div>
-              <div className="rp-lines">
-                {parseBody(p.body).map((ln, j) => {
-                  if (ln.kind === 'section')
-                    return (
-                      <div key={j} className="rp-line rp-section">
-                        {ln.text}
-                      </div>
-                    );
-                  if (ln.kind === 'arrow')
-                    return (
-                      <div key={j} className="rp-line rp-arrow">
-                        <span className="rp-mark">➜</span> {ln.text}
-                      </div>
-                    );
-                  if (ln.kind === 'sub')
-                    return (
-                      <div key={j} className="rp-line rp-sub">
-                        <span className="rp-mark">◦</span> {ln.text}
-                      </div>
-                    );
-                  if (ln.kind === 'bullet')
-                    return (
-                      <div key={j} className="rp-line rp-bullet">
-                        <span className="rp-mark">•</span> {ln.text}
-                      </div>
-                    );
-                  return (
-                    <div key={j} className="rp-line rp-text">
-                      {ln.text}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
+        projects.map(({ p, i }, n) => (
+          <section
+            key={i}
+            data-pidx={i}
+            className={`rpv-proj${highlight === i ? ' is-cur' : ''}`}
+          >
+            <h3>
+              <span>{roman(n + 1)} -</span> {p.name}
+            </h3>
+            <ul>
+              {parseBody(p.body).map((ln, j) => (
+                <li key={j} className={LINE_CLS[ln.kind]}>
+                  {ln.kind === 'arrow' && <IcArrowRight size={12} />}
+                  {ln.text}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
       )}
     </div>
   );
