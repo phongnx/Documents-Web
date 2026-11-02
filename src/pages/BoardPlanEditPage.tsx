@@ -385,7 +385,7 @@ export default function BoardPlanEditPage() {
     const html =
       kind === 'detailed'
         ? buildDetailedHtml(full, releaseKeys, tasks)
-        : buildReleaseTestHtml(full, releaseKeys);
+        : buildReleaseTestHtml(full, releaseKeys, tasks);
     const base = fileBase(
       kind === 'detailed'
         ? `mobile_team_weekly_plan_${mmdd(form.weekStart)}_to_${mmddyyyy(form.weekEnd)}`

@@ -35,6 +35,9 @@ export default function HtmlFrame({ value }: { value: string }) {
       className="html-frame"
       title="Nội dung HTML"
       sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+      // Cho phép tài liệu GHI clipboard khi người xem bấm (VD nút Copy của bản export
+      // Plan tuần release/test); không cho đọc clipboard, sandbox vẫn không same-origin.
+      allow="clipboard-write"
       srcDoc={buildSrcDoc(value)}
     />
   );

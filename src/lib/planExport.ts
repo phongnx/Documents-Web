@@ -8,7 +8,7 @@ import {
 } from '../pmTypes';
 import { weekdayVN } from './pmDates';
 import { taskMilestoneDate } from './planAutofill';
-import { escHtml as esc, renderItemsHtml } from './planItems';
+import { escHtml as esc, parseItemLines, renderItemsHtml } from './planItems';
 
 // Sinh 2 file HTML tĩnh từ 1 WeeklyPlan, bám sát 2 template mẫu trong docs/plan.
 // Nội dung nhánh render theo cấp bậc marker (xem planItems.ts) — tiêu đề '#' in đậm
@@ -33,6 +33,51 @@ const roman = (i: number) => ROMAN[i] ?? String(i + 1);
 // "Test" = không phải release nhưng có milestone (bất kỳ loại không-release) hoặc category test.
 const isTestWs = (w: PlanWorkstream, releaseKeys: Set<string>) =>
   !isReleaseWs(w, releaseKeys) && (!!w.milestone || w.category === 'test');
+
+// Các nhánh khớp `pick` gom theo DỰ ÁN: 1 dự án = 1 mục dù có nhiều nhánh/mốc. Dự án
+// trùng tên (VD 1 nhập tay + 1 gắn app) cũng gộp làm 1; thứ tự = lần xuất hiện đầu tiên.
+interface ProjectGroup {
+  name: string;
+  ws: PlanWorkstream[];
+}
+function groupByProject(
+  projects: WeeklyPlan['projects'],
+  pick: (w: PlanWorkstream) => boolean,
+): ProjectGroup[] {
+  const map = new Map<string, ProjectGroup>();
+  for (const p of projects ?? []) {
+    const ws = (p.workstreams ?? []).filter(pick);
+    if (ws.length === 0) continue;
+    const key = p.name.trim().toLowerCase().replace(/\s+/g, ' ');
+    const g = map.get(key);
+    if (g) g.ws.push(...ws);
+    else map.set(key, { name: p.name.trim(), ws });
+  }
+  return [...map.values()];
+}
+
+// ---------- Mã release (version) của nhánh ----------
+// Chỉ thêm lúc xuất file, KHÔNG sửa dữ liệu plan. Nguồn: version trong text milestone
+// ("Build release v1.99"); không có thì version các task nguồn (không trùng, đúng thứ tự
+// sourceTaskIds, VD "v1.64, v1.65"). Nhánh nhập tay / task không có version → ''.
+const VERSION_RE = /\bv\d[\w.]*/i;
+function srcVersions(w: PlanWorkstream, tasks?: TaskItem[]): string {
+  const out: string[] = [];
+  for (const tid of w.sourceTaskIds ?? []) {
+    const v = (tasks ?? []).find((t) => t.id === tid)?.version?.trim();
+    if (v && !out.includes(v)) out.push(v);
+  }
+  return out.join(', ');
+}
+function wsVersion(w: PlanWorkstream, tasks?: TaskItem[]): string {
+  return w.milestone?.text.match(VERSION_RE)?.[0] ?? srcVersions(w, tasks);
+}
+// Text milestone kèm mã release: đã có 'vX' thì giữ nguyên, chưa có thì nối version task nguồn.
+function msWithVersion(w: PlanWorkstream, tasks?: TaskItem[]): string {
+  const text = (w.milestone?.text ?? '').trim();
+  if (VERSION_RE.test(text)) return text;
+  return [text, srcVersions(w, tasks)].filter(Boolean).join(' ');
+}
 
 // ---------- Template 1: bản chi tiết (mobile_team_weekly_plan) ----------
 
@@ -166,13 +211,16 @@ export function buildDetailedHtml(
   plan: WeeklyPlan,
   releaseKeys: Set<string> = new Set(['release']),
   // Task nguồn (tùy chọn) — để gắn nhãn thứ cho mốc milestone KHÔNG phải release
-  // (mốc non-release chỉ hiển thị trong file này, không vào Timeline release).
+  // (mốc non-release chỉ hiển thị trong file này, không vào Timeline release) và
+  // nối mã release (version) vào milestone chưa ghi version.
   tasks?: TaskItem[],
 ): string {
   const projects = plan.projects ?? [];
   const allWs = projects.flatMap((p) => p.workstreams ?? []);
-  const releaseCount = allWs.filter((w) => isReleaseWs(w, releaseKeys)).length;
-  const testCount = allWs.filter(
+  // 2 ô release / test đếm theo DỰ ÁN (1 dự án nhiều mốc vẫn tính 1), khớp mục Milestone.
+  const releaseCount = groupByProject(projects, (w) => isReleaseWs(w, releaseKeys)).length;
+  const testCount = groupByProject(
+    projects,
     (w) => !!w.milestone && !isReleaseWs(w, releaseKeys),
   ).length;
   const planCount = allWs.filter((w) => w.category === 'plan').length;
@@ -184,7 +232,7 @@ export function buildDetailedHtml(
           const meta = catMeta(w.category);
           const items = renderItemsHtml(w.items ?? [], '          ');
           const ms = w.milestone
-            ? `\n          <div class="milestone ${isReleaseWs(w, releaseKeys) ? 'release' : 'test'}">→ ${esc(w.milestone.text)}</div>`
+            ? `\n          <div class="milestone ${isReleaseWs(w, releaseKeys) ? 'release' : 'test'}">→ ${esc(msWithVersion(w, tasks))}</div>`
             : '';
           return `        <div class="workstream">
           <h4 class="workstream-title">${esc(w.title)} <span class="badge ${meta.badgeClass}">${esc(meta.label)}</span></h4>
@@ -203,16 +251,18 @@ ${streams}
     })
     .join('\n\n');
 
-  const releaseSummary = projects
-    .flatMap((p) =>
-      (p.workstreams ?? [])
-        .filter((w) => !!w.milestone && isReleaseWs(w, releaseKeys))
-        .map(
-          (w) =>
-            `            <li><strong>${esc(p.name)} ${esc(w.title)}:</strong> ${esc(w.milestone!.text)}.</li>`,
-        ),
-    )
-    .join('\n');
+  // Mục Milestone: 1 dòng / dự án, các mốc nối bằng '; ' — "Nhánh → mốc (thứ)".
+  const msLine = (g: ProjectGroup, label: (w: PlanWorkstream) => string) =>
+    `            <li><strong>${esc(g.name)}:</strong> ${g.ws.map(label).join('; ')}.</li>`;
+  const msText = (w: PlanWorkstream) =>
+    w.title.trim()
+      ? `${esc(w.title.trim())} → ${esc(msWithVersion(w, tasks))}`
+      : esc(msWithVersion(w, tasks));
+  const releaseGroups = groupByProject(
+    projects,
+    (w) => !!w.milestone && isReleaseWs(w, releaseKeys),
+  );
+  const releaseSummary = releaseGroups.map((g) => msLine(g, msText)).join('\n');
   // Nhãn thứ cho mốc non-release: từ mốc task nguồn (planDate/endDate) khi nằm trong tuần.
   const msDayLabel = (w: PlanWorkstream): string => {
     for (const tid of w.sourceTaskIds ?? []) {
@@ -222,14 +272,16 @@ ${streams}
     }
     return '';
   };
-  const testSummary = projects
-    .flatMap((p) =>
-      (p.workstreams ?? [])
-        .filter((w) => !!w.milestone && !isReleaseWs(w, releaseKeys))
-        .map((w) => {
-          const day = msDayLabel(w);
-          return `            <li><strong>${esc(p.name)} ${esc(w.title)}:</strong> ${esc(w.milestone!.text)}${day ? ` <em>(${esc(day)})</em>` : ''}.</li>`;
-        }),
+  const testGroups = groupByProject(
+    projects,
+    (w) => !!w.milestone && !isReleaseWs(w, releaseKeys),
+  );
+  const testSummary = testGroups
+    .map((g) =>
+      msLine(g, (w) => {
+        const day = msDayLabel(w);
+        return `${msText(w)}${day ? ` <em>(${esc(day)})</em>` : ''}`;
+      }),
     )
     .join('\n');
 
@@ -269,14 +321,14 @@ ${cards}
     <section class="summary-card">
       <div class="summary-grid">
         <div class="summary-block">
-          <h3>Mốc build release <span class="badge release-badge">${releaseCount}</span></h3>
+          <h3>Mốc build release <span class="badge release-badge">${releaseGroups.length}</span></h3>
           <ul class="summary-list">
 ${releaseSummary}
           </ul>
         </div>
 
         <div class="summary-block">
-          <h3>Nhóm build test & fix bugs <span class="badge test-badge">${testCount}</span></h3>
+          <h3>Nhóm build test & fix bugs <span class="badge test-badge">${testGroups.length}</span></h3>
           <ul class="summary-list">
 ${testSummary}
           </ul>
@@ -357,6 +409,23 @@ const RELEASE_TEST_CSS = `
     li, .sub-title, .workstream h3, .timeline-release, .header h1, .item-head, .item-cont {
       overflow-wrap: anywhere; word-break: break-word;
     }
+    /* 1 dự án nhiều nhánh: mỗi nhánh (dòng phụ + đầu việc) cách nhau 1 nhịp. */
+    .ws-branch + .ws-branch { margin-top: 14px; }
+    /* Nút copy nhanh nội dung khối (text thuần, đúng format gửi chat). */
+    .copy-btn {
+      margin-left: auto; padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px;
+      background: #ffffff; color: var(--primary); font: inherit; font-size: 14px; font-weight: 700;
+      cursor: pointer;
+    }
+    .copy-btn:hover { background: var(--primary-soft); }
+    .copy-btn.done { color: var(--release); border-color: var(--release); }
+    /* Textarea nguồn copy: ẩn; chỉ hiện (đã bôi đen) khi trình duyệt chặn copy tự động. */
+    .copy-src {
+      display: block; width: 100%; min-height: 160px; margin: 0 0 16px; padding: 10px;
+      border: 1px solid var(--border); border-radius: 10px; font: 13px/1.5 monospace; resize: vertical;
+    }
+    .copy-src[hidden] { display: none; }
+    @media print { .copy-btn, .copy-src { display: none !important; } }
     .timeline-list {
       display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px; padding: 0; list-style: none;
@@ -375,36 +444,113 @@ const RELEASE_TEST_CSS = `
       .timeline-list { grid-template-columns: 1fr; }
     }`;
 
-// Một workstream trong bản release/test: h3 = "roman. project", sub-title = milestone/tiêu đề.
-function rtWorkstream(
-  projectName: string,
-  w: PlanWorkstream,
-  index: number,
-): string {
-  const sub = w.milestone?.text || w.title;
-  const subLine = sub ? `        <p class="sub-title">${esc(sub)}</p>\n` : '';
-  const items = renderItemsHtml(w.items ?? [], '        ');
-  return `      <article class="workstream">
-        <h3>${roman(index)}. ${esc(projectName)}</h3>
+// Dòng phụ của 1 nhánh trong bản release/test: milestone (kèm mã release), không có
+// milestone thì tiêu đề nhánh (kèm version task nguồn nếu có).
+const rtSub = (w: PlanWorkstream, tasks?: TaskItem[]) =>
+  w.milestone?.text.trim()
+    ? msWithVersion(w, tasks)
+    : [w.title.trim(), srcVersions(w, tasks)].filter(Boolean).join(' ');
+
+// 1 dự án trong bản release/test: h3 = "roman. project", mỗi nhánh = dòng phụ + đầu việc.
+function rtProject(g: ProjectGroup, index: number, tasks?: TaskItem[]): string {
+  const branches = g.ws
+    .map((w) => {
+      const sub = rtSub(w, tasks);
+      const subLine = sub ? `          <p class="sub-title">${esc(sub)}</p>\n` : '';
+      const items = renderItemsHtml(w.items ?? [], '          ');
+      return `        <div class="ws-branch">
 ${subLine}${items}
+        </div>`;
+    })
+    .join('\n');
+  return `      <article class="workstream">
+        <h3>${roman(index)}. ${esc(g.name)}</h3>
+${branches}
       </article>`;
 }
+
+// Text copy của 1 khối (format gửi chat): "Tiêu đề:" → dòng trống → "I. Dự án" + các dòng
+// đầu việc đã bỏ marker; dự án cách nhau 1 dòng trống. Dự án có ≥ 2 nhánh trong khối thì
+// thêm dòng "Dòng phụ:" (kèm mã release) trước đầu việc mỗi nhánh để các mốc không trộn
+// vào nhau; dự án 1 nhánh thì mã release gắn vào dòng tên dự án ("III. Outlook, Hotmail v1.29").
+function rtCopyText(heading: string, groups: ProjectGroup[], tasks?: TaskItem[]): string {
+  const blocks = groups.map((g, i) => {
+    const multi = g.ws.length > 1;
+    const ver = multi ? '' : wsVersion(g.ws[0], tasks);
+    const lines = [`${roman(i)}. ${g.name}${ver ? ` ${ver}` : ''}`];
+    for (const w of g.ws) {
+      const sub = rtSub(w, tasks).replace(/:+$/, '');
+      if (multi && sub) lines.push(`${sub}:`);
+      for (const n of parseItemLines(w.items ?? [])) lines.push(n.text);
+    }
+    return lines.join('\n');
+  });
+  return [`${heading}:`, '', blocks.join('\n\n')].join('\n');
+}
+
+// Nút Copy ở tiêu đề khối + textarea nguồn (ẩn). Khối rỗng → không có nút.
+function rtCopyParts(
+  heading: string,
+  groups: ProjectGroup[],
+  tasks?: TaskItem[],
+): { btn: string; src: string } {
+  if (groups.length === 0) return { btn: '', src: '' };
+  return {
+    btn: '<button type="button" class="copy-btn">Copy</button>',
+    src: `      <textarea class="copy-src" hidden readonly aria-label="Nội dung copy">${esc(rtCopyText(heading, groups, tasks))}</textarea>\n`,
+  };
+}
+
+// Script nút Copy: clipboard API → không được (iframe/quyền) thì execCommand trên textarea →
+// vẫn không được thì hiện textarea đã bôi đen để người xem tự Ctrl+C.
+const RT_COPY_SCRIPT = `
+    document.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.copy-btn') : null;
+      if (!btn) return;
+      var src = btn.closest('.section').querySelector('.copy-src');
+      if (!src) return;
+      function done() {
+        src.hidden = true;
+        btn.textContent = 'Đã copy';
+        btn.classList.add('done');
+        clearTimeout(btn._t);
+        btn._t = setTimeout(function () {
+          btn.textContent = 'Copy';
+          btn.classList.remove('done');
+        }, 1500);
+      }
+      function fallback() {
+        // Giữ vị trí cuộn: textarea hiện ra rồi ẩn lại không được làm trang nhảy.
+        var y = window.scrollY;
+        src.hidden = false;
+        src.focus({ preventScroll: true });
+        src.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+        if (ok) {
+          done();
+          window.scrollTo(0, y);
+        } else btn.textContent = 'Bấm Ctrl+C để copy';
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText)
+        navigator.clipboard.writeText(src.value).then(done, fallback);
+      else fallback();
+    });`;
 
 export function buildReleaseTestHtml(
   plan: WeeklyPlan,
   releaseKeys: Set<string> = new Set(['release']),
+  // Task nguồn (tùy chọn) — để nối mã release (version) vào milestone chưa ghi version.
+  tasks?: TaskItem[],
 ): string {
   const projects = plan.projects ?? [];
-  const releaseWs: string[] = [];
-  const testWs: string[] = [];
-  for (const p of projects) {
-    for (const w of p.workstreams ?? []) {
-      if (isReleaseWs(w, releaseKeys))
-        releaseWs.push(rtWorkstream(p.name, w, releaseWs.length));
-      else if (isTestWs(w, releaseKeys))
-        testWs.push(rtWorkstream(p.name, w, testWs.length));
-    }
-  }
+  // Gom theo dự án: 1 dự án nhiều nhánh/mốc = 1 mục trong mỗi khối.
+  const releaseGroups = groupByProject(projects, (w) => isReleaseWs(w, releaseKeys));
+  const testGroups = groupByProject(projects, (w) => isTestWs(w, releaseKeys));
+  const releaseWs = releaseGroups.map((g, i) => rtProject(g, i, tasks));
+  const testWs = testGroups.map((g, i) => rtProject(g, i, tasks));
+  const releaseCopy = rtCopyParts('Build Release', releaseGroups, tasks);
+  const testCopy = rtCopyParts('Build Test & fix bugs', testGroups, tasks);
 
   // Sort theo dòng thời gian (plan cũ chưa lưu lại có thể đang lệch thứ tự).
   const timeline = sortTimeline(plan.timeline ?? [])
@@ -436,13 +582,13 @@ export function buildReleaseTestHtml(
     </header>
 
     <section class="section">
-      <h2 class="section-title"><span class="badge release">1</span>Build Release</h2>
-${releaseWs.join('\n\n') || '      <p>Chưa có mục release.</p>'}
+      <h2 class="section-title"><span class="badge release">1</span>Build Release${releaseCopy.btn}</h2>
+${releaseCopy.src}${releaseWs.join('\n\n') || '      <p>Chưa có mục release.</p>'}
     </section>
 
     <section class="section">
-      <h2 class="section-title"><span class="badge test">2</span>Build Test</h2>
-${testWs.join('\n\n') || '      <p>Chưa có mục test.</p>'}
+      <h2 class="section-title"><span class="badge test">2</span>Build Test${testCopy.btn}</h2>
+${testCopy.src}${testWs.join('\n\n') || '      <p>Chưa có mục test.</p>'}
     </section>
 
     <section class="section">
@@ -452,6 +598,8 @@ ${timeline || '        <li class="timeline-item"><span class="timeline-release">
       </ul>
     </section>
   </main>
+  <script>${RT_COPY_SCRIPT}
+  </script>
 </body>
 </html>
 `;
