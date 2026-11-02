@@ -2,6 +2,7 @@
 // trang Tổng kết): Esc / bấm nền để đóng, nút ✕, focus vào dialog khi mở và trả focus
 // về chỗ cũ khi đóng. `dismissible=false` (form đã sửa) → chỉ đóng bằng nút.
 // `sheet` → màn hẹp hiện dạng bottom sheet (chi tiết dòng).
+// `fullscreen` → dialog toàn màn hình (màn hẹp): thanh trên = ✕ · tiêu đề · `headAction`.
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { IcClose } from './ksumIcons';
 
@@ -9,14 +10,23 @@ interface Props {
   title: string;
   subtitle?: ReactNode;
   icon?: ReactNode;
+  /** Màu ô icon ở header (mặc định info xanh). */
+  tone?: 'info' | 'warn' | 'pos' | 'danger';
   children?: ReactNode;
   /** Nút cuối dialog (căn phải). */
   actions?: ReactNode;
+  /** Hàng công cụ giữa header và thân (không cuộn theo thân). */
+  toolbar?: ReactNode;
   dismissible?: boolean;
   wide?: boolean;
   sheet?: boolean;
+  fullscreen?: boolean;
+  /** Nút bên phải thanh trên khi `fullscreen`. */
+  headAction?: ReactNode;
   /** Thân dialog cuộn riêng (danh sách dài) — có viền trên/dưới. */
   scrollBody?: boolean;
+  /** Class thêm cho khung dialog. */
+  className?: string;
   onClose: () => void;
 }
 
@@ -24,12 +34,17 @@ export default function KpiDialog({
   title,
   subtitle,
   icon,
+  tone = 'info',
   children,
   actions,
+  toolbar,
   dismissible = true,
   wide,
   sheet,
+  fullscreen,
+  headAction,
   scrollBody,
+  className,
   onClose,
 }: Props) {
   const boxRef = useRef<HTMLDivElement>(null);
@@ -58,7 +73,7 @@ export default function KpiDialog({
 
   return (
     <div
-      className={`k-modal kml-modal${sheet ? ' is-sheet' : ''}`}
+      className={`k-modal kml-modal${sheet ? ' is-sheet' : ''}${fullscreen ? ' is-full' : ''}`}
       onMouseDown={(e) => {
         if (dismissible && e.target === e.currentTarget) onClose();
       }}
@@ -66,21 +81,35 @@ export default function KpiDialog({
       <div
         ref={boxRef}
         tabIndex={-1}
-        className={`k-dialog kml-dialog${wide ? ' is-wide' : ''}${sheet ? ' is-sheet' : ''}`}
+        className={`k-dialog kml-dialog${wide ? ' is-wide' : ''}${sheet ? ' is-sheet' : ''}${fullscreen ? ' is-full' : ''}${className ? ` ${className}` : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
       >
-        <div className="k-dialog-h">
-          {icon && <span className="k-dialog-ic is-info">{icon}</span>}
-          <div className="kml-dialog-titles">
-            <h3 id={titleId}>{title}</h3>
-            {subtitle && <p>{subtitle}</p>}
+        {fullscreen ? (
+          <div className="kml-fs-bar">
+            <button type="button" className="kml-iconbtn" aria-label="Đóng" onClick={onClose}>
+              <IcClose size={20} />
+            </button>
+            <div className="kml-dialog-titles">
+              <h3 id={titleId}>{title}</h3>
+              {subtitle && <p>{subtitle}</p>}
+            </div>
+            {headAction}
           </div>
-          <button type="button" className="k-iconbtn k-dialog-x" aria-label="Đóng" onClick={onClose}>
-            <IcClose />
-          </button>
-        </div>
+        ) : (
+          <div className="k-dialog-h">
+            {icon && <span className={`k-dialog-ic is-${tone}`}>{icon}</span>}
+            <div className="kml-dialog-titles">
+              <h3 id={titleId}>{title}</h3>
+              {subtitle && <p>{subtitle}</p>}
+            </div>
+            <button type="button" className="k-iconbtn k-dialog-x" aria-label="Đóng" onClick={onClose}>
+              <IcClose />
+            </button>
+          </div>
+        )}
+        {toolbar && <div className="kml-dialog-tools">{toolbar}</div>}
         {children && (
           <div className={`k-dialog-b${scrollBody ? ' kml-dialog-scroll' : ''}`}>{children}</div>
         )}

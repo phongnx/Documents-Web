@@ -228,7 +228,7 @@ export const WORKSTREAM_STATE_META: Record<
 > = {
   todo: { label: 'Chưa làm', icon: '⚪', pct: 0, badgeClass: 'st-todo' },
   doing: { label: 'Đang làm', icon: '🔵', pct: 50, badgeClass: 'st-doing' },
-  testing: { label: 'Test', icon: '🧪', pct: 80, badgeClass: 'st-fix' },
+  testing: { label: 'Testing', icon: '🧪', pct: 80, badgeClass: 'st-fix' },
   done: { label: 'Xong', icon: '✅', pct: 100, badgeClass: 'st-done' },
   // Key giữ 'blocked' (data cũ trong DB) nhưng nhãn hiển thị là Pending — nghĩa "đang chờ".
   blocked: { label: 'Pending', icon: '⏳', pct: 0, badgeClass: 'st-block' },

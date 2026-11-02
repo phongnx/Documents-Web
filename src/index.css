@@ -30,9 +30,17 @@
   --base-bg: rgba(37, 99, 235, 0.1);
   --neg: #dc2626;
   --neg-bg: rgba(220, 38, 38, 0.1);
+  /* Teal — màu đặc trưng của release ở Plan tuần (design 02/11/2026) */
+  --teal: #0f766e;
+  --teal-bg: rgba(15, 118, 110, 0.12);
+  --teal-solid: #2b7a73;
+  --on-teal: #f0fdfa;
   --warn: #b45309;
   --warn-bg: rgba(234, 88, 12, 0.1);
   --warn-border: #f3c58b;
+  /* Vàng "test" dịu hơn --warn: tag Testing, tone Test/Fix (--warn giữ cho cảnh báo thật) */
+  --test: #845a0e;
+  --test-bg: rgba(180, 130, 40, 0.12);
   --block-alt: #fbfbfc;
   --scrim: rgba(15, 17, 21, 0.62);
   --dialog-shadow: 0 24px 64px rgba(15, 17, 21, 0.28), 0 2px 6px rgba(15, 17, 21, 0.12);
@@ -73,9 +81,15 @@
   --base-bg: rgba(96, 165, 250, 0.14);
   --neg: #f87171;
   --neg-bg: rgba(248, 113, 113, 0.14);
+  --teal: #6cc5b8;
+  --teal-bg: rgba(108, 197, 184, 0.13);
+  --teal-solid: #1f5f59;
+  --on-teal: #d5f5ef;
   --warn: #fbbf24;
   --warn-bg: rgba(251, 191, 36, 0.1);
   --warn-border: #6b5217;
+  --test: #d4b26a;
+  --test-bg: rgba(212, 178, 106, 0.12);
   --block-alt: #171a20;
   --scrim: rgba(0, 0, 0, 0.74);
   --dialog-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
@@ -2987,57 +3001,6 @@ a.kpi-rel-chip:hover {
   padding-left: 4px;
 }
 
-/* ---------- Dialog chọn task → nhánh ---------- */
-.task-picker {
-  max-width: 620px;
-  width: 100%;
-}
-.picker-list {
-  max-height: 52vh;
-  overflow-y: auto;
-  margin: 12px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.picker-task {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: var(--subtle);
-}
-.picker-task-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-weight: 600;
-  cursor: pointer;
-}
-.picker-task-title {
-  flex: 1;
-  min-width: 0;
-}
-.picker-lines {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0 0 0 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.picker-lines label {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 14px;
-  cursor: pointer;
-}
-.picker-lines input {
-  margin-top: 4px;
-  flex-shrink: 0;
-}
-
 /* ---------- Chọn nhiều để xóa ---------- */
 .select-bar {
   display: flex;
@@ -4168,6 +4131,24 @@ select.kml-input { cursor: pointer; padding-right: 8px; }
 .kml-detail dt { color: var(--muted); }
 .kml-detail dd { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
 .kml-clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.k-dialog-ic.is-pos { background: var(--pos-bg); color: var(--pos); }
+/* Hàng công cụ giữa header và thân dialog (không cuộn theo thân) */
+.kml-dialog-tools { padding: 8px 20px 0; }
+/* Dialog toàn màn hình (màn hẹp): thanh trên ✕ · tiêu đề · nút chữ, thân cuộn chiếm hết phần còn lại */
+.k-modal.is-full { padding: 0; place-items: stretch; }
+.k-dialog.is-full { max-width: none; max-height: none; height: 100dvh; border: 0; border-radius: 0; background: var(--bg); }
+.kml-fs-bar { display: flex; align-items: center; gap: 4px; min-height: 64px; padding: 8px 8px 8px 4px; border-bottom: 1px solid var(--border); }
+.kml-fs-bar h3 { font-size: 20px; line-height: 28px; font-weight: 500; }
+.kml-fs-bar p { font-size: 12px; line-height: 16px; color: var(--muted); }
+.kml-fs-bar .kml-btn { height: 48px; }
+.k-dialog.is-full .kml-dialog-tools { padding: 16px 16px 0; }
+.k-dialog.is-full .kml-dialog-scroll { flex: 1; min-height: 0; max-height: none; margin: 0; padding: 8px 16px 24px; border: 0; }
+/* Menu: banner nhắc ở đầu menu + mục cao 2 dòng */
+.kml-menu-warn { padding: 4px 12px 8px; }
+.kml-menu-warn .kml-banner { padding: 10px 12px; font-size: 13px; line-height: 18px; }
+.kml-menu-item.is-tall { min-height: 56px; }
+.kml-tag.is-outline { background: transparent; box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--muted); font-weight: 500; }
+.kml-tag.is-neutral { background: var(--hover-bg); color: var(--muted); }
 
 /* ---------- Màn hẹp ---------- */
 @media (max-width: 839px) {
@@ -4799,4 +4780,445 @@ div.rpt-rrow-main { cursor: default; }
 @media (max-width: 839px) {
   .rpt-ed.has-sync .rpt-ed-mirror, .rpt-ed.has-sync .rpt-ed-ta { padding-right: 84px; }
   .rpt-sync-wrap.in-mirror { right: -76px; }
+}
+
+/* ==========================================================================
+   Plan tuần — editor redesign Material 3 (02/11/2026), prefix pl- / plpv-.
+   Dùng lại khung rpt-* của editor Báo cáo ngày (header, thẻ dự án, ô nội dung, xem trước).
+   ========================================================================== */
+.pl-info { grid-template-columns: minmax(0, 1fr) 196px 196px; gap: 20px 16px; }
+.pl-info-desc { grid-column: 1 / -1; }
+.kml-input.pl-desc { height: auto; min-height: 72px; padding: 12px 14px; line-height: 22px; resize: vertical; font: inherit; font-size: 15px; }
+.pl-h1-tag { margin-left: 10px; vertical-align: 3px; }
+.pl-linkbtn { padding: 0; border: 0; background: none; color: var(--primary); font: inherit; font-weight: 600; cursor: pointer; }
+.pl-linkbtn:hover { text-decoration: underline; }
+.pl-addrow-note { margin-left: auto; font-size: 12px; color: var(--muted); }
+
+/* Thẻ dự án */
+.rpt-pc.pl-pc.is-col { padding-bottom: 4px; }
+.pl-pc-body { display: flex; flex-direction: column; gap: 8px; margin: 0 12px 0 36px; }
+.pl-pc-empty { margin: 0; font-size: 13px; color: var(--muted); }
+.pl-pc-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 0 12px 8px 36px; font-size: 12.5px; line-height: 18px; color: var(--muted); }
+.pl-pc-sum b { color: var(--text); font-weight: 600; }
+.pl-pc-tl b { font-weight: 600; color: var(--text); }
+.pl-pc-tl b.is-warn { color: var(--warn); }
+
+/* Nhánh — card nền riêng, KHÔNG viền (bỏ lồng viền, design 02/11): nhánh release (isReleaseWs) nền
+   ánh xanh; chỉ ô đầu việc có viền; tên nhánh / loại / milestone chỉ hiện viền khi hover / focus. */
+.pl-ws { background: color-mix(in srgb, var(--text) 5%, var(--card)); border-radius: 12px; padding: 4px 10px 8px; }
+.pl-ws.is-rel { background: color-mix(in srgb, var(--teal) 10%, var(--card)); }
+.pl-ws .rpt-ed { background: var(--card); }
+/* Focus: chỉ ô đang gõ viền xanh; thẻ dự án chỉ đậm viền nhẹ (nhiều nhánh mà tô xanh hết thì rối mắt).
+   Dự án vừa thêm (is-new) giữ quầng xanh của Báo cáo ngày. */
+.rpt-pc.pl-pc.is-focus:not(.is-new) { border-color: var(--border-strong); box-shadow: none; }
+.rpt-pc.pl-pc.is-focus .rpt-ed { border-color: var(--border); }
+.pl-ws .rpt-ed:focus-within { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.pl-ws-h { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 44px; padding: 2px 0; }
+.pl-ws-title {
+  flex: 0 1 220px; min-width: 120px; height: 36px; margin-left: -8px; padding: 0 8px; border: 1px solid transparent; border-radius: 4px;
+  background: transparent; color: var(--text); font: inherit; font-size: 14px; font-weight: 600;
+}
+.pl-ws-title:hover { border-color: var(--border-strong); }
+.pl-ws-title:focus { outline: none; border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); background: var(--card); }
+.pl-cat {
+  position: relative; display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 2px 0 6px;
+  border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted);
+  font: inherit; font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer;
+}
+.pl-cat::before { content: ''; position: absolute; inset: -6px; }
+.pl-cat b { font-weight: 600; color: var(--text); }
+.pl-cat:hover { background: var(--hover-bg); }
+.pl-src {
+  display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 280px;
+  font-size: 12px; color: var(--muted); white-space: nowrap; text-decoration: none;
+}
+.pl-src span { overflow: hidden; text-overflow: ellipsis; }
+.pl-src svg { flex: none; }
+a.pl-src:hover { color: var(--primary); text-decoration: underline; }
+.pl-src.is-missing { color: var(--warn); }
+.pl-ws-b { padding: 0; }
+.pl-ws.is-done .rpt-ed { opacity: 0.7; }
+.kml-iconbtn.pl-xs { width: 32px; height: 32px; }
+.pl-ws-add { display: flex; flex-wrap: wrap; gap: 4px; margin-left: -12px; }
+
+/* Tag trạng thái nhánh (chỉ xem) — dùng chung editor + xem trước */
+.pl-st {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: 999px; flex: none;
+  font-size: 12px; font-weight: 500; white-space: nowrap; cursor: help;
+  background: transparent; color: var(--text); box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+/* Giảm màu: pill viền xám không nền, màu chỉ ở icon; riêng "Đã release" giữ pill xanh lá */
+.pl-st.is-todo svg { color: var(--muted); }
+.pl-st.is-doing svg { color: var(--base); }
+.pl-st.is-test svg { color: var(--test); }
+.pl-st.is-done svg { color: var(--pos); }
+.pl-st.is-pend svg { color: var(--note); }
+.pl-st.is-rel { background: var(--pos-bg); color: var(--pos); box-shadow: none; font-weight: 600; }
+.pl-st.is-rel svg { color: inherit; }
+
+/* Milestone — 1 hàng phẳng: badge loại (release nền teal đặc / mốc thường theo màu loại) · text · chip ngày · ✕ */
+.pl-ms { display: flex; align-items: center; gap: 8px; min-height: 36px; margin-top: 6px; }
+.pl-ms-badge {
+  position: relative; display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 6px 0 7px;
+  border: 0; border-radius: 6px; font: inherit; font-size: 12px; line-height: 16px; font-weight: 700; white-space: nowrap; cursor: pointer;
+}
+.pl-ms-badge::before { content: ''; position: absolute; inset: -7px -2px; }
+.pl-ms-badge.is-rel { background: var(--teal-solid); color: var(--on-teal); }
+.pl-ms-badge.is-mk { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--border-strong); font-weight: 600; }
+.pl-ms-badge.is-mk:hover { background: var(--hover-bg); }
+.pl-ms-text {
+  flex: 1; min-width: 0; height: 32px; padding: 0 8px; border-radius: 6px; background: transparent;
+  border: 1px solid transparent; color: var(--text); font: inherit; font-size: 14px; font-weight: 500;
+}
+.pl-ms.is-rel .pl-ms-text { font-weight: 700; }
+.pl-ms-text:hover { border-color: var(--border-strong); }
+.pl-ms-text:focus { outline: none; border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); background: var(--card); }
+.pl-ms-day {
+  display: inline-flex; align-items: center; gap: 4px; flex: none; height: 26px; padding: 0 8px; border-radius: 6px;
+  background: var(--teal-bg); color: var(--teal); font-size: 12px; font-weight: 600; white-space: nowrap; cursor: default;
+}
+.pl-ms-day.is-warn { background: var(--warn-bg); color: var(--warn); }
+.pl-ms-add {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; margin: 4px 0 0 -6px; padding: 0 10px 0 6px;
+  border: 0; border-radius: 999px; background: transparent; color: var(--primary); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.pl-ms-add:hover { background: var(--base-bg); }
+
+/* Menu */
+.kml-menu.pl-menu-left { left: 0; right: auto; width: 260px; }
+.kml-menu.pl-export-menu { width: 320px; }
+.kml-menu.pl-head-menu { width: 300px; }
+.kml-menu-item.is-cur { background: var(--base-bg); }
+.kml-menu-item.is-cur > svg:last-child { color: var(--primary); margin-left: auto; }
+.rpt-popmenu .kml-menu-item > span { flex: 1; min-width: 0; }
+
+/* Timeline */
+.pl-tl { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: visible; }
+.pl-tl-row { display: grid; grid-template-columns: 196px minmax(0, 1fr) 40px; gap: 12px; align-items: start; padding: 12px 8px 12px 16px; border-top: 1px solid var(--border); }
+.pl-tl-row:first-child { border-top: 0; border-radius: 15px 15px 0 0; }
+.pl-tl-row.is-new { background: var(--base-bg); }
+.pl-tl-rel .kml-input { height: 40px; font-size: 14px; font-weight: 600; }
+.pl-tl-match { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; padding-left: 2px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.pl-tl-match svg { flex: none; }
+.pl-tl-match.is-warn { color: var(--warn); }
+.pl-tl-add { padding: 4px 8px 8px; border-top: 1px solid var(--border); }
+.pl-tl .rpt-plist-empty { border-bottom: 0; }
+.pl-day-anchor { min-width: 0; }
+.pl-daysel {
+  display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; height: 40px; padding: 0 6px 0 12px;
+  border: 1px solid var(--border-strong); border-radius: 8px; background: var(--card); color: var(--text);
+  font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+}
+.pl-daysel-t { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pl-daysel small { font-weight: 400; color: var(--muted); font-size: 12px; }
+.pl-daysel > svg { flex: none; color: var(--muted); }
+.pl-daysel.is-empty { border-style: dashed; color: var(--warn); font-weight: 500; }
+.pl-daysel.is-legacy { border-color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn); }
+.pl-daysel.is-open { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.kml-menu.pl-daymenu { left: 0; right: auto; width: 380px; max-width: calc(100vw - 32px); padding: 8px; }
+.pl-daygrid { display: grid; gap: 4px; }
+.pl-daygrid button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; height: 52px;
+  border: 1px solid var(--border-strong); border-radius: 10px; background: transparent; color: var(--text);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.pl-daygrid button:hover { background: var(--hover-bg); }
+.pl-daygrid button small { font-weight: 400; font-size: 11px; color: var(--muted); }
+.pl-daygrid button.on { background: var(--primary-solid); border-color: var(--primary-solid); color: var(--on-solid); }
+.pl-daygrid button.on small { color: inherit; opacity: 0.85; }
+.pl-daygrid-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.pl-daygrid-legacy { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--warn); }
+.pl-leave-err { display: flex; align-items: center; gap: 6px; color: var(--neg); }
+
+/* Xem trước */
+.plpv { font-size: 14px; line-height: 22px; }
+.plpv-title { font-size: 16px; line-height: 24px; font-weight: 600; }
+.plpv-title span { font-weight: 400; color: var(--muted); }
+.plpv-desc { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 20px; }
+.plpv-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; align-items: stretch; margin-top: 12px; }
+.pl-stbar { display: flex; gap: 2px; height: 8px; margin-bottom: 8px; border-radius: 4px; overflow: hidden; }
+.pl-stbar i { display: block; height: 100%; flex-basis: 0; }
+.pl-stbar .is-todo { background: var(--border-strong); }
+.pl-stbar .is-doing { background: var(--base); }
+.pl-stbar .is-test { background: var(--test); }
+.pl-stbar .is-done { background: var(--pos); }
+.pl-stbar .is-pend { background: var(--note); }
+/* Header nhóm "Có release" / "Không release" (spec grp-h): dải nền bo 12, cao 48 · ô icon 32 · tiêu đề 16/700 · chip "N app" */
+.plpv-grp {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 48px; margin: 28px 0 12px;
+  padding: 8px 12px 8px 8px; border-radius: 12px; background: var(--hover-bg);
+}
+.plpv-grp.is-rel { background: color-mix(in srgb, var(--teal) 15%, var(--card)); }
+.plpv-grp-ic {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px;
+  border-radius: 8px; background: var(--card); color: var(--muted);
+}
+.plpv-grp.is-rel .plpv-grp-ic { background: var(--teal-solid); color: var(--on-teal); }
+.plpv-grp-t { margin: 0 2px 0 4px; font-size: 16px; line-height: 24px; font-weight: 700; color: var(--text); }
+.plpv-grp-n {
+  display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px;
+  background: var(--card); color: var(--muted); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* Grid (không masonry): thẻ cùng hàng cao bằng nhau, đọc theo hàng; tối đa 2 cột, mỗi cột ≥ 300px */
+.plpv-cards {
+  display: grid; gap: 12px; align-items: stretch;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(300px, calc((100% - 12px) / 2))), 1fr));
+}
+.plpv-card {
+  display: flex; flex-direction: column;
+  min-width: 0; margin: 0; padding: 10px 14px 12px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--block-alt); transition: background 150ms, border-color 150ms;
+}
+/* Thân thẻ thu gọn (chỉ danh sách plan): tối đa ~8 dòng, tràn thì mờ dần ở đáy + nút "Xem đủ N dòng" dạt đáy thẻ */
+.plpv-cb.is-clamp { max-height: 232px; overflow: hidden; }
+.plpv-cb.is-over {
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 56px), transparent);
+  mask-image: linear-gradient(#000 calc(100% - 56px), transparent);
+}
+.plpv-more {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; height: 32px; margin: auto 0 -4px -8px; padding: 0 10px 0 8px;
+  border: 0; border-radius: 999px; background: transparent; color: var(--primary); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.plpv-more:hover { background: var(--base-bg); }
+.plpv-more:focus-visible { outline: 3px solid var(--primary); outline-offset: 0; }
+.plpv-card.is-cur { background: var(--base-bg); border-color: var(--primary); }
+.plpv-card h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin: 0 0 2px; padding-bottom: 8px; border-bottom: 1px solid var(--border); font-size: 15px; line-height: 22px; font-weight: 600; }
+.plpv-name { min-width: 0; overflow-wrap: anywhere; }
+.plpv-rocket { display: inline-flex; color: var(--teal); margin-left: -2px; }
+.plpv-app { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 400; color: var(--muted); }
+/* Rail: tối đa 4 cột, mỗi cột ≥ 260px */
+.plpv-cards.is-wide { grid-template-columns: repeat(auto-fill, minmax(min(100%, max(260px, calc((100% - 36px) / 4))), 1fr)); }
+.plpv-ws { margin-top: 8px; }
+.plpv-ws + .plpv-ws { margin-top: 10px; }
+.plpv-ws-h { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.plpv-ws-h b { font-size: 13.5px; font-weight: 600; }
+.plpv-ws .pl-st { height: 22px; padding: 0 8px 0 7px; font-size: 11.5px; cursor: default; }
+.plpv-ws.is-done .plpv-ws-h b { text-decoration: line-through; color: var(--muted); }
+.plpv-ws.is-done .item-lines { opacity: 0.55; }
+/* Milestone (chỉ xem): icon (tên lửa teal / cờ theo màu loại) · text · chip ngày · ✓ — badge loại nằm trên header nhánh */
+.plpv-ms { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0 2px; font-size: 13.5px; line-height: 20px; font-weight: 500; }
+.plpv-ms.is-rel { font-weight: 700; }
+.plpv-ms .pl-ms-day { order: 0; height: 24px; }
+.plpv-ms-text { min-width: 0; overflow-wrap: anywhere; }
+.plpv-ok { display: inline-flex; color: var(--pos); }
+.plpv-grp-ok {
+  display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px 0 8px; border-radius: 999px;
+  background: var(--pos-bg); color: var(--pos); font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.plpv-ws-h .kml-spacer { flex: 1; }
+/* Card "Tuần này" ở danh sách hẹp: bỏ nền ô, 1 cột */
+.plpv-top.is-flat { grid-template-columns: 1fr; gap: 10px; margin-top: 0; }
+
+/* ---------- Plan tuần — màu theo loại nhánh / loại mốc + thẻ Timeline (design 02/11/2026) ---------- */
+/* Tone: release teal · Test/Fix vàng (cùng tag Testing) · Development xanh dương · còn lại xám · nhánh release đã xong xanh lá */
+.is-c-rel { --cc: var(--teal); --cb: var(--teal-bg); }
+.is-c-dev { --cc: var(--base); --cb: var(--base-bg); }
+.is-c-fix { --cc: var(--test); --cb: var(--test-bg); }
+.is-c-oth { --cc: var(--text); --cb: color-mix(in srgb, var(--text) 11%, transparent); }
+.is-c-done { --cc: var(--pos); --cb: var(--pos-bg); }
+/* Chip loại nhánh ở xem trước */
+.plpv-catc {
+  display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px; border-radius: 6px;
+  background: var(--cb); color: var(--cc); font-size: 11.5px; line-height: 16px; font-weight: 600; white-space: nowrap;
+}
+.plpv-catc svg { margin-left: -2px; }
+/* Giảm màu (02/11/2026): nút "Loại …" + badge mốc thường = viền xám, chữ màu chính, không nền theo tone */
+.pl-cat[class*='is-c-'] { border-color: var(--border-strong); padding: 0 4px 0 8px; }
+.pl-ms-badge.is-mk[class*='is-c-'] { color: var(--text); font-weight: 600; }
+.pl-ms-badge.is-mk[class*='is-c-'] svg { color: var(--muted); }
+/* Header nhánh ở xem trước: badge chỉ xem, thấp hơn bản editor */
+.plpv-ws-h .pl-ms-badge { height: 22px; padding: 0 7px 0 6px; font-size: 11.5px; cursor: default; }
+.plpv-ws-h .pl-ms-badge::before { display: none; }
+.plpv-ws-h .pl-ms-badge.is-mk:hover { background: transparent; }
+.plpv-ms-ic { display: inline-flex; color: var(--cc); }
+
+/* Thẻ Timeline release: nền teal nhạt, trục dọc, mỗi mốc = ngày · chấm · ô app + version */
+.plpv-tlc { padding: 14px 16px 12px; border-radius: 12px; background: color-mix(in srgb, var(--teal) 10%, var(--card)); }
+.plpv-tlc-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; }
+.plpv-tlc-h h4 { flex: 1; margin: 0; font-size: 15px; line-height: 22px; font-weight: 700; color: var(--text); }
+.plpv-tlc-ic {
+  display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 10px;
+  background: var(--teal-solid); color: var(--on-teal);
+}
+.plpv-tlc-l { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.plpv-tlc-i { position: relative; display: grid; grid-template-columns: 52px 20px minmax(0, 1fr); align-items: center; min-height: 50px; padding: 3px 0; }
+.plpv-tlc-i::before {
+  content: ''; position: absolute; left: 61px; top: 0; bottom: 0; width: 2px;
+  background: color-mix(in srgb, var(--teal) 35%, transparent);
+}
+.plpv-tlc-i:first-child::before { top: 50%; }
+.plpv-tlc-i:last-child::before { bottom: 50%; }
+.plpv-tlc-i:only-child::before { display: none; }
+.plpv-tlc-d { display: flex; flex-direction: column; line-height: 1.2; }
+.plpv-tlc-d b { font-size: 13.5px; font-weight: 700; }
+.plpv-tlc-d small { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.plpv-tlc-d.is-warn b { font-size: 12px; color: var(--warn); }
+.plpv-tlc-dot {
+  position: relative; z-index: 1; justify-self: center; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--card); box-shadow: inset 0 0 0 3px var(--teal);
+}
+.plpv-tlc-i.is-done .plpv-tlc-dot { background: var(--pos); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pos) 25%, transparent); }
+.plpv-tlc-c {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; margin-left: 4px; padding: 8px 12px;
+  border-radius: 10px; background: var(--card);
+}
+.plpv-tlc-c b { min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.plpv-tlc-v { padding: 1px 7px; border-radius: 6px; background: var(--teal-bg); color: var(--teal); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.plpv-tlc-c .pl-st { height: 22px; padding: 0 7px; font-size: 11.5px; cursor: default; }
+.plpv-tlc > .plpv-none { padding: 4px 0 2px; }
+/* Card "Tuần này" ở danh sách hẹp: thẻ timeline gọn hơn */
+.plpv-top.is-flat .plpv-tlc { padding: 12px; }
+.plpv-top.is-flat .plpv-tlc-c { padding: 6px 10px; }
+.plpv-top.is-flat .plpv-tlc-i { min-height: 44px; }
+
+/* Thẻ Trạng thái (spec stc, design 02/11/2026): header như thẻ Timeline · thanh 10px · ô số theo trạng thái ·
+   hàng chip "Theo loại" và "N mốc tuần" */
+.plpv-stc { padding: 14px 16px; border-radius: 12px; background: var(--hover-bg); }
+.plpv-tlc-ic.plpv-stc-ic { background: var(--card); color: var(--text); }
+.plpv-stc-link {
+  display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--primary);
+  font: inherit; font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.plpv-stc-link:hover { text-decoration: underline; }
+.plpv-stc-link:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+.pl-stbar.plpv-stc-bar { height: 10px; margin: 4px 0 0; }
+.plpv-stt { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; margin-top: 12px; }
+.plpv-stt-i { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 10px; background: var(--card); }
+.plpv-stt-i span { display: flex; align-items: center; gap: 4px; font-size: 11.5px; line-height: 16px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.plpv-stt-i b { font-size: 20px; line-height: 24px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.plpv-stt-i b small { font-size: 13px; font-weight: 600; color: var(--muted); }
+.plpv-stt-i.is-test span svg, .plpv-stt-i.is-test b { color: var(--test); }
+.plpv-stt-i.is-doing span svg, .plpv-stt-i.is-doing b { color: var(--base); }
+.plpv-stt-i.is-done span svg, .plpv-stt-i.is-done b, .plpv-stt-i.is-rel span svg, .plpv-stt-i.is-rel b { color: var(--pos); }
+.plpv-stt-i.is-pend span svg, .plpv-stt-i.is-pend b { color: var(--note); }
+.plpv-stc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+.plpv-stc-lbl { min-width: 84px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.plpv-stc-row .plpv-catc b { margin-left: 2px; font-weight: 700; }
+.plpv-stc-row .pl-ms-badge { height: 22px; padding: 0 7px 0 6px; font-size: 11.5px; cursor: default; }
+.plpv-stc-row .pl-ms-badge::before { display: none; }
+.plpv-top.is-flat .plpv-stc { padding: 12px; }
+
+/* ---------- Xem trước plan — phương án giảm màu & nhãn (design ListCalm 02/11/2026) ----------
+   Chỉ 2 thứ có nền màu: release (teal) và đã release (xanh lá). Chip loại / mốc thường / trạng thái = viền xám
+   không nền (kiểu gốc .pl-st, .pl-ms-badge.is-mk), màu chỉ ở icon nhỏ. Áp cả editor lẫn xem trước. */
+.plpv-ws-h .plpv-catc:not(.is-c-done) {
+  background: transparent; color: var(--text); font-weight: 500; box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.plpv-ws-h .plpv-catc.is-c-done, .plpv-ws-h .pl-st.is-rel { padding: 0 8px 0 6px; }
+.plpv-ms-ic:not(.is-c-rel) { color: var(--muted); }
+.plpv-card.has-rel:not(.is-cur) {
+  background: color-mix(in srgb, var(--teal) 8%, var(--block-alt));
+  border-color: color-mix(in srgb, var(--teal) 30%, var(--border));
+}
+.plpv-grp, .plpv-grp.is-rel { margin: 24px 0 8px; padding: 4px 0; background: none; }
+.plpv-grp-ic { background: var(--hover-bg); }
+.plpv-grp-n { background: var(--hover-bg); }
+/* Thẻ Trạng thái: chip đếm là chữ màu chính, không nền / không viền (riêng Release giữ teal) */
+.plpv-stc-row .plpv-catc { height: auto; padding: 0 2px; background: none; color: var(--text); font-size: 12px; font-weight: 500; }
+.plpv-stc-row .pl-ms-badge.is-mk,
+.plpv-stc-row .pl-ms-badge.is-mk:hover { height: auto; padding: 0 2px; background: none; box-shadow: none; font-weight: 500; }
+.plpv-stt-i.is-doing b, .plpv-stt-i.is-todo b { color: var(--text); }
+.pl-stbar .is-doing { background: color-mix(in srgb, var(--base) 70%, var(--card)); }
+
+/* ---------- Plan tuần — dialog chọn task (design TaskPicker 02/11/2026) ---------- */
+/* Menu chọn app thả ra ngoài khung dialog: khung không cuộn, chỉ thân danh sách cuộn */
+.k-dialog.pl-tk-dlg:not(.is-full) { max-width: 760px; overflow: visible; }
+.pl-tk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
+.pl-tk-app { position: relative; min-width: 0; }
+.pl-tk-app > .kml-menu { left: 0; right: auto; }
+.pl-tk-count { margin-left: auto; font-size: 12px; color: var(--muted); }
+.pl-tk { padding: 8px 8px 8px 12px; border: 1px solid var(--border); border-radius: 12px; }
+.pl-tk.is-in { background: var(--block-alt); }
+.pl-tk + .pl-tk { margin-top: 8px; }
+/* Header thẻ: checkbox · (tên + tag, tự xuống dòng) · số dòng + nút thu gọn luôn ở góc phải */
+.pl-tk-h { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.pl-tk-hm { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+.pl-tk-h > .kml-iconbtn { flex: none; align-self: flex-start; }
+.pl-tk-h > .pl-tk-cbx { align-self: flex-start; margin-top: 11px; }
+.pl-tk-t { min-width: 0; font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
+.pl-tk-n { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.pl-tk-cbx { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--primary); cursor: pointer; }
+.kml-banner.pl-tk-warn { margin: 8px 0 4px 28px; padding: 8px 12px; font-size: 13px; line-height: 18px; }
+.pl-tk-lines { display: flex; flex-direction: column; margin: 4px 0 0 28px; }
+.pl-tk-ln { display: flex; align-items: flex-start; gap: 10px; min-height: 32px; padding: 5px 0; font-size: 13.5px; line-height: 20px; cursor: pointer; }
+.pl-tk-ln .pl-tk-cbx { margin-top: 1px; }
+.pl-tk-ln span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.pl-tk-empty { margin: 0; padding: 16px 0; color: var(--muted); text-align: center; }
+.pl-tk-sum { margin-right: auto; align-self: center; font-size: 13px; color: var(--muted); }
+@media (max-width: 839px) {
+  .pl-tk-bar .rpt-appchip { flex: 1; max-width: none; }
+  .pl-tk-count { margin-left: 0; }
+  .pl-tk-ln { min-height: 48px; padding: 12px 0; }
+  .pl-tk-bar .kml-check { min-height: 48px; }
+}
+/* Dialog kết quả export: ô tên file + thư mục */
+.pl-exp-file { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--hover-bg); }
+.pl-exp-file > svg { flex: none; color: var(--primary); }
+.pl-exp-file > span { display: flex; flex-direction: column; min-width: 0; }
+.pl-exp-file b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-exp-file small { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+
+/* ---------- Plan tuần — danh sách (redesign 02/11/2026) ---------- */
+.pl-ls.is-rail { grid-template-columns: 72px minmax(0, 1fr); }
+.pl-ls-searchrow { display: flex; align-items: center; gap: 4px; }
+.pl-ls-searchrow .pl-ls-search { flex: 1; min-width: 0; }
+.pl-ls-search .kml-input { padding-right: 48px; }
+.pl-wtile span { font-size: 10.5px; }
+.pl-pvc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-pvc .rpt-pvc-head { flex-wrap: nowrap; }
+.pl-pvc .rpt-pvc-head .kml-btn { flex: none; }
+.pl-rail {
+  position: sticky; top: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 0 12px; background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+}
+.pl-rail-sep { width: 40px; height: 1px; margin: 6px 0; background: var(--border); }
+.pl-rail-w {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; width: 60px; padding: 6px 0;
+  border: 0; border-radius: 12px; background: transparent; color: var(--text); font: inherit; cursor: pointer;
+}
+.pl-rail-w:hover { background: var(--hover-bg); }
+.pl-rail-w.is-sel { background: var(--base-bg); }
+.pl-rail-w:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.pl-rail-w small { font-size: 11px; line-height: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pl-rail-w.is-now .rpt-dtile { background: var(--primary-solid); color: var(--on-solid); }
+.pl-rail-w.is-now .rpt-dtile span { color: inherit; opacity: 0.85; }
+.rpt-dtile.pl-rail-more { background: transparent; border: 1px dashed var(--border-strong); font-size: 13px; font-weight: 600; }
+.pl-hl-pv { padding: 12px 16px 8px; font-size: 13px; }
+.pl-hl .rpt-rrow-s b { color: var(--base); font-weight: 600; }
+.pl-hl-main { flex: 1; }
+.pl-hl .rpt-hl-act .kml-menu-anchor .kml-iconbtn { width: 48px; height: 48px; }
+.pl-empty { max-width: 520px; margin: 32px auto; }
+.plpv-ws .item-lines { font-size: 13.5px; line-height: 21px; }
+.plpv-none { margin: 0; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 839px) {
+  .pl-info { grid-template-columns: 1fr; }
+  .pl-pc-body { margin: 0 12px; }
+  .pl-pc-sum { margin: 0 12px 8px 36px; flex-direction: column; align-items: flex-start; gap: 2px; }
+  .pl-ws { padding: 4px 8px 8px; }
+  .pl-ws-h { padding: 4px 0; }
+  .pl-ws-title { flex: 1 1 100%; height: 48px; margin-left: -4px; }
+  /* Hàng 2: loại · task nguồn (co lại, cắt …) · trạng thái · ⋮ — không để ⋮ rơi xuống dòng */
+  .pl-ws-h > .kml-spacer { display: none; }
+  .pl-src { flex: 1 1 0; max-width: none; }
+  .pl-cat { height: 40px; padding: 0 8px 0 12px; }
+  .kml-iconbtn.pl-xs { width: 48px; height: 48px; }
+  /* Hàng trên: badge · chip ngày · ✕ (dạt phải); hàng dưới: ô text nền card + viền mảnh để vẫn thấy là ô nhập */
+  .pl-ms { flex-wrap: wrap; row-gap: 4px; }
+  .pl-ms-badge { height: 32px; padding: 0 8px; }
+  .pl-ms-badge::before { inset: -8px -2px; }
+  .pl-ms-day { order: 1; }
+  .pl-ms > .kml-iconbtn { order: 2; margin-left: auto; }
+  .pl-ms-text { order: 3; flex-basis: 100%; height: 48px; background: var(--card); border-radius: 8px; box-shadow: inset 0 0 0 1px var(--border); }
+  .pl-ms-add { height: 48px; }
+  .pl-ws-add .kml-btn, .pl-tl-add .kml-btn { height: 48px; }
+  .pl-addrow-note { margin-left: 0; width: 100%; }
+  .pl-tl-row { grid-template-columns: minmax(0, 1fr) 48px; padding: 12px 4px 12px 12px; }
+  .pl-tl-row .pl-day-anchor { grid-column: 1; }
+  .pl-tl-row .pl-tl-rel { grid-column: 1; grid-row: 2; }
+  .pl-tl-row > .kml-iconbtn { grid-column: 2; grid-row: 1; width: 48px; height: 48px; }
+  .pl-daysel { height: 48px; }
+  .pl-tl-rel .kml-input { height: 48px; }
+  .pl-daygrid button { height: 56px; }
+  .kml-menu.pl-head-menu, .kml-menu.pl-export-menu { right: 0; }
 }

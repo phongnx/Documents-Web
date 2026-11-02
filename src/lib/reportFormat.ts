@@ -210,7 +210,8 @@ export function groupReportsByWeek(reports: DailyReport[]): ReportWeek[] {
 }
 
 // Bỏ dấu + chữ thường để tìm "android" khớp "Android", "bao cao" khớp "báo cáo".
-function fold(s: string): string {
+// (Export để danh sách Plan tuần tìm cùng luật.)
+export function fold(s: string): string {
   return s
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')

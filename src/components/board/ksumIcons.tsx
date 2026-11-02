@@ -272,6 +272,27 @@ export const IcStDone = ({ size }: P) => (
     <path d="M5.6 8.2l1.7 1.7 3.2-3.6" />
   </Svg>
 );
+/** Mở sang trang khác — link "Sửa ở Tổng quan" (path lấy từ design Plan tuần). */
+export const IcExternal = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M9 2.5h4.5V7M13.5 2.5L7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3" />
+  </Svg>
+);
+/** Trục thời gian — thẻ Timeline release (path lấy từ design Plan tuần). */
+export const IcTimeline = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M2.5 8h11" />
+    <circle cx="4.5" cy="8" r="1.5" />
+    <circle cx="11.5" cy="8" r="1.5" />
+    <path d="M8 4.5v7" />
+  </Svg>
+);
+/** Bình thí nghiệm — trạng thái nhánh Testing (path lấy từ design Plan tuần). */
+export const IcStTest = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M6 2.5h4M6.8 2.5v4.2L3.4 12.3a1 1 0 0 0 .9 1.4h7.4a1 1 0 0 0 .9-1.4L9.2 6.7V2.5M4.8 10h6.4" />
+  </Svg>
+);
 export const IcSearch = ({ size }: P) => (
   <Svg size={size}>
     <circle cx="7" cy="7" r="4.5" />
@@ -307,5 +328,41 @@ export const IcEye = ({ size }: P) => (
   <Svg size={size}>
     <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" />
     <circle cx="8" cy="8" r="2" />
+  </Svg>
+);
+// Thu gọn / mở cột danh sách (khung có vạch cột trái + mũi tên).
+export const IcPanelClose = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="2" y="2.5" width="12" height="11" rx="1.5" />
+    <path d="M6 2.5v11M10.5 6.5L9 8l1.5 1.5" />
+  </Svg>
+);
+export const IcPanelOpen = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="2" y="2.5" width="12" height="11" rx="1.5" />
+    <path d="M6 2.5v11M9 6.5L10.5 8 9 9.5" />
+  </Svg>
+);
+// Icon dialog chọn task / export plan (path lấy từ design Plan tuần 02/11/2026).
+export const IcTask = ({ size }: P) => (
+  <Svg size={size}>
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+    <path d="M5.2 8.2l1.8 1.8 3.8-4" />
+  </Svg>
+);
+export const IcPin = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M6 2.5h4M7 2.5v3.5L4.5 8.5h7L9 6V2.5M8 8.5v5" />
+  </Svg>
+);
+export const IcDoc = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M4 1.8h5.5L12.5 5v9.2H4z" />
+    <path d="M9.5 1.8V5h3M6 8h4.5M6 10.5h4.5" />
+  </Svg>
+);
+export const IcFolder = ({ size }: P) => (
+  <Svg size={size}>
+    <path d="M2.5 4.5a1 1 0 0 1 1-1h3l1.5 1.5h4.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z" />
   </Svg>
 );

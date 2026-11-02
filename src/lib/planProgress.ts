@@ -579,6 +579,75 @@ export function reconcileTimeline(
   return changed ? result : null;
 }
 
+/** Version trong text milestone ("Build release v1.60." → "v1.60"); không có → ''. */
+export function msVersion(text: string): string {
+  return (text.match(/v[0-9][\w.]*/i)?.[0] ?? '').replace(/\.$/, '');
+}
+
+/** Nhánh release nào trong plan ứng với 1 dòng timeline (để editor hiện "Khớp nhánh X").
+ * Version lấy từ text milestone và từ task nguồn; null = dòng nhập tay / không khớp. */
+export function timelineRowSource(
+  release: string,
+  projects: PlanProject[],
+  apps: AppItem[],
+  tasks: TaskItem[],
+  releaseKeys: Set<string>,
+): { project: string; ws: string } | null {
+  if (!release.trim()) return null;
+  for (const pr of projects) {
+    const appName = (apps.find((a) => a.id === pr.appId)?.name ?? pr.name).trim();
+    if (!appName) continue;
+    for (const w of pr.workstreams ?? []) {
+      if (!w.milestone || !releaseKeys.has(w.milestone.type)) continue;
+      const vers = new Set([msVersion(w.milestone.text)]);
+      for (const tid of w.sourceTaskIds ?? []) {
+        const v = tasks.find((t) => t.id === tid)?.version;
+        if (v) vers.add(v);
+      }
+      if ([...vers].some((v) => matchTimelineRow(release, appName, v)))
+        return { project: pr.name, ws: w.title };
+    }
+  }
+  return null;
+}
+
+// Khoá so khớp tên (giữ dấu tiếng Việt — normName bỏ ký tự ngoài a-z0-9).
+const keyText = (s: string) => (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** Lấy state/progress MỚI NHẤT (đã đổi ở Tổng quan / sync task trong lúc editor đang mở)
+ * đè lên form trước khi lưu, để Lưu ở editor không ghi đè trạng thái bằng bản cũ lúc mở.
+ * Khớp nhánh theo: dự án (appId, thiếu thì tên) + tiêu đề nhánh + task nguồn; nhiều nhánh
+ * trùng khoá thì khớp lần lượt theo thứ tự. Nhánh không khớp (mới thêm / vừa đổi tên) giữ
+ * nguyên giá trị trong form. */
+export function mergeLatestState(
+  projects: PlanProject[],
+  latest: PlanProject[] | undefined,
+): PlanProject[] {
+  if (!latest) return projects;
+  const wsKey = (pr: PlanProject, w: PlanWorkstream) =>
+    `${pr.appId || `n:${keyText(pr.name)}`}|${keyText(w.title)}|${(w.sourceTaskIds ?? []).join(',')}`;
+  const pool = new Map<string, PlanWorkstream[]>();
+  for (const pr of latest)
+    for (const w of pr.workstreams ?? []) {
+      const k = wsKey(pr, w);
+      if (!pool.has(k)) pool.set(k, []);
+      pool.get(k)!.push(w);
+    }
+  return projects.map((pr) => ({
+    ...pr,
+    workstreams: (pr.workstreams ?? []).map((w) => {
+      const src = pool.get(wsKey(pr, w))?.shift();
+      if (!src) return w;
+      const next: PlanWorkstream = { ...w };
+      delete next.state;
+      delete next.progress;
+      if (src.state) next.state = src.state;
+      if (typeof src.progress === 'number') next.progress = src.progress;
+      return next;
+    }),
+  }));
+}
+
 // Điểm match nhánh release ↔ mục Timeline: tổng ký tự token khớp (bắt buộc có
 // token TÊN APP khớp); frac = tỉ lệ token app khớp trọn — để "WF3" ưu tiên đúng
 // mục "WF3 v2.1" thay vì "WF3_Radar v1" và ngược lại.

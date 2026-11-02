@@ -246,8 +246,8 @@ interface PmState {
   importData: (payload: PmImportPayload) => Promise<void>;
   addPlan: (data: PlanInput) => WeeklyPlan | null;
   /** Ghi đè toàn bộ plan (trình sửa lưu cả object). */
-  updatePlan: (id: string, data: PlanInput) => void;
-  deletePlan: (id: string) => void;
+  updatePlan: (id: string, data: PlanInput) => Promise<void>;
+  deletePlan: (id: string) => Promise<void>;
   /** Cập nhật trạng thái/tiến độ nhiều nhánh trong 1 plan (ghi 1 lần). */
   setWorkstreamProgress: (
     planId: string,
@@ -353,6 +353,10 @@ function normalizeReport(r: DailyReport): DailyReport {
 
 const PmContext = createContext<PmState | null>(null);
 
+// Các nhánh `users/{uid}/pm/*` mà provider onValue — loading tắt khi đủ cả.
+const PM_NODES = ['apps', 'tasks', 'meta', 'members', 'estimates', 'plans', 'reports'] as const;
+type PmNode = (typeof PM_NODES)[number];
+
 export function PmProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const uid = user?.uid;
@@ -364,7 +368,12 @@ export function PmProvider({ children }: { children: ReactNode }) {
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [members, setMembers] = useState<KpiMember[]>([]);
   const [estimates, setEstimates] = useState<EstIndexItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // loading chỉ tắt khi MỌI nhánh đã nhận snapshot đầu (như DocumentsContext): trước đây chỉ
+  // chờ `apps` nên có khoảng loading=false mà plans/tasks còn rỗng — editor plan nháy "Không tìm
+  // thấy plan" và bước reconcile Timeline chạy trên danh sách task rỗng.
+  const [readyNodes, setReadyNodes] = useState<ReadonlySet<string>>(new Set());
+  const [noDb, setNoDb] = useState(false);
+  const loading = !noDb && readyNodes.size < PM_NODES.length;
 
   // Đọc state mới nhất trong mutator (không đọc closure) — như DocumentsContext.
   const stateRef = useRef<{
@@ -401,10 +410,20 @@ export function PmProvider({ children }: { children: ReactNode }) {
       setReports([]);
       setMembers([]);
       setEstimates([]);
-      setLoading(false);
+      setNoDb(true);
       return;
     }
-    setLoading(true);
+    setNoDb(false);
+    setReadyNodes(new Set());
+    // Đánh dấu nhánh đã về (cả khi lỗi quyền đọc — để trang không kẹt "Đang tải…" mãi).
+    const mark = (node: PmNode) =>
+      setReadyNodes((s) => {
+        if (s.has(node)) return s;
+        const next = new Set(s);
+        next.add(node);
+        return next;
+      });
+    const onErr = (node: PmNode) => () => mark(node);
 
     const appsRef = ref(db, `users/${uid}/pm/apps`);
     const unsubApps = onValue(appsRef, (snap) => {
@@ -414,8 +433,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
         (a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt),
       );
       setApps(list);
-      setLoading(false);
-    });
+      mark('apps');
+    }, onErr('apps'));
 
     const tasksRef = ref(db, `users/${uid}/pm/tasks`);
     const unsubTasks = onValue(tasksRef, (snap) => {
@@ -425,7 +444,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
         (a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt),
       );
       setTasks(list);
-    });
+      mark('tasks');
+    }, onErr('tasks'));
 
     const metaRef = ref(db, `users/${uid}/pm/meta`);
     const unsubMeta = onValue(metaRef, (snap) => {
@@ -450,7 +470,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
         kpiRules:
           val?.kpiRules && val.kpiRules.length ? val.kpiRules : DEFAULT_KPI_RULES,
       });
-    });
+      mark('meta');
+    }, onErr('meta'));
 
     const membersRef = ref(db, `users/${uid}/pm/members`);
     const unsubMembers = onValue(membersRef, (snap) => {
@@ -458,7 +479,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
       const list = val ? Object.values(val) : [];
       list.sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
       setMembers(list);
-    });
+      mark('members');
+    }, onErr('members'));
 
     const estimatesRef = ref(db, `users/${uid}/pm/estimates`);
     const unsubEstimates = onValue(estimatesRef, (snap) => {
@@ -467,7 +489,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
       // Mới nhất trước.
       list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       setEstimates(list);
-    });
+      mark('estimates');
+    }, onErr('estimates'));
 
     const plansRef = ref(db, `users/${uid}/pm/plans`);
     const unsubPlans = onValue(plansRef, (snap) => {
@@ -481,7 +504,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
           b.createdAt.localeCompare(a.createdAt),
       );
       setPlans(list);
-    });
+      mark('plans');
+    }, onErr('plans'));
 
     const reportsRef = ref(db, `users/${uid}/pm/reports`);
     const unsubReports = onValue(reportsRef, (snap) => {
@@ -495,7 +519,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
           b.createdAt.localeCompare(a.createdAt),
       );
       setReports(list);
-    });
+      mark('reports');
+    }, onErr('reports'));
 
     return () => {
       unsubApps();
@@ -1632,8 +1657,8 @@ export function PmProvider({ children }: { children: ReactNode }) {
   );
 
   const updatePlan = useCallback(
-    (id: string, data: PlanInput) => {
-      if (!db || !uid) return;
+    (id: string, data: PlanInput): Promise<void> => {
+      if (!db || !uid) return Promise.resolve();
       const prev = stateRef.current.plans.find((p) => p.id === id);
       const now = new Date().toISOString();
       const next: WeeklyPlan = {
@@ -1644,15 +1669,16 @@ export function PmProvider({ children }: { children: ReactNode }) {
         updatedAt: now,
       };
       // Chuẩn hóa để loại các key undefined (RTDB set sẽ ném lỗi nếu còn undefined).
-      set(ref(db, `users/${uid}/pm/plans/${id}`), normalizePlan(next));
+      // Trả promise để editor hiện "Đang lưu… / Lưu thất bại" thay vì nuốt lỗi.
+      return set(ref(db, `users/${uid}/pm/plans/${id}`), normalizePlan(next));
     },
     [uid],
   );
 
   const deletePlan = useCallback(
-    (id: string) => {
-      if (!db || !uid) return;
-      set(ref(db, `users/${uid}/pm/plans/${id}`), null);
+    (id: string): Promise<void> => {
+      if (!db || !uid) return Promise.resolve();
+      return set(ref(db, `users/${uid}/pm/plans/${id}`), null);
     },
     [uid],
   );

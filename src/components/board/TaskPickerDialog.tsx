@@ -1,8 +1,20 @@
-import { useMemo, useState } from 'react';
+// Dialog chọn task để tạo nhánh (design Plan tuần 02/11/2026): chip chọn app (ReportAppPicker),
+// lọc "Ẩn task đã có trong plan", mỗi task 1 thẻ thu gọn được (checkbox 3 trạng thái), cảnh báo
+// khi task đã là nhánh trong plan mà vẫn chọn thêm. Màn hẹp: toàn màn hình.
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DONE_STATUS } from '../../pmTypes';
 import type { AppItem, PlanWorkstream, TaskItem } from '../../pmTypes';
 import { sortDate } from '../../lib/pmSort';
 import { taskLines, taskToWorkstream } from '../../lib/planAutofill';
+import KpiDialog from './KpiDialog';
+import ReportAppPicker from './ReportAppPicker';
+import { IcChevronDown, IcChevronUp, IcLink, IcPin, IcPlus, IcTask, IcWarn } from './ksumIcons';
+
+/** Nhánh trong plan đang lấy từ 1 task (tính trên form hiện tại, kể cả chưa lưu). */
+export interface TaskInPlan {
+  ws: string;
+  project: string;
+}
 
 interface Props {
   apps: AppItem[];
@@ -11,8 +23,22 @@ interface Props {
   initialAppId?: string;
   /** Khoảng tuần của plan — milestone chỉ "tự tick" khi mốc task nằm trong tuần. */
   week?: { start: string; end: string };
+  /** Tên dự án đang thêm nhánh (dòng phụ của dialog). */
+  projectName: string;
+  /** taskId → các nhánh trong plan đang lấy từ task đó. */
+  inPlan: Map<string, TaskInPlan[]>;
+  narrow: boolean;
   onConfirm: (workstreams: PlanWorkstream[]) => void;
   onClose: () => void;
+}
+
+// Checkbox gốc có trạng thái "chọn một phần" (indeterminate chỉ đặt được qua DOM).
+function TriCheck({ checked, mixed, label, onChange }: { checked: boolean; mixed: boolean; label: string; onChange: () => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = mixed;
+  }, [mixed]);
+  return <input ref={ref} type="checkbox" className="pl-tk-cbx" checked={checked} aria-label={label} onChange={onChange} />;
 }
 
 export default function TaskPickerDialog({
@@ -20,14 +46,22 @@ export default function TaskPickerDialog({
   tasks,
   initialAppId,
   week,
+  projectName,
+  inPlan,
+  narrow,
   onConfirm,
   onClose,
 }: Props) {
   const [appId, setAppId] = useState(initialAppId || apps[0]?.id || '');
-  // Dòng đã chọn theo từng task: taskId → Set(chỉ số dòng).
+  // Dòng đã chọn theo từng task: taskId → Set(chỉ số dòng). Đổi app / ẩn task vẫn giữ lựa chọn.
   const [picked, setPicked] = useState<Record<string, Set<number>>>({});
+  const [hideIn, setHideIn] = useState(false);
+  const [appOpen, setAppOpen] = useState(false);
+  // Thu gọn: mặc định task đã có trong plan thu gọn, task chưa có mở sẵn; bấm ▴/▾ thì ghi đè.
+  const [fold, setFold] = useState<Record<string, boolean>>({});
+  const isFolded = (id: string) => fold[id] ?? inPlan.has(id);
 
-  // Chỉ lấy task của app đang chọn và CHƯA hoàn thành (bỏ task đã "Đã hoàn thành").
+  // Chỉ lấy task của app đang chọn và CHƯA hoàn thành, mới nhất trước.
   const appTasks = useMemo(
     () =>
       tasks
@@ -35,6 +69,9 @@ export default function TaskPickerDialog({
         .sort((a, b) => sortDate(b).localeCompare(sortDate(a))),
     [tasks, appId],
   );
+  const inCount = appTasks.filter((t) => inPlan.has(t.id)).length;
+  const shown = hideIn ? appTasks.filter((t) => !inPlan.has(t.id)) : appTasks;
+  const app = apps.find((a) => a.id === appId);
 
   const toggleLine = (taskId: string, idx: number) =>
     setPicked((prev) => {
@@ -55,11 +92,12 @@ export default function TaskPickerDialog({
       };
     });
 
-  // Số nhánh sẽ tạo = số task có ít nhất 1 dòng được chọn.
+  // Số nhánh sẽ tạo = số task (của app đang chọn) có ít nhất 1 dòng được chọn.
   const chosenTasks = appTasks.filter((t) => (picked[t.id]?.size ?? 0) > 0);
+  const lineCount = chosenTasks.reduce((n, t) => n + (picked[t.id]?.size ?? 0), 0);
+  const n = chosenTasks.length;
 
   const confirm = () => {
-    const app = apps.find((a) => a.id === appId);
     const result: PlanWorkstream[] = chosenTasks.map((t) => {
       const lines = taskLines(t);
       const items = [...(picked[t.id] ?? [])]
@@ -71,78 +109,155 @@ export default function TaskPickerDialog({
     onConfirm(result);
   };
 
-  return (
-    <div className="modal-overlay">
-      <div className="modal-dialog task-picker" role="dialog" aria-modal="true">
-        <div className="modal-header">
-          <strong>Chọn task để tạo nhánh</strong>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Đóng">
-            ✕
-          </button>
-        </div>
-
-        <label className="task-field">
-          <span>App</span>
-          <select value={appId} onChange={(e) => setAppId(e.target.value)}>
-            {apps.length === 0 && <option value="">(Chưa có app)</option>}
-            {apps.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name} · {a.platform}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="picker-list">
-          {appTasks.length === 0 ? (
-            <p className="muted">Không có task đang mở (chưa hoàn thành).</p>
-          ) : (
-            appTasks.map((t) => {
-              const lines = taskLines(t);
-              const cur = picked[t.id] ?? new Set<number>();
-              const allOn = cur.size === lines.length && lines.length > 0;
-              return (
-                <div key={t.id} className="picker-task">
-                  <label className="picker-task-head">
-                    <input type="checkbox" checked={allOn} onChange={() => toggleAll(t)} />
-                    <span className="picker-task-title">{t.title}</span>
-                    {t.version && <span className="task-badge ver">{t.version}</span>}
-                    <span className="task-badge type">{t.type}</span>
-                  </label>
-                  <ul className="picker-lines">
-                    {lines.map((ln, i) => (
-                      <li key={i}>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={cur.has(i)}
-                            onChange={() => toggleLine(t.id, i)}
-                          />
-                          <span>{ln}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>
-            Hủy
-          </button>
-          <button
-            type="button"
-            className="primary"
-            disabled={chosenTasks.length === 0}
-            onClick={confirm}
-          >
-            Thêm {chosenTasks.length} nhánh
-          </button>
-        </div>
+  const addLabel = `Thêm ${n} nhánh`;
+  const toolbar = (
+    <div className="pl-tk-bar">
+      <div className="kml-menu-anchor pl-tk-app">
+        <button
+          type="button"
+          className={`rpt-appchip${app ? '' : ' is-none'}${appOpen ? ' is-open' : ''}`}
+          aria-haspopup="listbox"
+          aria-expanded={appOpen}
+          disabled={apps.length === 0}
+          onClick={() => setAppOpen((o) => !o)}
+        >
+          <IcLink size={14} />
+          <span>{app ? `${app.name} · ${app.platform}` : 'Chưa có app'}</span>
+          <IcChevronDown size={14} />
+        </button>
+        {appOpen && (
+          <ReportAppPicker
+            apps={apps}
+            usedBy={new Map()}
+            currentAppId={appId}
+            title="Chọn app"
+            sheet={narrow}
+            onPick={setAppId}
+            onClose={() => setAppOpen(false)}
+          />
+        )}
       </div>
+      <label className="kml-check">
+        <input type="checkbox" checked={hideIn} onChange={(e) => setHideIn(e.target.checked)} />
+        Ẩn task đã có trong plan
+      </label>
+      <span className="pl-tk-count">
+        {appTasks.length} task chưa hoàn thành{inCount > 0 && ` · ${inCount} đã có trong plan`}
+      </span>
     </div>
+  );
+
+  return (
+    <KpiDialog
+      title={narrow ? 'Chọn task' : 'Chọn task để tạo nhánh'}
+      subtitle={
+        narrow
+          ? `Dự án ${projectName} · ${lineCount} dòng đã chọn`
+          : `Dự án ${projectName} · mỗi task có dòng được chọn thành 1 nhánh`
+      }
+      icon={<IcTask size={20} />}
+      wide
+      fullscreen={narrow}
+      className="pl-tk-dlg"
+      // Menu chọn app đang mở: Esc / bấm nền chỉ đóng menu, không đóng dialog.
+      dismissible={!appOpen}
+      scrollBody
+      toolbar={toolbar}
+      headAction={
+        <button type="button" className="kml-btn kml-btn-text" disabled={n === 0} onClick={confirm}>
+          {addLabel}
+        </button>
+      }
+      actions={
+        narrow ? undefined : (
+          <>
+            <span className="pl-tk-sum">
+              {lineCount} dòng · {n} task
+            </span>
+            <button type="button" className="kml-btn kml-btn-text" onClick={onClose}>
+              Huỷ
+            </button>
+            <button type="button" className="kml-btn kml-btn-filled" disabled={n === 0} onClick={confirm}>
+              <IcPlus size={18} />
+              {addLabel}
+            </button>
+          </>
+        )
+      }
+      onClose={onClose}
+    >
+      {shown.length === 0 ? (
+        <p className="pl-tk-empty">
+          {appTasks.length === 0
+            ? 'Không có task đang mở (chưa hoàn thành).'
+            : 'Mọi task đang mở đều đã có trong plan — bỏ "Ẩn task đã có trong plan" để xem.'}
+        </p>
+      ) : (
+        shown.map((t) => {
+          const lines = taskLines(t);
+          const cur = picked[t.id] ?? new Set<number>();
+          const allOn = cur.size === lines.length && lines.length > 0;
+          const ins = inPlan.get(t.id);
+          const folded = isFolded(t.id);
+          return (
+            <div key={t.id} className={`pl-tk${ins ? ' is-in' : ''}`}>
+              <div className="pl-tk-h">
+                <TriCheck
+                  checked={allOn}
+                  mixed={cur.size > 0 && !allOn}
+                  label={`Chọn mọi dòng của task ${t.title}`}
+                  onChange={() => toggleAll(t)}
+                />
+                <span className="pl-tk-hm">
+                  <span className="pl-tk-t">{t.title}</span>
+                  {t.version && <span className="kml-tag is-outline">{t.version}</span>}
+                  {t.type && <span className="kml-tag is-neutral">{t.type}</span>}
+                  {ins && (
+                    <span className="kml-tag is-plan" title={ins.map((x) => `${x.project} · ${x.ws}`).join('\n')}>
+                      <IcPin size={14} />
+                      {ins.length > 1 ? `Đã có: ${ins.length} nhánh` : `Đã có: nhánh ${ins[0].ws}`}
+                    </span>
+                  )}
+                </span>
+                {folded && <span className="pl-tk-n">{lines.length} dòng</span>}
+                <button
+                  type="button"
+                  className="kml-iconbtn is-xs"
+                  aria-label={folded ? `Mở task ${t.title}` : `Thu gọn task ${t.title}`}
+                  aria-expanded={!folded}
+                  onClick={() => setFold((f) => ({ ...f, [t.id]: !folded }))}
+                >
+                  {folded ? <IcChevronDown size={16} /> : <IcChevronUp size={16} />}
+                </button>
+              </div>
+              {ins && cur.size > 0 && (
+                <div className="kml-banner is-warn pl-tk-warn">
+                  <IcWarn size={14} />
+                  <span>
+                    Task này đã là nhánh {ins[0].ws} của dự án {ins[0].project}. Thêm nữa sẽ ra nhánh thứ{' '}
+                    {ins.length + 1} từ cùng task.
+                  </span>
+                </div>
+              )}
+              {!folded && (
+                <div className="pl-tk-lines">
+                  {lines.map((ln, i) => (
+                    <label key={i} className="pl-tk-ln">
+                      <input
+                        type="checkbox"
+                        className="pl-tk-cbx"
+                        checked={cur.has(i)}
+                        onChange={() => toggleLine(t.id, i)}
+                      />
+                      <span>{ln}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+    </KpiDialog>
   );
 }
