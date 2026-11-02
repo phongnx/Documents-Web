@@ -1,5 +1,6 @@
 // Danh sách Báo cáo ngày (redesign Material 3, 01/11/2026).
-// - ≥ 1200px: 2 cột — trái là danh sách nhóm theo tuần, phải xem trước báo cáo đang chọn.
+// - ≥ 1200px: 2 cột — trái là danh sách nhóm theo tuần (mặc định thu gọn thành rail), phải xem
+//   trước báo cáo đang chọn.
 // - < 1200px: 1 cột, bấm hàng mở editor ở tab Xem trước.
 // - < 840px: card hôm nay nổi bật + FAB "Tạo báo cáo" mở bottom sheet.
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -25,6 +26,8 @@ import {
   IcInfo,
   IcMoreV,
   IcNote,
+  IcPanelClose,
+  IcPanelOpen,
   IcPlus,
   IcSearch,
   IcTrash,
@@ -49,6 +52,8 @@ import type { DailyReport } from '../pmTypes';
 
 // Số chip "Nhảy tới tháng" (các tháng gần nhất có báo cáo); tháng cũ hơn dùng nút lịch.
 const MONTH_CHIPS = 6;
+// Số báo cáo gần nhất hiện trên rail khi danh sách thu gọn (≥ 1200px).
+const RAIL_DAYS = 10;
 
 export default function BoardReportListPage() {
   const { reports, plans, loading, addReport, deleteReport } = usePm();
@@ -75,6 +80,13 @@ export default function BoardReportListPage() {
   const [planDone, setPlanDone] = useState(false);
   const [jump, setJump] = useState<{ id: string; n: number } | null>(null);
   const dateRef = useRef<HTMLInputElement>(null);
+  // ≥ 1200px: cột danh sách mặc định thu gọn thành rail (như Plan tuần); 🔍 trên rail mở ra + focus ô tìm.
+  const [listOpen, setListOpen] = useState(false);
+  const [focusSearch, setFocusSearch] = useState(0);
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusSearch) searchRef.current?.focus();
+  }, [focusSearch]);
 
   const query = useMemo(() => parseReportQuery(q), [q]);
   const searching = query.kind !== 'none';
@@ -562,11 +574,13 @@ export default function BoardReportListPage() {
     const list = (
       <div className="rpt-ls-col">
         <div className="rpt-ls-tools">
+          <div className="rpt-ls-searchrow">
           <div className="kml-field rpt-field-lead rpt-ls-search">
             <span className="rpt-field-lead-ic">
               <IcSearch size={18} />
             </span>
             <input
+              ref={searchRef}
               className="kml-input"
               value={q}
               placeholder="Tìm ngày (28/10) hoặc nội dung"
@@ -609,6 +623,23 @@ export default function BoardReportListPage() {
                 if (e.target.value) setQ(formatDateVi(e.target.value));
               }}
             />
+          </div>
+          {wide && (
+            <button
+              type="button"
+              className="kml-iconbtn"
+              aria-label="Thu gọn danh sách báo cáo"
+              aria-expanded={true}
+              title="Thu gọn danh sách"
+              onClick={() => {
+                // Xoá tìm kiếm: rail + xem trước cùng dựa trên toàn bộ báo cáo.
+                setQ('');
+                setListOpen(false);
+              }}
+            >
+              <IcPanelClose size={20} />
+            </button>
+          )}
           </div>
           {months.length > 1 && (
             <div className="rpt-ls-jump" role="group" aria-label="Nhảy tới tháng">
@@ -654,9 +685,68 @@ export default function BoardReportListPage() {
         {!searching && <p className="rpt-ls-more">Cũ nhất: {formatDateVi(oldest.date)}</p>}
       </div>
     );
+    // Rail (≥ 1200px, danh sách thu gọn): mở danh sách · 🔍 · RAIL_DAYS báo cáo gần nhất · "+N tất cả".
+    const railCard = (
+      <nav className="pl-rail" aria-label="Danh sách báo cáo (thu gọn)">
+        <button
+          type="button"
+          className="kml-iconbtn"
+          aria-label="Mở danh sách báo cáo"
+          aria-expanded={false}
+          title="Mở danh sách"
+          onClick={() => setListOpen(true)}
+        >
+          <IcPanelOpen size={20} />
+        </button>
+        <button
+          type="button"
+          className="kml-iconbtn"
+          aria-label="Tìm báo cáo"
+          title="Tìm báo cáo"
+          onClick={() => {
+            setListOpen(true);
+            setFocusSearch((n) => n + 1);
+          }}
+        >
+          <IcSearch size={20} />
+        </button>
+        <div className="pl-rail-sep" />
+        {reports.slice(0, RAIL_DAYS).map((r) => {
+          const label = `${weekdayLong(r.date)}, ${formatDateVi(r.date)} · ${countReportProjects(r)} dự án`;
+          return (
+            <button
+              key={r.id}
+              type="button"
+              className={`pl-rail-w${r.date === today ? ' is-now' : ''}${r.id === selected?.id ? ' is-sel' : ''}`}
+              aria-label={label}
+              aria-current={r.id === selected?.id ? 'true' : undefined}
+              title={label}
+              onClick={() => setSelId(r.id)}
+            >
+              {tile(r.date)}
+              <small>{formatDayMonth(r.date)}</small>
+            </button>
+          );
+        })}
+        {reports.length > RAIL_DAYS && (
+          <button
+            type="button"
+            className="pl-rail-w"
+            aria-label={`Xem tất cả ${reports.length} báo cáo`}
+            title={`Xem tất cả ${reports.length} báo cáo`}
+            onClick={() => setListOpen(true)}
+          >
+            <span className="rpt-dtile pl-rail-more" aria-hidden="true">
+              +{reports.length - RAIL_DAYS}
+            </span>
+            <small>tất cả</small>
+          </button>
+        )}
+      </nav>
+    );
     body = wide ? (
-      <div className="rpt-ls">
-        {list}
+      <div className={`rpt-ls${listOpen ? '' : ' is-rail'}`}>
+        {listOpen ? list : railCard}
         {previewCard}
       </div>
     ) : (

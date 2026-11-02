@@ -17,6 +17,8 @@ export default function ReportPopMenu({
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
+    // Menu ở hàng sát đáy vùng cuộn (cột danh sách cuộn riêng) bị cắt → cuộn vừa đủ để thấy hết.
+    ref.current?.scrollIntoView({ block: 'nearest' });
     const onDown = (e: MouseEvent) => {
       const anchor = ref.current?.parentElement;
       if (anchor && !anchor.contains(e.target as Node)) closeRef.current();

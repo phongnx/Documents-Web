@@ -4618,6 +4618,10 @@ button.m-row-main { cursor: pointer; }
 .rpt-ls-col { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding-bottom: 8px; }
 .rpt-ls-tools { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 8px; }
 .rpt-ls-search .kml-input { padding-right: 88px; }
+/* Danh sách thu gọn thành rail 72px (dùng chung style pl-rail của Plan tuần) */
+.rpt-ls.is-rail { grid-template-columns: 72px minmax(0, 1fr); }
+.rpt-ls-searchrow { display: flex; align-items: center; gap: 4px; }
+.rpt-ls-searchrow .rpt-ls-search { flex: 1; min-width: 0; }
 .rpt-ls-search .rpt-field-trail { top: 2px; display: flex; }
 .rpt-ls-jump { display: flex; gap: 8px; flex-wrap: wrap; }
 .rpt-ls-jump .kml-chip { padding: 0 12px; }
@@ -4691,6 +4695,16 @@ div.rpt-rrow-main { cursor: default; }
 .rpt-pvc-title h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; }
 .rpt-pvc-title p { margin: 2px 0 0; font-size: 12px; line-height: 16px; color: var(--muted); }
 .rpt-pvc-body { flex: 1; min-height: 0; padding: 20px 24px 24px; overflow: auto; }
+/* Trang danh sách Báo cáo ngày / Plan tuần có 2 cột (≥ 1200px): trang cao đúng màn hình, cửa sổ
+   không cuộn — cột trái (rail / danh sách) và thân xem trước tự cuộn bên trong (tránh 2 scroll lồng). */
+@media (min-width: 1200px) {
+  .rpt-lpage:has(> .rpt-ls) { display: flex; flex-direction: column; height: 100dvh; padding-bottom: 24px; }
+  .rpt-lpage:has(> .rpt-ls) > .rpt-ls {
+    flex: 1; min-height: 360px; grid-template-rows: minmax(0, 1fr); align-items: stretch;
+  }
+  .rpt-ls > .rpt-ls-col, .rpt-ls > .pl-rail { position: static; min-height: 0; overflow-y: auto; }
+  .rpt-ls > .rpt-pvc { position: static; max-height: none; min-height: 0; }
+}
 
 /* Menu "Tạo báo cáo" */
 .rpt-create-menu { width: 380px; max-width: calc(100vw - 32px); }
