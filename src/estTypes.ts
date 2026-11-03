@@ -100,6 +100,17 @@ export const EST_STATUS_META: Record<
 
 // ---------- Pure helpers ----------
 
+/** appId giả cho nhóm bảng không gắn app (route /board/estimates/app/_none). */
+export const EST_NO_APP = '_none';
+
+/** App của 1 bảng: appId lưu trên bảng, thiếu thì lấy theo task được gắn. */
+export function estAppIdOf(
+  e: Pick<EstIndexItem, 'appId' | 'taskId'>,
+  tasks: { id: string; appId?: string }[],
+): string {
+  return e.appId || (e.taskId ? tasks.find((t) => t.id === e.taskId)?.appId : '') || EST_NO_APP;
+}
+
 /** Sort group/task theo order (RTDB lưu Record — không đảm bảo thứ tự). */
 export function sortedGroups(groups?: Record<string, EstGroup>): EstGroup[] {
   return Object.values(groups ?? {}).sort((a, b) => a.order - b.order);

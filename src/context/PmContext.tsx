@@ -282,6 +282,8 @@ interface PmState {
   estimates: EstIndexItem[];
   /** Tạo bảng estimate (state draft) + sync mục Estimate sang sheet KPI của participants; trả estId. */
   addEstimate: (data: EstMetaInput) => string | null;
+  /** Tạo nhiều bảng trong 1 lần ghi nguyên tử — trả id theo thứ tự input (null = bỏ qua). */
+  addEstimates: (list: EstMetaInput[]) => (string | null)[];
   /** Sửa meta bảng (title/app/version/ngày/participants) — không đụng groups. */
   updateEstimateMeta: (id: string, patch: Partial<EstMetaInput>) => void;
   /** Duyệt & chốt (approved — member chỉ còn sửa status/note) hoặc mở lại draft. */
@@ -1389,66 +1391,78 @@ export function PmProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const addEstimate = useCallback(
-    (data: EstMetaInput): string | null => {
-      if (!db || !uid) return null;
-      const title = data.title.trim();
-      if (!title) return null;
-      // 1 task ↔ tối đa 1 bảng: task đã có bảng thì trả bảng đó, không tạo trùng
-      // (bấm 2 lần / 2 tab cùng mở trang Estimate của member).
-      if (data.taskId) {
-        const existed = stateRef.current.estimates.find((e) => e.taskId === data.taskId);
-        if (existed) return existed.id;
-      }
+  // Tạo NHIỀU bảng trong 1 update nguyên tử (dialog chọn nhiều task ở trang estimate của
+  // app). Không gọi addEstimate lặp: mỗi lần tính meta/estimates của member từ
+  // stateRef.current.estimates (chưa có bảng vừa tạo) → lần sau ghi đè mất bảng trước.
+  // Trả id theo đúng thứ tự input (task đã có bảng → id bảng cũ; title rỗng → null).
+  const addEstimates = useCallback(
+    (list: EstMetaInput[]): (string | null)[] => {
+      if (!db || !uid) return list.map(() => null);
       const now = new Date().toISOString();
-      const id = uuidv4();
-      const participants = toParticipants(data.participantIds);
-      const appName = data.appId
-        ? stateRef.current.apps.find((a) => a.id === data.appId)?.name
-        : undefined;
-      const taskTitle = data.taskId
-        ? stateRef.current.tasks.find((t) => t.id === data.taskId)?.title
-        : undefined;
-      const estMeta: EstimateMeta = {
-        ownerId: uid,
-        title,
-        state: 'draft',
-        createdAt: now,
-        ...(data.appId ? { appId: data.appId } : {}),
-        ...(appName ? { appName } : {}),
-        ...(data.version ? { version: data.version } : {}),
-        ...(data.taskId ? { taskId: data.taskId } : {}),
-        ...(taskTitle ? { taskTitle } : {}),
-        ...(data.startDate ? { startDate: data.startDate } : {}),
-        ...(data.endDate ? { endDate: data.endDate } : {}),
-        ...(typeof data.holidays === 'number' ? { holidays: data.holidays } : {}),
-        ...(participants.length ? { participants } : {}),
-      };
-      const index: EstIndexItem = {
-        id,
-        title,
-        createdAt: now,
-        ...(data.appId ? { appId: data.appId } : {}),
-        ...(data.version ? { version: data.version } : {}),
-        ...(data.taskId ? { taskId: data.taskId } : {}),
-        ...(participants.length
-          ? { participantIds: participants.map((p) => p.memberId) }
-          : {}),
-      };
+      const writes: Record<string, unknown> = {};
+      const nextIndex = [...stateRef.current.estimates];
+      const touched = new Set<string>();
+      const ids = list.map((data) => {
+        const title = data.title.trim();
+        if (!title) return null;
+        // 1 task ↔ tối đa 1 bảng: task đã có bảng (kể cả bảng vừa tạo trong lượt này)
+        // thì trả bảng đó, không tạo trùng (bấm 2 lần / 2 tab cùng mở).
+        if (data.taskId) {
+          const existed = nextIndex.find((e) => e.taskId === data.taskId);
+          if (existed) return existed.id;
+        }
+        const id = uuidv4();
+        const participants = toParticipants(data.participantIds);
+        const appName = data.appId
+          ? stateRef.current.apps.find((a) => a.id === data.appId)?.name
+          : undefined;
+        const taskTitle = data.taskId
+          ? stateRef.current.tasks.find((t) => t.id === data.taskId)?.title
+          : undefined;
+        const estMeta: EstimateMeta = {
+          ownerId: uid,
+          title,
+          state: 'draft',
+          createdAt: now,
+          ...(data.appId ? { appId: data.appId } : {}),
+          ...(appName ? { appName } : {}),
+          ...(data.version ? { version: data.version } : {}),
+          ...(data.taskId ? { taskId: data.taskId } : {}),
+          ...(taskTitle ? { taskTitle } : {}),
+          ...(data.startDate ? { startDate: data.startDate } : {}),
+          ...(data.endDate ? { endDate: data.endDate } : {}),
+          ...(typeof data.holidays === 'number' ? { holidays: data.holidays } : {}),
+          ...(participants.length ? { participants } : {}),
+        };
+        const index: EstIndexItem = {
+          id,
+          title,
+          createdAt: now,
+          ...(data.appId ? { appId: data.appId } : {}),
+          ...(data.version ? { version: data.version } : {}),
+          ...(data.taskId ? { taskId: data.taskId } : {}),
+          ...(participants.length
+            ? { participantIds: participants.map((p) => p.memberId) }
+            : {}),
+        };
+        writes[`users/${uid}/pm/estimates/${id}`] = index;
+        writes[`shared/est/${id}/meta`] = estMeta;
+        nextIndex.push(index);
+        for (const mid of index.participantIds ?? []) touched.add(mid);
+        return id;
+      });
+      if (Object.keys(writes).length === 0) return ids;
       // 1 update nguyên tử: index riêng tư + meta công khai + mục Estimate trên sheet KPI.
-      const writes: Record<string, unknown> = {
-        [`users/${uid}/pm/estimates/${id}`]: index,
-        [`shared/est/${id}/meta`]: estMeta,
-      };
-      kpiEstimatesWrites(
-        writes,
-        [...stateRef.current.estimates, index],
-        new Set(index.participantIds ?? []),
-      );
+      kpiEstimatesWrites(writes, nextIndex, touched);
       update(ref(db), writes);
-      return id;
+      return ids;
     },
     [uid, kpiEstimatesWrites, toParticipants],
+  );
+
+  const addEstimate = useCallback(
+    (data: EstMetaInput): string | null => addEstimates([data])[0] ?? null,
+    [addEstimates],
   );
 
   const updateEstimateMeta = useCallback(
@@ -1837,6 +1851,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
         syncAllKpiSheetMeta,
         estimates,
         addEstimate,
+        addEstimates,
         updateEstimateMeta,
         setEstimateState,
         setEstimateLocked,

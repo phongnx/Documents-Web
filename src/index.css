@@ -5189,7 +5189,20 @@ a.pl-src:hover { color: var(--primary); text-decoration: underline; }
 .pl-tk-ln .pl-tk-cbx { margin-top: 1px; }
 .pl-tk-ln span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .pl-tk-empty { margin: 0; padding: 16px 0; color: var(--muted); text-align: center; }
-.pl-tk-sum { margin-right: auto; align-self: center; font-size: 13px; color: var(--muted); }
+/* Dialog chọn task tạo bảng estimate (EstTaskPickerDialog) */
+.etp-all { display: inline-flex; align-items: center; gap: 10px; min-height: 40px; padding-left: 6px;font-size: 14px; font-weight: 600; cursor: pointer; }
+.etp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.etp-row { display: flex; align-items: flex-start; gap: 12px; min-height: 48px; padding: 10px 8px; border-radius: 8px; cursor: pointer; }
+.etp-row:hover { background: var(--hover-bg); }
+.etp-row .pl-tk-cbx { margin-top: 2px; }
+.etp-row.is-taken { cursor: default; opacity: 0.55; }
+.etp-row.is-taken:hover { background: transparent; }
+.etp-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.etp-title { font-weight: 600; overflow-wrap: anywhere; }
+.etp-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
+/* Danh sách app ở tab Estimate: app không có bảng và không còn task chưa xong → mờ */
+.task-row.est-app-idle { opacity: 0.6; }
+.pl-tk-sum {margin-right: auto; align-self: center; font-size: 13px; color: var(--muted); }
 @media (max-width: 839px) {
   .pl-tk-bar .rpt-appchip { flex: 1; max-width: none; }
   .pl-tk-count { margin-left: 0; }

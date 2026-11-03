@@ -59,41 +59,10 @@ export function estInitialFromTask(
   };
 }
 
-// Giá trị filter đặc biệt: mặc định chỉ task chưa xong (326/355 task thật đã xong).
-const OPEN = '__open';
-const ALL = '';
-
-const dateOf = (t: KpiTaskSnap) => t.planDate || t.endDate || t.startDate || '';
-
-export default function MemberEstimateList({
-  tasks,
-  estimates,
-  detailHref,
-  onCreate,
-  onDelete,
-  emptyHint,
-}: Props) {
-  const navigate = useNavigate();
-  const [fApp, setFApp] = useState('');
-  const [fStatus, setFStatus] = useState(OPEN);
-  const [fType, setFType] = useState('');
-  const [search, setSearch] = useState('');
+/** Tóm tắt từng bảng: get() 1 lần mỗi khi danh sách id đổi (undefined = đang tải,
+ *  null = không đọc được). Dùng chung với trang estimate của 1 app. */
+export function useEstSummaries(estimates: EstRef[]): Record<string, EstSummary | null> {
   const [summaries, setSummaries] = useState<Record<string, EstSummary | null>>({});
-
-  const estByTask = useMemo(() => {
-    const map = new Map<string, EstRef>();
-    for (const e of estimates) if (e.taskId) map.set(e.taskId, e);
-    return map;
-  }, [estimates]);
-
-  // Bảng không ghép được task nào trong danh sách: bảng cũ theo phase/release, hoặc
-  // task của bảng đã bị xóa / chuyển sang app không còn gán cho member.
-  const orphans = useMemo(() => {
-    const ids = new Set(tasks.map((t) => t.id));
-    return estimates.filter((e) => !e.taskId || !ids.has(e.taskId));
-  }, [estimates, tasks]);
-
-  // Tóm tắt từng bảng: get() 1 lần (như trang danh sách estimate của leader).
   const estKey = estimates.map((e) => e.id).join(',');
   useEffect(() => {
     if (!db || estimates.length === 0) {
@@ -125,6 +94,80 @@ export default function MemberEstimateList({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estKey]);
+  return summaries;
+}
+
+/** Badge trạng thái + tiến độ của 1 bảng (Draft/Đã duyệt · sub task · est/thực tế · %). */
+export function EstSummaryBadge({ summary }: { summary: EstSummary | null | undefined }) {
+  if (summary === undefined) return <span className="muted">Đang tải…</span>;
+  if (summary === null) return <span className="muted">Bảng không đọc được</span>;
+  const s = summary;
+  return (
+    <>
+      <span className={`task-badge ${s.state === 'draft' ? 'st-doing' : 'st-done'}`}>
+        {s.state === 'draft' ? 'Draft' : 'Đã duyệt'}
+      </span>
+      {s.locked && <span className="task-badge st-block">🔒</span>}
+      <span className="muted">
+        {`${s.doneCount}/${s.total} sub task · est ${fmtEstHours(s.estHours)} · thực tế ${fmtMin(s.actualMin)}`}
+      </span>
+      <span className={`kpi-month-score ${s.pct >= 100 ? 'pos' : 'neg'}`}>{s.pct}%</span>
+    </>
+  );
+}
+
+/** Nút 🗑️ xóa bảng — confirm mạnh vì mất cả sub task lẫn giờ thực tế đã log vào bảng. */
+export function EstDeleteButton({ est, onDelete }: { est: EstRef; onDelete: (e: EstRef) => void }) {
+  return (
+    <div className="doc-line-actions">
+      <button
+        type="button"
+        className="doc-action danger"
+        title="Xóa bảng (kèm toàn bộ nội dung)"
+        onClick={() => {
+          if (window.confirm(`Xóa bảng "${est.title}" và toàn bộ nội dung? Không thể hoàn tác.`))
+            onDelete(est);
+        }}
+      >
+        🗑️
+      </button>
+    </div>
+  );
+}
+
+// Giá trị filter đặc biệt: mặc định chỉ task chưa xong (326/355 task thật đã xong).
+const OPEN = '__open';
+const ALL = '';
+
+const dateOf = (t: KpiTaskSnap) => t.planDate || t.endDate || t.startDate || '';
+
+export default function MemberEstimateList({
+  tasks,
+  estimates,
+  detailHref,
+  onCreate,
+  onDelete,
+  emptyHint,
+}: Props) {
+  const navigate = useNavigate();
+  const [fApp, setFApp] = useState('');
+  const [fStatus, setFStatus] = useState(OPEN);
+  const [fType, setFType] = useState('');
+  const [search, setSearch] = useState('');
+  const summaries = useEstSummaries(estimates);
+
+  const estByTask = useMemo(() => {
+    const map = new Map<string, EstRef>();
+    for (const e of estimates) if (e.taskId) map.set(e.taskId, e);
+    return map;
+  }, [estimates]);
+
+  // Bảng không ghép được task nào trong danh sách: bảng cũ theo phase/release, hoặc
+  // task của bảng đã bị xóa / chuyển sang app không còn gán cho member.
+  const orphans = useMemo(() => {
+    const ids = new Set(tasks.map((t) => t.id));
+    return estimates.filter((e) => !e.taskId || !ids.has(e.taskId));
+  }, [estimates, tasks]);
 
   // App có trong danh sách (cho bộ lọc App — chỉ hiện khi hơn 1 app).
   const appOptions = useMemo(() => {
@@ -169,43 +212,8 @@ export default function MemberEstimateList({
 
   const shown = groups.reduce((s, g) => s + g.items.length, 0);
 
-  const summaryText = (s: EstSummary) =>
-    `${s.doneCount}/${s.total} sub task · est ${fmtEstHours(s.estHours)} · thực tế ${fmtMin(s.actualMin)}`;
-
-  const estBadge = (estId: string) => {
-    const s = summaries[estId];
-    if (s === undefined) return <span className="muted">Đang tải…</span>;
-    if (s === null) return <span className="muted">Bảng không đọc được</span>;
-    return (
-      <>
-        <span className={`task-badge ${s.state === 'draft' ? 'st-doing' : 'st-done'}`}>
-          {s.state === 'draft' ? 'Draft' : 'Đã duyệt'}
-        </span>
-        {s.locked && <span className="task-badge st-block">🔒</span>}
-        <span className="muted">{summaryText(s)}</span>
-        <span className={`kpi-month-score ${s.pct >= 100 ? 'pos' : 'neg'}`}>{s.pct}%</span>
-      </>
-    );
-  };
-
-  // Xóa bảng — confirm mạnh vì mất cả sub task lẫn giờ thực tế đã log vào bảng.
-  const deleteButton = (e: EstRef) => (
-    <div className="doc-line-actions">
-      <button
-        type="button"
-        className="doc-action danger"
-        title="Xóa bảng (kèm toàn bộ nội dung)"
-        onClick={() => {
-          if (
-            window.confirm(`Xóa bảng "${e.title}" và toàn bộ nội dung? Không thể hoàn tác.`)
-          )
-            onDelete?.(e);
-        }}
-      >
-        🗑️
-      </button>
-    </div>
-  );
+  const estBadge = (estId: string) => <EstSummaryBadge summary={summaries[estId]} />;
+  const deleteButton = (e: EstRef) => onDelete && <EstDeleteButton est={e} onDelete={onDelete} />;
 
   if (tasks.length === 0 && estimates.length === 0) {
     return <p className="muted empty">{emptyHint}</p>;

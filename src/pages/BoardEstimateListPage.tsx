@@ -1,93 +1,110 @@
-// Tab Estimate của leader (/board/estimates): estimate theo APP → TASK — toàn bộ task của
-// mọi app (lọc mặc định chưa xong) + bảng của từng task, dùng chung MemberEstimateList với
-// trang Estimate của từng member. Tạo bảng ngay trên dòng task (1 task ↔ 1 bảng chung);
-// bảng tự do không gắn task (theo phase/release như trước) vẫn tạo được ở nút trên cùng
-// và nằm ở nhóm "Bảng không gắn task" cuối trang. Xóa bảng bằng 🗑️ trên dòng.
+// Tab Estimate của leader (/board/estimates): danh sách APP — mỗi app 1 dòng (số bảng đã
+// có + số task chưa xong), click → trang estimate của app đó (/board/estimates/app/:appId)
+// liệt kê các bảng và tạo bảng mới từ task chưa xong. Không liệt kê từng task ở đây nữa.
+// Bảng không xác định được app (bảng cũ không gắn app/task) gom vào dòng "Bảng không gắn app".
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePm, type EstMetaInput } from '../context/PmContext';
+import { usePm } from '../context/PmContext';
 import BoardNav from '../components/board/BoardNav';
-import EstMetaDialog from '../components/board/EstMetaDialog';
-import MemberEstimateList, {
-  estInitialFromTask,
-  type EstRef,
-} from '../components/board/MemberEstimateList';
-import { taskSnapOf, type KpiTaskSnap } from '../kpiTypes';
+import { DONE_STATUS } from '../pmTypes';
+import { EST_NO_APP, estAppIdOf } from '../estTypes';
 
 export default function BoardEstimateListPage() {
-  const { estimates, apps, tasks, members, loading, addEstimate, deleteEstimate } = usePm();
+  const { estimates, apps, tasks, loading } = usePm();
   const navigate = useNavigate();
-  // undefined = đóng; null = bảng tự do; task = bảng gắn task đó.
-  const [creating, setCreating] = useState<KpiTaskSnap | null | undefined>(undefined);
+  const [search, setSearch] = useState('');
 
-  // Task chưa gán app bị bỏ: dialog bắt chọn app trước mới gắn được task.
-  const taskSnaps = useMemo(
-    () =>
-      tasks.flatMap((t) => {
-        const app = t.appId ? apps.find((a) => a.id === t.appId) : undefined;
-        return app ? [taskSnapOf(t, app.name)] : [];
-      }),
-    [tasks, apps],
+  const rows = useMemo(() => {
+    const boards = new Map<string, number>();
+    for (const e of estimates) {
+      const aid = estAppIdOf(e, tasks);
+      boards.set(aid, (boards.get(aid) ?? 0) + 1);
+    }
+    const open = new Map<string, number>();
+    for (const t of tasks)
+      if (t.appId && t.status !== DONE_STATUS) open.set(t.appId, (open.get(t.appId) ?? 0) + 1);
+    const q = search.trim().toLowerCase();
+    return apps
+      .filter((a) => !q || a.name.toLowerCase().includes(q))
+      .map((a) => ({ app: a, boards: boards.get(a.id) ?? 0, open: open.get(a.id) ?? 0 }))
+      .sort(
+        // App đã có bảng lên đầu (đang được estimate), rồi theo tên.
+        (x, y) => Number(y.boards > 0) - Number(x.boards > 0) || x.app.name.localeCompare(y.app.name),
+      );
+  }, [apps, tasks, estimates, search]);
+
+  const noAppCount = useMemo(
+    () => estimates.filter((e) => estAppIdOf(e, tasks) === EST_NO_APP).length,
+    [estimates, tasks],
   );
-
-  const estRefs = useMemo<EstRef[]>(
-    () =>
-      estimates.map((e) => ({
-        id: e.id,
-        title: e.title,
-        ...(e.taskId ? { taskId: e.taskId } : {}),
-      })),
-    [estimates],
-  );
-
-  const takenTaskIds = useMemo(
-    () => new Set(estimates.map((e) => e.taskId).filter((x): x is string => !!x)),
-    [estimates],
-  );
-
-  const onSave = (data: EstMetaInput) => {
-    const id = addEstimate(data);
-    if (id) navigate(`/board/estimates/${id}`);
-  };
 
   return (
     <div className="container">
       <BoardNav />
 
-      <div className="board-add-row">
-        <button
-          type="button"
-          onClick={() => setCreating(null)}
-          title="Bảng không gắn task — theo phase/release, gắn task sau cũng được"
-        >
-          ＋ Tạo bảng tự do
-        </button>
+      <div className="task-filters">
+        <input
+          className="task-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Tìm app…"
+        />
+        <span className="muted cal-count">
+          {rows.length} app · {estimates.length} bảng
+        </span>
       </div>
 
       {loading ? (
         <p className="muted">Đang tải…</p>
+      ) : apps.length === 0 && noAppCount === 0 ? (
+        <p className="muted empty">Chưa có app nào — thêm app ở tab Task trước.</p>
       ) : (
-        <MemberEstimateList
-          tasks={taskSnaps}
-          estimates={estRefs}
-          detailHref={(id) => `/board/estimates/${id}`}
-          onCreate={setCreating}
-          onDelete={(e) => deleteEstimate(e.id)}
-          emptyHint="Chưa có task nào thuộc app — thêm task ở tab Task trước."
-        />
-      )}
-
-      {creating !== undefined && (
-        <EstMetaDialog
-          title={creating ? '＋ Tạo bảng estimate cho task' : '＋ Tạo bảng tự do'}
-          apps={apps}
-          members={members.filter((m) => m.active)}
-          tasks={tasks}
-          takenTaskIds={takenTaskIds}
-          initial={creating ? estInitialFromTask(creating, members) : undefined}
-          onSave={onSave}
-          onClose={() => setCreating(undefined)}
-        />
+        <ul className="task-list">
+          {rows.map(({ app, boards, open }) => (
+            <li
+              key={app.id}
+              className={`task-row${boards ? ' mest-has-est' : ''}${!boards && !open ? ' est-app-idle' : ''}`}
+            >
+              <button
+                type="button"
+                className="task-main"
+                onClick={() => navigate(`/board/estimates/app/${app.id}`)}
+              >
+                <span className="task-head">
+                  <span className="task-title">{app.name}</span>
+                  <span className="task-tags">
+                    <span className="task-badge type">{app.platform}</span>
+                    {boards > 0 ? (
+                      <span className="task-badge st-doing">📐 {boards} bảng</span>
+                    ) : (
+                      <span className="muted">Chưa có bảng</span>
+                    )}
+                    <span className="muted">
+                      · {open > 0 ? `${open} task chưa xong` : 'không còn task chưa xong'}
+                    </span>
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+          {noAppCount > 0 && !search.trim() && (
+            <li className="task-row mest-has-est">
+              <button
+                type="button"
+                className="task-main"
+                onClick={() => navigate(`/board/estimates/app/${EST_NO_APP}`)}
+              >
+                <span className="task-head">
+                  <span className="task-title">Bảng không gắn app</span>
+                  <span className="task-tags">
+                    <span className="task-badge st-doing">📐 {noAppCount} bảng</span>
+                    <span className="muted">· bảng cũ theo phase/release</span>
+                  </span>
+                </span>
+              </button>
+            </li>
+          )}
+        </ul>
       )}
     </div>
   );

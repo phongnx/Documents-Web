@@ -21,6 +21,8 @@ import { useEstSheet } from '../hooks/useEstSheet';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { completeEstMessage, completeEstTask } from '../lib/estKpiSync';
 import {
+  EST_NO_APP,
+  estAppIdOf,
   estProgress,
   estProgressText,
   fmtEstHours,
@@ -180,6 +182,16 @@ export default function BoardEstimateEditPage() {
     0,
   );
 
+  // Quay lại trang estimate của app chứa bảng (bảng không gắn app → nhóm "_none").
+  const backAppId = estAppIdOf(meta, tasks);
+  const back = {
+    to: `/board/estimates/app/${backAppId}`,
+    label:
+      backAppId === EST_NO_APP
+        ? 'Bảng không gắn app'
+        : apps.find((a) => a.id === backAppId)?.name ?? meta.appName ?? 'Danh sách bảng',
+  };
+
   return (
     <div className="container kml-page est-page">
       <BoardNav />
@@ -188,7 +200,7 @@ export default function BoardEstimateEditPage() {
         meta={meta}
         groups={sheet.groups}
         narrow={narrow}
-        back={BACK}
+        back={back}
         showTask
         actions={narrow ? undefined : actions}
         below={narrow ? actions : undefined}

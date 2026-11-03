@@ -27,6 +27,7 @@ import BoardKpiEstimateListPage from './pages/BoardKpiEstimateListPage';
 import KpiEstimateListPage from './pages/KpiEstimateListPage';
 import KpiSummarySharePage from './pages/KpiSummarySharePage';
 import BoardEstimateListPage from './pages/BoardEstimateListPage';
+import BoardEstimateAppPage from './pages/BoardEstimateAppPage';
 import BoardEstimateEditPage from './pages/BoardEstimateEditPage';
 import KpiSharePage from './pages/KpiSharePage';
 import EstimateSharePage from './pages/EstimateSharePage';
@@ -132,6 +133,7 @@ function AppShell() {
         <Route path="/board/kpi/:memberId" element={<BoardKpiMemberPage />} />
         <Route path="/board/kpi/:memberId/estimates" element={<BoardKpiEstimateListPage />} />
         <Route path="/board/estimates" element={<BoardEstimateListPage />} />
+        <Route path="/board/estimates/app/:appId" element={<BoardEstimateAppPage />} />
         <Route path="/board/estimates/:id" element={<BoardEstimateEditPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/docs" replace />} />
