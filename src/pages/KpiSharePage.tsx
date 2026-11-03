@@ -12,6 +12,7 @@ import { shortDay } from '../components/board/KpiLogEditor';
 import {
   IcAlert,
   IcChevronDown,
+  IcChevronRight,
   IcChevronUp,
   IcClose,
   IcLinkOff,
@@ -28,6 +29,22 @@ import { completeEstMessage, completeEstTask } from '../lib/estKpiSync';
 import type { EstGroup, EstLogs, KpiEstRef } from '../estTypes';
 import { addDays, isoLocal, mondayOf } from '../lib/pmDates';
 import { DEFAULT_KPI_RULES, type KpiRelease } from '../kpiTypes';
+import { DONE_STATUS } from '../pmTypes';
+
+// Nhãn đếm ngược tới mốc (mốc trong tuần nên tối đa 6 ngày).
+function countdownLabel(today: string, date: string): string {
+  let n = 0;
+  while (n < 7 && addDays(today, n) < date) n++;
+  return n === 0 ? 'Hôm nay' : n === 1 ? 'Ngày mai' : `Còn ${n} ngày`;
+}
+
+// Tiến độ task của mốc từ snapshot; bỏ dòng "… còn N task khác" (status rỗng).
+// null = snapshot cũ không có task → ẩn phần tiến độ.
+function releaseProgress(r: KpiRelease): { done: number; total: number } | null {
+  const list = (r.tasks ?? []).filter((t) => t.status);
+  if (list.length === 0) return null;
+  return { done: list.filter((t) => t.status === DONE_STATUS).length, total: list.length };
+}
 
 export default function KpiSharePage() {
   const { token } = useParams();
@@ -96,11 +113,14 @@ export default function KpiSharePage() {
   // Mốc đang xem chi tiết trong dialog (null = đóng).
   const [relDetail, setRelDetail] = useState<KpiRelease | null>(null);
   const today = isoLocal(new Date());
-  const weekStart = mondayOf(today);
-  const weekEnd = addDays(weekStart, 6);
+  const weekEnd = addDays(mondayOf(today), 6);
   const releases = (sheet.meta?.releases ?? []).filter((r) => r.date >= today);
+  // Mốc từ hôm nay tới hết CN tuần này → thẻ "Release tuần này" (hiện đủ, kể cả màn hẹp);
+  // mốc sau đó giữ dạng chip "Release sắp tới".
+  const weekReleases = releases.filter((r) => r.date <= weekEnd);
+  const laterReleases = releases.filter((r) => r.date > weekEnd);
   const relLimit = narrow ? 1 : 3;
-  const visibleReleases = relOpen ? releases : releases.slice(0, relLimit);
+  const visibleReleases = relOpen ? laterReleases : laterReleases.slice(0, relLimit);
 
   // Tiêu đề tab theo tên member.
   useEffect(() => {
@@ -189,15 +209,56 @@ export default function KpiSharePage() {
       )}
       {ready && (
         <>
-          {releases.length > 0 && (
+          {weekReleases.length > 0 && (
+            <section className="kml-relweek" aria-label="Release tuần này">
+              <div className="kml-relweek-h">
+                <IcRocket size={18} />
+                <strong>Release tuần này</strong>
+                <span className="kml-relweek-count">· {weekReleases.length} mốc</span>
+              </div>
+              <div className="kml-relweek-list">
+                {weekReleases.map((r, i) => {
+                  const prog = releaseProgress(r);
+                  return (
+                    <button
+                      type="button"
+                      key={`${r.app}-${r.date}-${i}`}
+                      className="kml-relweek-row"
+                      title="Xem chi tiết các task trong release"
+                      onClick={() => setRelDetail(r)}
+                    >
+                      <span className="kml-relweek-name kml-ellipsis">
+                        {r.app}
+                        {r.version ? ` ${r.version}` : ''}
+                      </span>
+                      <span className="kml-relweek-meta">
+                        <span className={`kml-tag ${r.date === today ? 'is-today' : 'is-outline'}`}>
+                          {countdownLabel(today, r.date)}
+                        </span>
+                        <span className="kml-relweek-date">{shortDay(r.date)}</span>
+                        {prog && (
+                          <span className={`kml-relweek-prog${prog.done === prog.total ? ' is-done' : ''}`}>
+                            {prog.done === prog.total
+                              ? `Đã xong ${prog.done}/${prog.total}`
+                              : `${prog.done}/${prog.total} task xong`}
+                          </span>
+                        )}
+                      </span>
+                      <IcChevronRight size={18} />
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+          {laterReleases.length > 0 && (
             <div className={`kml-rels${relOpen ? ' is-open' : ''}`} role="group" aria-label="Release sắp tới">
               <span className={narrow ? 'k-sr' : 'kml-rels-label'}>Release sắp tới</span>
               {visibleReleases.map((r, i) => (
                 <button
                   type="button"
                   key={`${r.app}-${r.date}-${i}`}
-                  // Mốc nằm trong tuần hiện tại → tô nền khác biệt.
-                  className={`kml-chip${r.date >= weekStart && r.date <= weekEnd ? ' is-week' : ''}`}
+                  className="kml-chip"
                   title="Xem chi tiết các task trong release"
                   onClick={() => setRelDetail(r)}
                 >
@@ -209,14 +270,14 @@ export default function KpiSharePage() {
                   <span className="kml-chip-sub">{shortDay(r.date)}</span>
                 </button>
               ))}
-              {releases.length > relLimit && (
+              {laterReleases.length > relLimit && (
                 <button
                   type="button"
                   className="kml-chip"
                   aria-expanded={relOpen}
                   onClick={() => setRelOpen((v) => !v)}
                 >
-                  {relOpen ? 'Thu gọn' : `+${releases.length - relLimit}`}
+                  {relOpen ? 'Thu gọn' : `+${laterReleases.length - relLimit}`}
                   {relOpen ? <IcChevronUp size={14} /> : <IcChevronDown size={14} />}
                 </button>
               )}
@@ -239,6 +300,7 @@ export default function KpiSharePage() {
             projectIds={sheet.meta?.projectIds}
             strictProjects={sheet.meta?.strictProjects === true}
             leaves={sheet.leaves}
+            releases={releases}
             weekPlans={sheet.weekPlans}
             onSaveWeekPlan={sheet.setWeekPlan}
             estimates={sheet.meta?.estimates}

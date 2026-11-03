@@ -3810,7 +3810,37 @@ a.kpi-rel-chip:hover {
 .kml-chip svg { color: var(--primary); flex: none; }
 .kml-chip:hover { background: var(--hover-bg); }
 .kml-chip-sub { font-weight: 400; color: var(--muted); flex: none; }
-.kml-chip.is-week { background: var(--base-bg); border-color: transparent; }
+
+/* Thẻ "Release tuần này" (mốc từ hôm nay tới hết CN) — viền + nền nhạt primary để nổi
+   hơn dải chip, không dùng --warn (để dành cho cảnh báo thật). */
+.kml-relweek {
+  margin-bottom: 12px; padding: 4px 4px 4px 0; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+}
+.kml-relweek-h { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; }
+.kml-relweek-h svg { color: var(--primary); flex: none; }
+.kml-relweek-count { color: var(--muted); }
+.kml-relweek-list { display: flex; flex-direction: column; }
+.kml-relweek-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 6px 12px 6px 42px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.kml-relweek-row:hover { background: var(--hover-bg); }
+.kml-relweek-row:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.kml-relweek-row > svg { color: var(--muted); flex: none; }
+.kml-relweek-name { flex: 1; min-width: 0; font-weight: 600; }
+.kml-relweek-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; flex: none; }
+.kml-relweek-date { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kml-relweek-prog { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kml-relweek-prog.is-done { color: var(--pos); font-weight: 600; }
+@media (max-width: 839px) {
+  /* Màn hẹp: tên 1 hàng, đếm ngược · ngày · tiến độ xuống hàng dưới. */
+  .kml-relweek-row { flex-wrap: wrap; gap: 4px 8px; padding: 8px 8px 8px 16px; }
+  .kml-relweek-name { flex: 1 1 calc(100% - 34px); order: 0; }
+  .kml-relweek-row > svg { order: 1; }
+  .kml-relweek-meta { order: 2; flex: 1 1 100%; gap: 4px 10px; }
+}
 
 /* ---------- Banner ---------- */
 .kml-banner {
@@ -3891,6 +3921,7 @@ a.kpi-rel-chip:hover {
 .kml-tag.is-warn, .kml-tag.is-leave { background: var(--warn-bg); color: var(--warn); }
 .kml-tag.is-plan { background: color-mix(in srgb, var(--note) 14%, transparent); color: var(--note); }
 .kml-tag.is-today { background: var(--base-bg); color: var(--base); }
+.kml-tag.is-rel { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); }
 
 .kml-score {
   display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px 0 6px; border-radius: 6px;

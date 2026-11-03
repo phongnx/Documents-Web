@@ -23,6 +23,7 @@ import {
   type KpiEntry,
   type KpiLeave,
   type KpiMilestoneOption,
+  type KpiRelease,
   type KpiScore,
   type KpiTaskSnap,
   type KpiWeekPlan,
@@ -102,6 +103,8 @@ interface Props {
   /** true = member CHỈ chọn được project trong projectNames (đã được leader gán). */
   strictProjects: boolean;
   leaves?: KpiLeave[];
+  /** Mốc release sắp tới (meta.releases, đã lọc từ hôm nay) — gắn nhãn lên đầu mục ngày. */
+  releases?: KpiRelease[];
   weekPlans?: Record<string, KpiWeekPlan>;
   onSaveWeekPlan: (weekStart: string, text: string) => void;
   /** Các bảng estimate member tham gia (meta.estimates) — bật nút chọn task estimate. */
@@ -238,6 +241,7 @@ export default function KpiMemberLog({
   projectIds,
   strictProjects,
   leaves,
+  releases,
   weekPlans,
   onSaveWeekPlan,
   estimates,
@@ -683,9 +687,19 @@ export default function KpiMemberLog({
   // ---------- Danh sách ----------
   const dayTags = (date: string): ReactNode => {
     const leave = leaveMap.get(date);
+    const rels = (releases ?? []).filter((r) => r.date === date);
     return (
       <>
         {date === today && <span className="kml-tag is-today">Hôm nay</span>}
+        {rels.map((r, i) => (
+          <span key={i} className="kml-tag is-rel" title="Mốc release trong ngày này">
+            <IcRocket size={13} />
+            <span className="kml-ellipsis">
+              Release {r.app}
+              {r.version ? ` ${r.version}` : ''}
+            </span>
+          </span>
+        ))}
         {date > today && (
           <span className="kml-tag is-plan" title="Dòng plan — điền giờ thực tế khi làm">
             <IcCalendarNext size={13} />
