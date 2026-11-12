@@ -4,7 +4,7 @@
 //   status/note sub task CỦA MÌNH (viewerId); locked = chỉ xem.
 // Bản redesign Material 3 (cùng hệ kml-* với trang Log KPI):
 // - Desktop: thanh tổng kết dính đầu trang + MỘT lưới chung cho mọi nhóm (cột thẳng hàng).
-//   Chip trạng thái mở menu đổi trạng thái (mục Xong xem trước điểm gợi ý); bấm dòng mở
+//   Chip trạng thái mở menu đổi trạng thái (mục Xong xem trước giờ thực tế / est); bấm dòng mở
 //   dialog sửa; nút xoá chỉ hiện khi rê chuột.
 // - Màn hẹp (< 840px): thẻ tổng kết + danh sách thẻ, đổi trạng thái qua bottom sheet.
 // Cột "Thực tế" đọc từ logs (Σ phút các dòng log KPI link tới sub task) — không nhập tay.
@@ -52,7 +52,6 @@ import {
   IcUsers,
   IcWarn,
 } from './ksumIcons';
-import { fmtDelta } from '../../kpiTypes';
 import { formatDateVi } from '../../lib/reportFormat';
 
 // ---------- Thông báo dạng snackbar (dùng chung 2 trang bảng) ----------
@@ -283,7 +282,7 @@ interface Props {
   /** < 840px: bố cục thẻ + bottom sheet. */
   narrow: boolean;
   /**
-   * Chuyển status; status='done' đi qua flow completeEstTask ở page (điểm gợi ý).
+   * Chuyển status; status='done' đi qua flow completeEstTask ở page (báo lệch est).
    * taskOverride: bản task vừa sửa trong dialog (est mới nhất) — không chờ realtime dội về.
    */
   onSetStatus: (
@@ -750,7 +749,7 @@ export default function EstSheetTable({
               <button
                 type="button"
                 className={`kml-iconbtn is-xs${legendOpen ? ' is-on' : ''}`}
-                aria-label="Chú giải cột thực tế và điểm gợi ý"
+                aria-label="Chú giải cột thực tế"
                 aria-expanded={legendOpen}
                 onClick={() => setLegendOpen((v) => !v)}
               >
@@ -783,28 +782,10 @@ export default function EstSheetTable({
                       <span>Đã Xong nhưng chưa có dòng log KPI nào gắn sub task này</span>
                     </div>
                   </div>
-                  <h3>Điểm gợi ý khi chuyển sang Xong</h3>
-                  <div className="kml-legend">
-                    <div>
-                      <span className="kml-score pos">{fmtDelta(1)}</span>
-                      <span>Thực tế ≤ 80% est</span>
-                    </div>
-                    <div>
-                      <span className="kml-score zero">0</span>
-                      <span>Thực tế ≤ 110% est</span>
-                    </div>
-                    <div>
-                      <span className="kml-score neg">{fmtDelta(-0.5)}</span>
-                      <span>Thực tế ≤ 120% est</span>
-                    </div>
-                    <div>
-                      <span className="kml-score neg">{fmtDelta(-1)}</span>
-                      <span>Thực tế &gt; 120% est</span>
-                    </div>
-                  </div>
                   <p className="est-pop-note">
-                    Giờ thực tế cộng từ các dòng log KPI gắn sub task. Điểm điền vào dòng log
-                    mới nhất; leader xác nhận khi chấm.
+                    Giờ thực tế cộng từ các dòng log KPI gắn sub task. Est chỉ dùng để lập kế
+                    hoạch, không quy ra điểm KPI; khi chuyển sang Xong mà thực tế lệch từ 2×
+                    trở lên (hoặc chỉ bằng 0.5× est) sẽ có nhắc xem lại cách estimate.
                   </p>
                 </div>
               )}

@@ -1,17 +1,17 @@
 // Đổi trạng thái sub task estimate — thay checkbox "Xong" cũ trên dòng.
 // Desktop: menu thả xuống dưới chip trạng thái. Màn hẹp: bottom sheet (KpiDialog sheet).
-// Mục "Xong" xem trước điểm gợi ý (estDonePreview — cùng căn cứ với completeEstTask)
-// để người dùng biết trước sẽ ghi gì vào dòng log KPI. Chọn Xong không hỏi lại.
+// Mục "Xong" xem trước giờ thực tế / est (estDonePreview) — lệch est lớn thì nhắc xem lại
+// cách estimate. Không còn điểm gợi ý (bỏ chấm theo est). Chọn Xong không hỏi lại.
 import { useEffect, useRef } from 'react';
 import {
   EST_STATUS_META,
   estDonePreview,
   fmtEstHours,
   fmtMin,
+  fmtRatio,
   type EstSubTask,
   type EstTaskStatus,
 } from '../../estTypes';
-import { fmtDelta } from '../../kpiTypes';
 import KpiDialog from './KpiDialog';
 import { IcCheck, IcStDoing, IcStDone, IcStTodo } from './ksumIcons';
 
@@ -20,8 +20,6 @@ export function EstStatusIcon({ status, size = 16 }: { status: EstTaskStatus; si
   if (status === 'doing') return <IcStDoing size={size} />;
   return <IcStTodo size={size} />;
 }
-
-const scoreCls = (d: number) => (d > 0 ? 'pos' : d < 0 ? 'neg' : 'zero');
 
 /** 3 lựa chọn trạng thái (dùng chung menu + sheet). */
 function StatusOptions({
@@ -68,9 +66,7 @@ function StatusOptions({
       >
         <EstStatusIcon status="done" size={iconSize} />
         <span>
-          <span className="est-mi-title">
-            {pv.delta !== null ? 'Xong · ghi điểm gợi ý' : 'Xong'}
-          </span>
+          <span className="est-mi-title">Xong</span>
           {task.status !== 'done' && (
             <>
               <small>{pv.lines[0]}</small>
@@ -80,8 +76,10 @@ function StatusOptions({
         </span>
         {task.status === 'done'
           ? tick('done')
-          : pv.delta !== null && (
-              <span className={`kml-score ${scoreCls(pv.delta)}`}>{fmtDelta(pv.delta)}</span>
+          : pv.deviation !== null && (
+              <span className="kml-score self" title="Thực tế lệch nhiều so với est">
+                {fmtRatio(pv.deviation)}
+              </span>
             )}
       </button>
     </>

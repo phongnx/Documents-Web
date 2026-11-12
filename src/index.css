@@ -2388,6 +2388,10 @@ a:hover {
 .kpi-rule-level-row {
   margin-top: 6px;
 }
+/* Nút "Nạp quy chế mặc định" tách sang trái, xa nút Lưu */
+.kpi-rules-reset {
+  margin-right: auto;
+}
 /* Preview quy chế (chỉ đọc — trang share member) */
 .kpi-rules-group-title {
   display: block;
@@ -3468,9 +3472,12 @@ a.kpi-rel-chip:hover {
 /* Cảnh báo KPI tháng ≠ 100 + Σ ± dòng — chỉ hiện khi lệch */
 .k-bh-warn {
   display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px;
-  border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: help;
-  color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-border);
+  border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-border); font-family: inherit;
 }
+/* Bấm cảnh báo = đặt KPI tháng về 100 + Σ ± dòng */
+.k-bh-warn:hover:not(:disabled) { filter: brightness(1.1); }
+.k-bh-warn:disabled { cursor: default; opacity: 0.6; }
 .k-bh-actions { display: flex; align-items: center; gap: 2px; padding-left: 8px; border-left: 1px solid var(--border); }
 /* Gộp tay: nút "Gộp N mục" + "Bỏ chọn" khi đang chọn mục của khối này */
 .k-bh-merge { display: flex; align-items: center; gap: 6px; }

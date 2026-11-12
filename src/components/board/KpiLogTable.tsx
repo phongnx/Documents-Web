@@ -115,7 +115,7 @@ interface RowDraft {
   selfDelta: string;
   /** Link về sub task estimate (pick từ dialog 📐). */
   estRef?: KpiEstRef;
-  /** Tick "Hoàn thành task estimate" — khi lưu sẽ chốt done + điểm gợi ý. */
+  /** Tick "Hoàn thành task estimate" — khi lưu sẽ chốt sub task done. */
   estDone: boolean;
   /** Mốc release/milestone task thuộc về. */
   rel?: KpiEntryRel;
@@ -380,7 +380,7 @@ export default function KpiLogTable({
     if (d.id) onUpdate?.(d.id, input);
     else entryId = onAdd?.(input) ?? '';
     // Tick "Hoàn thành task estimate" → dòng này là DÒNG CHỐT: page chạy flow
-    // completeEstTask (status done + điểm gợi ý điền vào chính dòng này).
+    // completeEstTask (status done; phút của dòng này tính vào độ lệch est).
     if (d.estDone && d.estRef && entryId)
       onCompleteEst?.(d.estRef, entryId, durationMin({ start: d.start, end: d.end }));
   };
@@ -619,7 +619,7 @@ export default function KpiLogTable({
             >
               ✕
             </button>
-            <label className="kpi-est-done" title="Chốt task estimate done — dòng này nhận điểm gợi ý theo est vs thực tế">
+            <label className="kpi-est-done" title="Chốt task estimate done khi lưu dòng này">
               <input
                 type="checkbox"
                 checked={d.estDone}

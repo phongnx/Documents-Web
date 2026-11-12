@@ -136,23 +136,24 @@ export function fmtEstHours(h: number): string {
   return fmtMin(Math.round(h * 60));
 }
 
+/** Ngưỡng lệch est đáng chú ý: thực tế ≥ 2× hoặc ≤ 0.5× est. */
+export const EST_DEVIATION_HIGH = 2;
+export const EST_DEVIATION_LOW = 0.5;
+
 /**
- * Gợi ý ± điểm KPI khi sub task done (map nhóm "Phát triển" của quy chế),
- * ratio = thực tế / est: nhanh ≥20% → +1 (vượt tiến độ); đến chậm ≤10% → 0 (đạt);
- * chậm >10% đến 20% → −0.5; chậm >20% → −1.
- * Không có est hoặc chưa có actual → null (không có căn cứ, không gợi ý).
+ * Tỉ lệ thực tế / est KHI LỆCH LỚN (≥ 2× hoặc ≤ 0.5×) — chỉ để báo leader/member xem lại
+ * cách estimate, KHÔNG quy ra điểm KPI (bỏ chấm theo est từ 11/2026: est do member tự điền,
+ * AI làm thời gian dao động mạnh nên tỉ lệ không phản ánh hiệu quả). Lệch trong ngưỡng,
+ * thiếu est hoặc chưa có giờ log → null.
  */
-export function suggestDelta(
-  estHours: number | undefined,
-  actualMin: number,
-): number | null {
+export function estDeviation(estHours: number | undefined, actualMin: number): number | null {
   if (!estHours || estHours <= 0 || actualMin <= 0) return null;
   const ratio = actualMin / 60 / estHours;
-  if (ratio <= 0.8) return 1;
-  if (ratio <= 1.1) return 0;
-  if (ratio <= 1.2) return -0.5;
-  return -1;
+  return ratio >= EST_DEVIATION_HIGH || ratio <= EST_DEVIATION_LOW ? ratio : null;
 }
+
+/** '2.4×' / '0.3×' — làm tròn 1 chữ số. */
+export const fmtRatio = (r: number): string => `${Math.round(r * 10) / 10}×`;
 
 /** 1 ngày công = 8h (quy đổi est giờ → ngày khi tự tính End). */
 export const EST_HOURS_PER_DAY = 8;
@@ -276,29 +277,28 @@ export function estProgressText(p: {
 }
 
 /**
- * Xem trước kết quả khi chuyển sub task sang Xong (menu trạng thái, dialog sửa) — cùng
- * căn cứ với suggestDelta mà completeEstTask dùng lúc chốt thật.
+ * Xem trước khi chuyển sub task sang Xong (menu trạng thái) — chỉ thông tin giờ, không còn
+ * điểm gợi ý; lệch est lớn (estDeviation) thì nhắc xem lại cách estimate.
  */
 export function estDonePreview(
   estHours: number | undefined,
   actualMin: number,
-): { delta: number | null; lines: [string, string] } {
-  const delta = suggestDelta(estHours, actualMin);
+): { deviation: number | null; lines: [string, string] } {
+  const deviation = estDeviation(estHours, actualMin);
   if (actualMin <= 0)
-    return {
-      delta,
-      lines: ['Chưa có giờ log — không gợi ý điểm.', 'Leader đối chiếu khi chấm.'],
-    };
+    return { deviation, lines: ['Chưa có giờ log.', 'Điểm do leader chấm theo quy chế.'] };
   if (!estHours || estHours <= 0)
     return {
-      delta,
-      lines: ['Chưa có est — không gợi ý điểm.', `Thực tế ${fmtMin(actualMin)}.`],
+      deviation,
+      lines: [`Thực tế ${fmtMin(actualMin)}, chưa có est.`, 'Điểm do leader chấm theo quy chế.'],
     };
   return {
-    delta,
+    deviation,
     lines: [
-      'Điền vào dòng log KPI mới nhất gắn sub task này.',
-      `Thực tế ${fmtMin(actualMin)} / est ${fmtEstHours(estHours)}. Dòng đã được leader chấm thì giữ điểm.`,
+      `Thực tế ${fmtMin(actualMin)} / est ${fmtEstHours(estHours)}.`,
+      deviation !== null
+        ? `Lệch ${fmtRatio(deviation)} est — nên xem lại cách estimate (không tính điểm).`
+        : 'Điểm do leader chấm theo quy chế.',
     ],
   };
 }

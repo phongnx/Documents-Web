@@ -765,12 +765,23 @@ function datesOfRow(r: KpiSummaryRow): string[] {
   return daysBetween(r.start, r.end && r.end >= r.start ? r.end : r.start);
 }
 
-/** '+2' / '−0.5' / '-1' → số; không phải số → null (giữ nguyên text, không cộng bừa). */
+/**
+ * '+2' / '−0.5' / '-1' / '0,5' (dấu phẩy thập phân) → số; chuỗi bị nối bằng ' · ' (bản
+ * gộp cũ khi có ô '0,5' không đọc được, VD '2 · 0,5') → cộng các phần = 2.5. Phần nào
+ * không phải số → null (giữ nguyên text, không cộng bừa).
+ */
 export function parseDelta(s?: string): number | null {
-  const t = (s ?? '').trim().replace('−', '-').replace('+', '');
+  const t = (s ?? '').trim();
   if (!t) return 0;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
+  let sum = 0;
+  for (const part of t.split('·')) {
+    const p = part.trim().replace(/−/g, '-').replace(/^\+/, '').replace(',', '.');
+    if (!p) return null;
+    const n = Number(p);
+    if (!Number.isFinite(n)) return null;
+    sum += n;
+  }
+  return Number(sum.toFixed(2));
 }
 
 /** Nối text nhiều dòng của các ô, bỏ dòng TRÙNG (không phân biệt hoa/thường). */
@@ -888,7 +899,7 @@ export function optimizeSummaryMembers(members: KpiSummaryMember[]): {
     const rows = optimizeSummaryRows(m.rows ?? []);
     before += (m.rows ?? []).length;
     after += rows.length;
-    return { ...m, rows };
+    return withRows(m, rows);
   });
   return { members: out, before, after };
 }
@@ -981,6 +992,25 @@ export function sumRowKpi(rows: KpiSummaryRow[]): number | null {
     sum += d;
   }
   return Number(sum.toFixed(2));
+}
+
+/** Σ ± các dòng, ô không đọc được (đang gõ dở '-', chữ tự do) tính 0. */
+const looseRowKpi = (rows: KpiSummaryRow[]): number =>
+  Number(rows.reduce((s, r) => s + (parseDelta(r.kpi) ?? 0), 0).toFixed(2));
+
+/**
+ * Đặt rows mới cho 1 khối + tự cập nhật KPI tháng = 100 + Σ ± dòng — CHỈ khi trước thay
+ * đổi KPI tháng đang khớp 100 + Σ cũ (leader đã gõ tay khác đi thì giữ, cảnh báo lệch vẫn
+ * hiện). Cả Σ cũ lẫn Σ mới tính ô không đọc được = 0 (cùng 1 cách đo): gõ '-' rồi '-1'
+ * thì bước '-' đã kéo KPI tháng theo, bước sau vẫn còn khớp — nếu bước '-' giữ nguyên KPI
+ * tháng thì sẽ mất trạng thái khớp. Dùng cho mọi đường sửa dòng: sửa ô, thêm/xóa dòng,
+ * gộp tay, tối ưu.
+ */
+export function withRows(m: KpiSummaryMember, rows: KpiSummaryRow[]): KpiSummaryMember {
+  const inSync = Math.abs(m.kpiScore - (KPI_MONTH_BASE + looseRowKpi(m.rows ?? []))) <= 0.005;
+  return inSync
+    ? { ...m, rows, kpiScore: Number((KPI_MONTH_BASE + looseRowKpi(rows)).toFixed(2)) }
+    : { ...m, rows };
 }
 
 /** KPI tháng lệch 100 + Σ ± dòng → trả giá trị kỳ vọng để hiện cảnh báo; khớp/không tính được → null. */

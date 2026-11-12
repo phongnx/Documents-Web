@@ -17,6 +17,10 @@ interface Props {
   rows: KpiSummaryRow[];
   /** Danh mục giai đoạn (gợi ý cho ô Giai đoạn). */
   categories?: string[];
+  /** App member được gán (gợi ý thêm cho ô App, sau các app của mục nguồn). */
+  apps?: string[];
+  /** 'yyyy-mm' — tháng tổng kết: ô ngày trống thì lịch mở ở tháng này. */
+  defaultMonth?: string;
   onSave: (merged: KpiSummaryRow) => void;
   onCancel: () => void;
 }
@@ -38,6 +42,8 @@ export default function KsumMergeDialog({
   memberName,
   rows,
   categories,
+  apps,
+  defaultMonth,
   onSave,
   onCancel,
 }: Props) {
@@ -48,10 +54,10 @@ export default function KsumMergeDialog({
   const hints = useMemo(
     () => ({
       category: distinct([...rows.map((r) => r.category), ...(categories ?? [])]),
-      app: distinct(rows.map((r) => r.app)),
+      app: distinct([...rows.map((r) => r.app), ...(apps ?? [])]),
       milestone: distinct(rows.map((r) => r.milestone)),
     }),
-    [rows, categories],
+    [rows, categories, apps],
   );
   // Ô có giá trị khác nhau giữa các mục nguồn → nhắc leader kiểm lại.
   const differs = (k: 'category' | 'app' | 'milestone') =>
@@ -129,11 +135,21 @@ export default function KsumMergeDialog({
         {/* div thay label: ô ngày có nút lịch bên trong, label sẽ cướp click. */}
         <div className="k-field">
           <span>Start</span>
-          <DateInputVi value={row.start} onChange={(v) => patch({ start: v })} ariaLabel="Start" />
+          <DateInputVi
+            value={row.start}
+            onChange={(v) => patch({ start: v })}
+            ariaLabel="Start"
+            defaultMonth={defaultMonth}
+          />
         </div>
         <div className="k-field">
           <span>End</span>
-          <DateInputVi value={row.end} onChange={(v) => patch({ end: v })} ariaLabel="End" />
+          <DateInputVi
+            value={row.end}
+            onChange={(v) => patch({ end: v })}
+            ariaLabel="End"
+            defaultMonth={defaultMonth}
+          />
         </div>
         <label className="k-field">
           <span>Ngày</span>

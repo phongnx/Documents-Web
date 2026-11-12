@@ -37,6 +37,7 @@ import {
   normalizeSummaryRead,
   optimizePreviewByMember,
   optimizeSummaryRows,
+  withRows,
 } from '../lib/kpiSummary';
 import {
   kpiScoreClass,
@@ -68,7 +69,7 @@ type Confirm =
 
 export default function BoardKpiSummaryPage() {
   const { monthKey = '' } = useParams();
-  const { meta, members, ensureKpiSummary, saveKpiSummary, rebuildKpiSummaryMembers } =
+  const { meta, members, apps, ensureKpiSummary, saveKpiSummary, rebuildKpiSummaryMembers } =
     usePm();
   const [adding, setAdding] = useState(false);
   // memberId khối đang tổng hợp riêng (chặn bấm 2 lần trong lúc chờ đọc log).
@@ -82,6 +83,15 @@ export default function BoardKpiSummaryPage() {
   // Khối có thuộc 1 KPI member còn tồn tại không — khối nhập tay (VD dữ liệu chuyển từ
   // Excel) hoặc member đã bị xóa thì không có log để tổng hợp.
   const isKpiMember = (m: KpiSummaryMember) => members.some((x) => x.id === m.memberId);
+  // Gợi ý ô App của 1 khối: app member đang được gán; member chưa gán / khối nhập tay /
+  // member đã xóa → mọi app.
+  const appsOf = (memberId: string): string[] => {
+    const ids = members.find((x) => x.id === memberId)?.projectIds ?? [];
+    const assigned = ids
+      .map((id) => apps.find((a) => a.id === id)?.name)
+      .filter((n): n is string => !!n);
+    return assigned.length > 0 ? assigned : apps.map((a) => a.name);
+  };
 
   const [id, setId] = useState<string | null>(null);
   const [summary, setSummary] = useState<KpiSummary | null>(null);
@@ -176,7 +186,7 @@ export default function BoardKpiSummaryPage() {
                 if (i === at) rows.push(merged);
                 else if (!ids.has(r.id)) rows.push(r);
               });
-              return { ...m, rows: rows.map((r, i) => ({ ...r, order: i })) };
+              return withRows(m, rows.map((r, i) => ({ ...r, order: i })));
             }),
           }
         : s,
@@ -306,7 +316,7 @@ export default function BoardKpiSummaryPage() {
         ? {
             ...s,
             members: s.members.map((m) =>
-              m.memberId === c.memberId ? { ...m, rows: optimizeSummaryRows(m.rows ?? []) } : m,
+              m.memberId === c.memberId ? withRows(m, optimizeSummaryRows(m.rows ?? [])) : m,
             ),
           }
         : s,
@@ -545,6 +555,7 @@ export default function BoardKpiSummaryPage() {
                   <KpiSummaryTable
                     summary={summary}
                     categories={meta.kpiRules.map((g) => g.label)}
+                    appsOf={appsOf}
                     onChange={onEdit}
                     isOpen={open.isOpen}
                     onToggle={open.toggle}
@@ -780,6 +791,8 @@ export default function BoardKpiSummaryPage() {
               memberName={m.name}
               rows={m.rows.filter((r) => selection.rowIds.includes(r.id))}
               categories={meta.kpiRules.map((g) => g.label)}
+              apps={appsOf(m.memberId)}
+              defaultMonth={monthKey}
               onSave={onSaveMerged}
               onCancel={() => setMerging(false)}
             />

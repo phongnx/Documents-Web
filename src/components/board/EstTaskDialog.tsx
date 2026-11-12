@@ -156,9 +156,8 @@ export default function EstTaskDialog({
 
         {!isNew && status === 'done' && task?.status !== 'done' && (
           <p className="muted est-done-hint">
-            ✅ Lưu với status Xong → dòng log KPI chốt của assignee sẽ tự nhận điểm gợi ý
-            theo est vs thực tế (nhanh ≥20% = +1 · đạt = 0 · chậm 10–20% = −0.5 · chậm
-            &gt;20% = −1).
+            ✅ Lưu với status Xong → chốt sub task; thực tế lệch nhiều so với est (≥ 2× hoặc
+            ≤ 0.5×) sẽ có nhắc xem lại cách estimate. Est không quy ra điểm KPI.
           </p>
         )}
 

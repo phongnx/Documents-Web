@@ -66,8 +66,8 @@ export default function KpiSharePage() {
   const sheet = useKpiSheet(token, onWriteError, monthKey);
   const locked = sheet.meta?.locked === true;
 
-  // Tick "Hoàn thành task estimate" trên dòng log → dòng đó là DÒNG CHỐT:
-  // set sub task done + điền điểm gợi ý vào chính dòng này (1 update nguyên tử).
+  // Tick "Hoàn thành task estimate" trên dòng log → set sub task done (phút của dòng này
+  // tính vào độ lệch est); không điền điểm gợi ý — điểm do leader chấm theo quy chế.
   const onCompleteEst = async (
     estRef: KpiEstRef,
     entryId: string,

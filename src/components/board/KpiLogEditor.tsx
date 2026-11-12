@@ -376,7 +376,7 @@ export default function KpiLogEditor({
           </span>
           <label
             className="kml-check"
-            title="Chốt task estimate xong — dòng này nhận điểm gợi ý theo est so với thực tế"
+            title="Chốt task estimate xong khi lưu dòng này"
           >
             <input
               type="checkbox"

@@ -1,7 +1,8 @@
 // Ô ngày luôn hiển thị dd/mm/yyyy (không phụ thuộc locale trình duyệt như input type=date
 // — trước đây trang sửa hiện mm/dd còn trang share hiện dd/mm). Giá trị vào/ra vẫn ISO
 // 'yyyy-mm-dd'. Gõ tay có mask tự chèn '/'; nút lịch mở bộ chọn ngày của trình duyệt
-// qua 1 input type=date ẩn.
+// qua 1 input type=date ẩn. `defaultMonth` ('yyyy-mm'): ô đang trống thì lịch mở ở tháng
+// đó (input date không có thuộc tính "tháng mở mặc định" → kẹp tạm min/max về tháng đó).
 import { useEffect, useRef, useState } from 'react';
 import { IcCalendar } from './board/ksumIcons';
 
@@ -10,6 +11,8 @@ interface Props {
   onChange: (iso: string | undefined) => void;
   ariaLabel: string;
   className?: string;
+  /** 'yyyy-mm' — tháng lịch mở ra khi ô đang trống (VD tháng đang tổng kết). */
+  defaultMonth?: string;
 }
 
 const isoToVi = (iso?: string): string => {
@@ -43,7 +46,25 @@ const mask = (raw: string): string => {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 };
 
-export default function DateInputVi({ value, onChange, ariaLabel, className }: Props) {
+/** Ngày cuối tháng 'yyyy-mm' → 'yyyy-mm-dd'. */
+const lastDayOf = (month: string): string => {
+  const [y, m] = month.split('-').map(Number);
+  return `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+};
+
+/** min/max tạm cho input date ẩn khi ô TRỐNG: trình duyệt mở lịch ở hôm nay kẹp trong
+ *  [min, max] → tháng đã qua thì max = cuối tháng, tháng tương lai thì min = đầu tháng.
+ *  Không giữ sẵn ngày 01 làm value: bấm đúng ngày đó sẽ không phát sự kiện change. */
+function pickerBounds(defaultMonth?: string): { min?: string; max?: string } {
+  if (!defaultMonth || !/^\d{4}-\d{2}$/.test(defaultMonth)) return {};
+  const d = new Date();
+  const cur = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  if (defaultMonth < cur) return { max: lastDayOf(defaultMonth) };
+  if (defaultMonth > cur) return { min: `${defaultMonth}-01` };
+  return {};
+}
+
+export default function DateInputVi({ value, onChange, ariaLabel, className, defaultMonth }: Props) {
   const [text, setText] = useState(isoToVi(value));
   const [invalid, setInvalid] = useState(false);
   const focused = useRef(false);
@@ -117,6 +138,7 @@ export default function DateInputVi({ value, onChange, ariaLabel, className }: P
         tabIndex={-1}
         aria-hidden="true"
         value={value ?? ''}
+        {...(value ? {} : pickerBounds(defaultMonth))}
         onChange={(e) => {
           const iso = e.target.value || undefined;
           setText(isoToVi(iso));

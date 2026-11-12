@@ -33,7 +33,7 @@ export interface RowDraft {
   selfDelta: string;
   /** Link về sub task estimate (pick từ dialog estimate). */
   estRef?: KpiEstRef;
-  /** Tick "Hoàn thành task estimate" — khi lưu sẽ chốt done + điểm gợi ý. */
+  /** Tick "Hoàn thành task estimate" — khi lưu sẽ chốt sub task done. */
   estDone: boolean;
   /** Mốc release/milestone task thuộc về. */
   rel?: KpiEntryRel;

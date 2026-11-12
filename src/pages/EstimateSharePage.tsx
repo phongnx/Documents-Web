@@ -1,7 +1,7 @@
 // Trang bảng Break task & Estimate cho MEMBER — truy cập ẩn danh qua link trong trang
 // KPI riêng của member (/share/est/:id?t={kpiToken}). Draft: member tự break task +
-// điền est; Approved: chỉ đổi status/note sub task của mình; chọn Xong → dòng log chốt
-// bên bảng KPI tự nhận điểm gợi ý (completeEstTask).
+// điền est; Approved: chỉ đổi status/note sub task của mình; chọn Xong → completeEstTask
+// (set done + báo lệch est, không điền điểm sang bảng KPI).
 // Bản redesign Material 3: header gọn, chip trạng thái, banner, thông báo dạng snackbar.
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';

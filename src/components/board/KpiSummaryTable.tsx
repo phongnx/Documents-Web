@@ -17,10 +17,12 @@ import {
   fmtSigned,
   kpiScoreMismatch,
   parseDelta,
+  withRows,
   parseKpiReasons,
   pmClass,
 } from '../../lib/kpiSummary';
 import DateInputVi from '../DateInputVi';
+import { totalWorkDays } from '../../estTypes';
 import {
   IcChevronDown,
   IcChevronRight,
@@ -220,6 +222,8 @@ interface Props {
   readonly?: boolean;
   /** Danh mục giai đoạn (datalist cho ô Giai đoạn — chỉ dùng khi sửa được). */
   categories?: string[];
+  /** App gợi ý cho ô App của 1 khối member (datalist — app member được gán; chỉ khi sửa được). */
+  appsOf?: (memberId: string) => string[];
   onChange?: (next: KpiSummary) => void;
   isOpen: (memberId: string) => boolean;
   onToggle: (memberId: string) => void;
@@ -245,6 +249,7 @@ export default function KpiSummaryTable({
   summary,
   readonly: ro,
   categories,
+  appsOf,
   onChange,
   isOpen,
   onToggle,
@@ -266,18 +271,38 @@ export default function KpiSummaryTable({
       members: summary.members.map((m, i) => (i === mi ? { ...m, ...patch } : m)),
     });
 
-  const patchRow = (mi: number, ri: number, patch: Partial<KpiSummaryRow>) =>
-    patchMember(mi, {
-      rows: summary.members[mi].rows.map((r, j) => (j === ri ? { ...r, ...patch } : r)),
+  // Mọi thay đổi dòng đi qua withRows → KPI tháng tự = 100 + Σ ± dòng (nếu đang khớp).
+  const setRows = (mi: number, rows: KpiSummaryRow[]) =>
+    onChange?.({
+      ...summary,
+      members: summary.members.map((m, i) => (i === mi ? withRows(m, rows) : m)),
     });
+
+  const patchRow = (mi: number, ri: number, patch: Partial<KpiSummaryRow>) =>
+    setRows(
+      mi,
+      summary.members[mi].rows.map((r, j) => (j === ri ? { ...r, ...patch } : r)),
+    );
+
+  // Đổi Start/End → tự điền số ngày (T2–T6 trong khoảng) khi đủ 2 ngày hợp lệ. Chỉ ghi đè
+  // khi ô ngày đang trống hoặc đúng bằng số tự tính của khoảng CŨ — số gõ tay / số tổng hợp
+  // theo giờ log (VD 2.5) thì giữ.
+  const patchDates = (mi: number, ri: number, patch: Pick<KpiSummaryRow, 'start'> | Pick<KpiSummaryRow, 'end'>) => {
+    const r = summary.members[mi].rows[ri];
+    const next = { ...r, ...patch };
+    const prevAuto = totalWorkDays(r.start, r.end, 0);
+    const auto = totalWorkDays(next.start, next.end, 0);
+    const canAuto = typeof r.days !== 'number' || r.days === prevAuto;
+    patchRow(mi, ri, auto !== null && canAuto ? { ...patch, days: auto } : patch);
+  };
 
   const addRow = (mi: number) => {
     const rows = summary.members[mi].rows;
-    patchMember(mi, { rows: [...rows, { id: uuidv4(), order: rows.length }] });
+    setRows(mi, [...rows, { id: uuidv4(), order: rows.length }]);
   };
 
   const deleteRow = (mi: number, ri: number) =>
-    patchMember(mi, { rows: summary.members[mi].rows.filter((_, j) => j !== ri) });
+    setRows(mi, summary.members[mi].rows.filter((_, j) => j !== ri));
 
   // Lệch KPI tháng ↔ 100 + Σ ± dòng — tính 1 lần mỗi lần dữ liệu đổi.
   const mismatch = useMemo(
@@ -305,6 +330,7 @@ export default function KpiSummaryTable({
           />
           <input
             className="k-in"
+            list={`ksum-apps-${mi}`}
             value={r.app ?? ''}
             onChange={(e) => patchRow(mi, ri, { app: e.target.value })}
             placeholder="App"
@@ -334,13 +360,15 @@ export default function KpiSummaryTable({
         <div className="k-c k-c-time">
           <DateInputVi
             value={r.start}
-            onChange={(v) => patchRow(mi, ri, { start: v })}
+            onChange={(v) => patchDates(mi, ri, { start: v })}
             ariaLabel="Start"
+            defaultMonth={summary.meta.monthKey}
           />
           <DateInputVi
             value={r.end}
-            onChange={(v) => patchRow(mi, ri, { end: v })}
+            onChange={(v) => patchDates(mi, ri, { end: v })}
             ariaLabel="End"
+            defaultMonth={summary.meta.monthKey}
           />
           <div className="k-days">
             <input
@@ -426,6 +454,15 @@ export default function KpiSummaryTable({
           ))}
         </datalist>
       )}
+      {/* Gợi ý ô App theo từng khối member (id theo vị trí khối — memberId có thể là id lạ). */}
+      {editable &&
+        summary.members.map((m, mi) => (
+          <datalist key={m.memberId} id={`ksum-apps-${mi}`}>
+            {(appsOf?.(m.memberId) ?? []).map((a) => (
+              <option key={a} value={a} />
+            ))}
+          </datalist>
+        ))}
       <div className="k-thead k-grid" role="row">
         <div>Giai đoạn · App · Mốc</div>
         <div>Tasks</div>
@@ -453,7 +490,7 @@ export default function KpiSummaryTable({
         const warnTitle =
           expected === null
             ? ''
-            : `KPI tháng đã được sửa tay nên khác 100 + Σ ± các dòng (${expected}). Không phải lỗi; kiểm tra lại nếu không cố ý.`;
+            : `KPI tháng khác 100 + Σ ± các dòng (${expected}) — đã sửa tay hoặc bảng lưu từ trước khi tự cập nhật. Bấm để đặt KPI tháng = ${expected}.`;
 
         return (
           <section
@@ -510,9 +547,16 @@ export default function KpiSummaryTable({
                       />
                     </label>
                     {expected !== null && (
-                      <span className="k-bh-warn" tabIndex={0} title={warnTitle} aria-label={warnTitle}>
+                      <button
+                        type="button"
+                        className="k-bh-warn"
+                        title={warnTitle}
+                        aria-label={warnTitle}
+                        disabled={busy}
+                        onClick={() => patchMember(mi, { kpiScore: expected })}
+                      >
                         <IcWarn size={14} />≠ 100 + Σ ± dòng ({expected})
-                      </span>
+                      </button>
                     )}
                   </div>
                   {selection?.memberId === m.memberId && selection.rowIds.length > 0 && (

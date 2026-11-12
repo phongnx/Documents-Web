@@ -3,7 +3,7 @@
 // Lưu bằng nút "Lưu quy chế" (set cả mảng 1 lần).
 import { useState } from 'react';
 import { usePm } from '../../context/PmContext';
-import { fmtDelta, type KpiRuleGroup } from '../../kpiTypes';
+import { DEFAULT_KPI_RULES, fmtDelta, type KpiRuleGroup } from '../../kpiTypes';
 
 interface Props {
   onClose: () => void;
@@ -59,6 +59,20 @@ export default function KpiRulesDialog({ onClose }: Props) {
     setGroup(gi, { levels: [...rules[gi].levels, { label: '', delta: 0 }] });
   const removeLevel = (gi: number, li: number) =>
     setGroup(gi, { levels: rules[gi].levels.filter((_, i) => i !== li) });
+
+  // Nạp bộ quy chế mặc định (bản chỉnh cho bối cảnh dùng AI) vào BẢN NHÁP — chỉ ghi khi
+  // bấm Lưu; thay toàn bộ nhóm/mức đang có nên hỏi lại trước.
+  const loadDefaults = () => {
+    if (
+      !window.confirm(
+        'Thay toàn bộ quy chế đang sửa bằng quy chế mặc định?\n' +
+          'Các nhóm/mức tự thêm và tên nhóm đã đổi sẽ về như mặc định. ' +
+          'Chỉ áp dụng khi bấm "Lưu quy chế"; điểm đã chấm giữ nguyên.',
+      )
+    )
+      return;
+    patch(DEFAULT_KPI_RULES.map((g) => ({ ...g, levels: g.levels.map((l) => ({ ...l })) })));
+  };
 
   const save = () => {
     // Bỏ mức trống label; nhóm không còn mức vẫn giữ (leader tự xóa nếu muốn).
@@ -147,6 +161,14 @@ export default function KpiRulesDialog({ onClose }: Props) {
         </div>
 
         <div className="modal-actions">
+          <button
+            type="button"
+            className="kpi-rules-reset"
+            onClick={loadDefaults}
+            title="Nạp bộ quy chế mặc định vào bản nháp (chưa lưu)"
+          >
+            ↺ Nạp quy chế mặc định
+          </button>
           <button type="button" onClick={onClose}>
             Hủy
           </button>

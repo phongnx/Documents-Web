@@ -1,5 +1,5 @@
 // Panel đối chiếu estimate trên trang chấm KPI của leader: liệt kê sub task được
-// assign cho member từ các bảng estimate họ tham gia — est vs thực tế + điểm gợi ý,
+// assign cho member từ các bảng estimate họ tham gia — est vs thực tế (lệch lớn thì báo),
 // cảnh báo task done chưa có giờ log. Chỉ đọc (chấm điểm vẫn trên dòng log).
 import { useEffect, useState } from 'react';
 import { get, ref } from 'firebase/database';
@@ -12,12 +12,12 @@ import {
   fmtMin,
   sortedGroups,
   sortedTasks,
-  suggestDelta,
+  estDeviation,
+  fmtRatio,
   type EstGroup,
   type EstimateMeta,
   type EstLogs,
 } from '../../estTypes';
-import { fmtDelta } from '../../kpiTypes';
 
 interface Row {
   estTitle: string;
@@ -92,8 +92,8 @@ export default function KpiEstPanel({ memberId }: { memberId: string }) {
         <ul className="est-panel-list">
           {rows.map((r, i) => {
             const st = EST_STATUS_META[r.status];
-            const delta =
-              r.status === 'done' ? suggestDelta(r.estHours, r.actualMin) : null;
+            // Est không còn quy ra điểm — chỉ báo lệch lớn để leader xem lại cách estimate.
+            const deviation = estDeviation(r.estHours, r.actualMin);
             const over =
               r.estHours && r.actualMin > 0 && r.actualMin > r.estHours * 60;
             return (
@@ -112,12 +112,12 @@ export default function KpiEstPanel({ memberId }: { memberId: string }) {
                     {r.actualMin > 0 ? fmtMin(r.actualMin) : '—'}
                   </span>
                 </span>
-                {delta !== null && (
+                {deviation !== null && (
                   <span
-                    className={`kpi-score ${delta > 0 ? 'pos' : delta < 0 ? 'neg' : 'zero'}`}
-                    title="Điểm gợi ý theo est vs thực tế (nhanh ≥20% = +1 · đạt = 0 · chậm 10–20% = −0.5 · chậm >20% = −1)"
+                    className="kpi-warn"
+                    title="Thực tế lệch nhiều so với est (≥ 2× hoặc ≤ 0.5×) — xem lại cách estimate, không tính điểm"
                   >
-                    {fmtDelta(delta)}
+                    lệch {fmtRatio(deviation)} est
                   </span>
                 )}
                 {r.status === 'done' && r.actualMin === 0 && (

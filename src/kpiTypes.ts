@@ -335,17 +335,20 @@ export interface KpiRuleGroup {
 /** Điểm gốc mỗi tháng theo quy chế (tháng = 100 + Σ delta). */
 export const KPI_MONTH_BASE = 100;
 
-/** Quy chế mặc định — theo file "TTPM Android KPI.xlsx". */
+/** Quy chế mặc định — gốc từ file "TTPM Android KPI.xlsx", chỉnh lại 11/2026 cho bối cảnh
+ *  dev dùng AI hỗ trợ code: bỏ các mức chấm theo giờ thực tế so với estimate (est do member
+ *  tự điền, AI làm thời gian dao động mạnh → tỉ lệ đo độ may/độ trung thực khi log, không đo
+ *  hiệu quả), chuyển sang chất lượng bàn giao + kiểm chứng. Giữ nguyên key/label 5 nhóm vì
+ *  meta.categories của sheet lấy theo label (đổi tên làm dòng log cũ lệch nhóm). */
 export const DEFAULT_KPI_RULES: KpiRuleGroup[] = [
   {
     key: 'research',
     label: 'Nghiên cứu',
     levels: [
-      { label: 'Đầy đủ nguồn/ưu nhược/demo', delta: 1 },
-      { label: 'Demo nổi bật hiệu quả', delta: 0.5 },
-      { label: 'Đạt yêu cầu (1 nguồn + demo)', delta: 0 },
-      { label: 'Bỏ qua báo lỗi/lãng phí thời gian', delta: -0.5 },
-      { label: 'Không hiệu quả', delta: -1 },
+      { label: 'Có kiểm chứng (demo chạy thật/đo số liệu), áp dụng được', delta: 1 },
+      { label: 'Đạt yêu cầu (nguồn + demo)', delta: 0 },
+      { label: 'Chỉ chép kết quả AI, chưa kiểm chứng / có thông tin sai', delta: -0.5 },
+      { label: 'Không dùng được', delta: -1 },
     ],
   },
   {
@@ -353,20 +356,21 @@ export const DEFAULT_KPI_RULES: KpiRuleGroup[] = [
     label: 'Phát triển',
     levels: [
       { label: 'Đề xuất tối ưu lớn/refactor thành công', delta: 2 },
-      { label: 'Vượt tiến độ theo estimate (nhanh ≥20%)', delta: 1 },
-      { label: 'Đạt tiến độ', delta: 0 },
-      { label: 'Chậm 10–20% theo estimate', delta: -0.5 },
-      { label: 'Chậm >20% / không hoạt động đúng', delta: -1 },
+      { label: 'Bàn giao sạch: QA pass lần đầu, kèm test/tài liệu', delta: 1 },
+      { label: 'Đạt yêu cầu, đúng ngày đã cam kết', delta: 0 },
+      { label: 'Trễ ngày cam kết mà không báo trước', delta: -0.5 },
+      { label: 'Phải sửa lại sau review (lỗi logic, thiếu edge case, code AI chưa tự review)', delta: -0.5 },
+      { label: 'Không chạy đúng / phải làm lại', delta: -1 },
     ],
   },
   {
     key: 'fixbug',
     label: 'Fix bugs',
     levels: [
-      { label: 'Vượt tốc độ, hạn chế reopen', delta: 1 },
-      { label: 'Đúng tốc độ, commit đầy đủ', delta: 0 },
-      { label: 'Bug bị reopen', delta: -0.2 },
-      { label: 'Không đúng tiến độ', delta: -1 },
+      { label: 'Fix tận gốc, có test chặn tái phát', delta: 1 },
+      { label: 'Fix đúng, commit đầy đủ', delta: 0 },
+      { label: 'Bug bị reopen', delta: -0.5 },
+      { label: 'Fix gây lỗi mới (regression)', delta: -1 },
     ],
   },
   {
@@ -386,8 +390,10 @@ export const DEFAULT_KPI_RULES: KpiRuleGroup[] = [
     label: 'Khác',
     levels: [
       { label: 'Đóng góp tốt (report/log đầy đủ)', delta: 1 },
+      { label: 'Chia sẻ cách dùng AI hiệu quả cho team', delta: 1 },
       { label: 'Bình thường', delta: 0 },
       { label: 'Không report', delta: -1 },
+      { label: 'Code AI gây rủi ro bảo mật/bản quyền', delta: -2 },
     ],
   },
 ];

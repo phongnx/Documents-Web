@@ -1,6 +1,6 @@
 // Editor bảng Break task & Estimate (leader): toàn quyền sửa + duyệt/mở lại/khóa.
-// Chọn Xong 1 sub task → chạy cùng flow completeEstTask như member (dòng log chốt bên
-// bảng KPI của assignee nhận điểm gợi ý) — token tra từ danh sách member riêng tư.
+// Chọn Xong 1 sub task → chạy cùng flow completeEstTask như member (set done + báo lệch
+// est, không điền điểm sang bảng KPI).
 // Bản redesign Material 3: header gọn + chip trạng thái, Duyệt & chốt qua dialog xác nhận,
 // thông báo dạng snackbar.
 import { useState } from 'react';
@@ -53,7 +53,7 @@ export default function BoardEstimateEditPage() {
 
   const meta = sheet.meta;
 
-  // Đổi status sub task: done → flow chốt điểm (điểm gợi ý vào dòng log của assignee).
+  // Đổi status sub task: done → completeEstTask (set done + báo lệch est).
   // taskOverride = bản vừa sửa trong dialog (est mới nhất, state chưa kịp dội về).
   const onSetStatus = async (
     gid: string,
