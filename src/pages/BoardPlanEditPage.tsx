@@ -691,13 +691,44 @@ function PlanEditor({ id }: { id: string }) {
     );
 
   // ----- Milestone -----
+  // Milestone gán sẵn khi bấm "Thêm milestone" — theo Loại nhánh (trước đây luôn Release +
+  // "Build release v…" nên nhánh Development / Fix bugs phải chọn lại loại và gõ lại):
+  // Release → loại release + "Build release <version task nguồn>"; loại khác → loại milestone
+  // CÙNG TÊN với Loại nhánh; Loại kiểu test/bug (Test/Fix, Fix bugs) → loại milestone có chữ
+  // test/bug/fix trong tên + "Build test & fix bugs"; còn lại chữ trống để gõ. Chọn THEO TÊN,
+  // không theo key: key preset 'test' có thể đã bị đổi tên (data thật: 'test' = "Development").
+  const defaultMilestoneOf = (w: FormWs): PlanMilestone => {
+    const label = catMeta(w.category).label;
+    const types = meta.milestoneTypes;
+    if (w.category === 'release') {
+      const ver = tasks.find((t) => w.sourceTaskIds?.includes(t.id) && t.version)?.version ?? '';
+      const rel = types.find((t) => t.key === 'release') ?? types.find((t) => t.isRelease);
+      return { type: rel?.key ?? 'release', text: `Build release ${ver}`.trim() };
+    }
+    const testy = (s: string) => /test|bug|fix/i.test(s);
+    const isTestCat = w.category === 'test' || testy(`${w.category} ${label}`);
+    const same = types.find((t) => !t.isRelease && sameText(t.label, label));
+    const type =
+      same ??
+      (isTestCat ? types.find((t) => !t.isRelease && testy(t.label)) : undefined) ??
+      types.find((t) => t.key === 'test');
+    return { type: type?.key ?? 'test', text: isTestCat ? 'Build test & fix bugs' : '' };
+  };
+
   const toggleMilestone = (pk: string, w: FormWs, on: boolean) => {
     const prev = w.milestone;
-    const ms = { type: 'release', text: 'Build release v…' };
+    const ms = defaultMilestoneOf(w);
     setWs(pk, w._k, { milestone: on ? ms : undefined });
-    // Bật (mặc định loại release) → thêm dòng timeline; tắt nhánh release → gỡ dòng.
-    if (on) ensureTimelineForRelease(pk, w.title, ms);
-    else if (prev) removeTimelineForRelease(pk, w._k, prev);
+    // Bật → thêm dòng timeline nếu milestone là release (hàm tự bỏ qua loại khác);
+    // tắt nhánh release → gỡ dòng.
+    if (on) {
+      ensureTimelineForRelease(pk, w.title, ms);
+      // Chữ trống → đưa con trỏ vào ô milestone để gõ luôn.
+      if (!ms.text)
+        window.setTimeout(() =>
+          document.querySelector<HTMLInputElement>(`[data-ms-input="${w._k}"]`)?.focus(),
+        );
+    } else if (prev) removeTimelineForRelease(pk, w._k, prev);
   };
   const changeMsType = (pk: string, w: FormWs, type: string) => {
     const prev = w.milestone;
@@ -1279,6 +1310,7 @@ function PlanEditor({ id }: { id: string }) {
               </div>
               <input
                 className="pl-ms-text"
+                data-ms-input={wk}
                 value={w.milestone.text}
                 placeholder="VD: Build release v1.60"
                 aria-label={`Nội dung milestone nhánh ${wsName}`}

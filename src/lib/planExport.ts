@@ -1,6 +1,7 @@
 import {
   catMeta,
   isReleaseWs,
+  isTrackedWs,
   sortTimeline,
   type PlanWorkstream,
   type TaskItem,
@@ -30,9 +31,9 @@ const ROMAN = [
 ];
 const roman = (i: number) => ROMAN[i] ?? String(i + 1);
 
-// "Test" = không phải release nhưng có milestone (bất kỳ loại không-release) hoặc category test.
-const isTestWs = (w: PlanWorkstream, releaseKeys: Set<string>) =>
-  !isReleaseWs(w, releaseKeys) && (!!w.milestone || w.category === 'test');
+// "Test" = nhánh không-release cần theo dõi (isTrackedWs): có milestone không-release, hoặc
+// Loại nhánh khác Khác/Plan (Test/Fix, Development, Fix bugs…) dù chưa thêm milestone.
+const isTestWs = (w: PlanWorkstream, releaseKeys: Set<string>) => isTrackedWs(w, releaseKeys);
 
 // Các nhánh khớp `pick` gom theo DỰ ÁN: 1 dự án = 1 mục dù có nhiều nhánh/mốc. Dự án
 // trùng tên (VD 1 nhập tay + 1 gắn app) cũng gộp làm 1; thứ tự = lần xuất hiện đầu tiên.
@@ -219,10 +220,7 @@ export function buildDetailedHtml(
   const allWs = projects.flatMap((p) => p.workstreams ?? []);
   // 2 ô release / test đếm theo DỰ ÁN (1 dự án nhiều mốc vẫn tính 1), khớp mục Milestone.
   const releaseCount = groupByProject(projects, (w) => isReleaseWs(w, releaseKeys)).length;
-  const testCount = groupByProject(
-    projects,
-    (w) => !!w.milestone && !isReleaseWs(w, releaseKeys),
-  ).length;
+  const testCount = groupByProject(projects, (w) => isTestWs(w, releaseKeys)).length;
   const planCount = allWs.filter((w) => w.category === 'plan').length;
 
   const cards = projects
@@ -254,10 +252,13 @@ ${streams}
   // Mục Milestone: 1 dòng / dự án, các mốc nối bằng '; ' — "Nhánh → mốc (thứ)".
   const msLine = (g: ProjectGroup, label: (w: PlanWorkstream) => string) =>
     `            <li><strong>${esc(g.name)}:</strong> ${g.ws.map(label).join('; ')}.</li>`;
+  // Nhánh chưa có milestone (vào danh sách nhờ Loại nhánh) → mốc = tên Loại + version.
+  const msOf = (w: PlanWorkstream) =>
+    w.milestone
+      ? msWithVersion(w, tasks)
+      : [catMeta(w.category).label, srcVersions(w, tasks)].filter(Boolean).join(' ');
   const msText = (w: PlanWorkstream) =>
-    w.title.trim()
-      ? `${esc(w.title.trim())} → ${esc(msWithVersion(w, tasks))}`
-      : esc(msWithVersion(w, tasks));
+    w.title.trim() ? `${esc(w.title.trim())} → ${esc(msOf(w))}` : esc(msOf(w));
   const releaseGroups = groupByProject(
     projects,
     (w) => !!w.milestone && isReleaseWs(w, releaseKeys),
@@ -272,10 +273,7 @@ ${streams}
     }
     return '';
   };
-  const testGroups = groupByProject(
-    projects,
-    (w) => !!w.milestone && !isReleaseWs(w, releaseKeys),
-  );
+  const testGroups = groupByProject(projects, (w) => isTestWs(w, releaseKeys));
   const testSummary = testGroups
     .map((g) =>
       msLine(g, (w) => {

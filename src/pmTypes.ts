@@ -110,6 +110,22 @@ export function isGoalWs(
   return isReleaseWs(w, releaseKeys) || !!w.milestone;
 }
 
+/** Loại nhánh thường — KHÔNG tự vào danh sách theo dõi khi export nếu chưa có milestone. */
+const UNTRACKED_CATEGORIES = new Set(['other', 'plan']);
+
+/**
+ * Nhánh không-release cần theo dõi khi export (khối Build Test của bản release/test, mục
+ * Milestone nhóm Test của bản chi tiết): có milestone không-release, HOẶC Loại nhánh khác
+ * "Khác"/"Plan" (VD Test/Fix, Ads, loại tự thêm Development / Fix bugs) dù chưa bấm Thêm
+ * milestone. Chỉ dùng lúc xuất file, không sửa dữ liệu plan.
+ */
+export function isTrackedWs(
+  w: PlanWorkstream,
+  releaseKeys: Set<string> = new Set(['release']),
+): boolean {
+  return !isReleaseWs(w, releaseKeys) && (!!w.milestone || !UNTRACKED_CATEGORIES.has(w.category));
+}
+
 // Shape dữ liệu import (script Python sinh ra) và cũng là shape lưu ở pm/.
 export interface PmImportPayload {
   apps?: Record<string, AppItem>;
