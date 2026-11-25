@@ -58,6 +58,14 @@ export interface PmMeta {
   planCategories: string[];
   /** Quy chế chấm điểm KPI theo giai đoạn (seed DEFAULT_KPI_RULES — xem kpiTypes). */
   kpiRules: KpiRuleGroup[];
+  /** Khung dashboard Manager (thứ tự dòng + app gán); thiếu = khung mặc định (dashboardExport). */
+  dashboardRows?: DashboardRow[];
+}
+
+/** 1 dòng trong khung dashboard Manager: nhãn hiển thị + các app gom vào dòng đó. */
+export interface DashboardRow {
+  label: string;
+  appIds: string[];
 }
 
 /** Loại milestone mặc định (không cho xóa 2 loại gốc này). */

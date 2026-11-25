@@ -45,6 +45,7 @@ import {
   WORKSTREAM_STATE_META,
   type AppItem,
   type DailyReport,
+  type DashboardRow,
   type PmImportPayload,
   type PmMeta,
   type TaskItem,
@@ -274,6 +275,8 @@ interface PmState {
   setMemberProjects: (id: string, projectIds: string[]) => void;
   /** Ghi đè quy chế chấm điểm KPI. */
   updateKpiRules: (rules: KpiRuleGroup[]) => void;
+  /** Ghi đè khung dashboard Manager; null = xoá, quay về khung mặc định. */
+  updateDashboardRows: (rows: DashboardRow[] | null) => void;
   /** Đồng bộ snapshot categories/projectNames/memberName sang sheet của member. */
   syncKpiSheetMeta: (memberId: string) => void;
   /** Đồng bộ snapshot cho TẤT CẢ member trong 1 lần ghi; trả về số member đã ghi. */
@@ -471,6 +474,15 @@ export function PmProvider({ children }: { children: ReactNode }) {
             : DEFAULT_PLAN_CATEGORIES,
         kpiRules:
           val?.kpiRules && val.kpiRules.length ? val.kpiRules : DEFAULT_KPI_RULES,
+        // RTDB bỏ mảng rỗng → appIds có thể thiếu; khung rỗng coi như chưa cấu hình.
+        ...(val?.dashboardRows && val.dashboardRows.length
+          ? {
+              dashboardRows: val.dashboardRows.map((r) => ({
+                label: r.label ?? '',
+                appIds: r.appIds ?? [],
+              })),
+            }
+          : {}),
       });
       mark('meta');
     }, onErr('meta'));
@@ -1094,6 +1106,10 @@ export function PmProvider({ children }: { children: ReactNode }) {
             meta.kpiRules && meta.kpiRules.length
               ? meta.kpiRules
               : stateRef.current.meta.kpiRules,
+          // Khung dashboard Manager cũng giữ lại nếu payload không mang theo.
+          ...((meta.dashboardRows ?? stateRef.current.meta.dashboardRows)
+            ? { dashboardRows: meta.dashboardRows ?? stateRef.current.meta.dashboardRows }
+            : {}),
         },
       });
     },
@@ -1284,6 +1300,14 @@ export function PmProvider({ children }: { children: ReactNode }) {
     (rules: KpiRuleGroup[]) => {
       if (!db || !uid) return;
       set(ref(db, `users/${uid}/pm/meta/kpiRules`), rules);
+    },
+    [uid],
+  );
+
+  const updateDashboardRows = useCallback(
+    (rows: DashboardRow[] | null) => {
+      if (!db || !uid) return;
+      set(ref(db, `users/${uid}/pm/meta/dashboardRows`), rows);
     },
     [uid],
   );
@@ -1847,6 +1871,7 @@ export function PmProvider({ children }: { children: ReactNode }) {
         setMemberLocked,
         setMemberProjects,
         updateKpiRules,
+        updateDashboardRows,
         syncKpiSheetMeta,
         syncAllKpiSheetMeta,
         estimates,

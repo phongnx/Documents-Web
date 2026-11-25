@@ -26,6 +26,9 @@ export default function BoardNav() {
           <NavLink to="/board/tasks" className={({ isActive }) => (isActive ? 'active' : '')}>
             Task
           </NavLink>
+          <NavLink to="/board/manager" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Manager
+          </NavLink>
           <NavLink to="/board/apps" className={({ isActive }) => (isActive ? 'active' : '')}>
             App
           </NavLink>

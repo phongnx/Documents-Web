@@ -74,7 +74,8 @@ function wsVersion(w: PlanWorkstream, tasks?: TaskItem[]): string {
   return w.milestone?.text.match(VERSION_RE)?.[0] ?? srcVersions(w, tasks);
 }
 // Text milestone kèm mã release: đã có 'vX' thì giữ nguyên, chưa có thì nối version task nguồn.
-function msWithVersion(w: PlanWorkstream, tasks?: TaskItem[]): string {
+// (Export để dashboard Manager dùng chung — dashboardExport.ts.)
+export function msWithVersion(w: PlanWorkstream, tasks?: TaskItem[]): string {
   const text = (w.milestone?.text ?? '').trim();
   if (VERSION_RE.test(text)) return text;
   return [text, srcVersions(w, tasks)].filter(Boolean).join(' ');

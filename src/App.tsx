@@ -14,6 +14,8 @@ import SharedFolderPage from './pages/SharedFolderPage';
 import BoardOverviewPage from './pages/BoardOverviewPage';
 import BoardTasksPage from './pages/BoardTasksPage';
 import BoardAppTasksPage from './pages/BoardAppTasksPage';
+import BoardManagerPage from './pages/BoardManagerPage';
+import BoardManagerAppPage from './pages/BoardManagerAppPage';
 import BoardCalendarPage from './pages/BoardCalendarPage';
 import BoardAppsPage from './pages/BoardAppsPage';
 import BoardPlanListPage from './pages/BoardPlanListPage';
@@ -121,6 +123,8 @@ function AppShell() {
         <Route path="/board" element={<BoardOverviewPage />} />
         <Route path="/board/tasks" element={<BoardTasksPage />} />
         <Route path="/board/tasks/:appId" element={<BoardAppTasksPage />} />
+        <Route path="/board/manager" element={<BoardManagerPage />} />
+        <Route path="/board/manager/:appId" element={<BoardManagerAppPage />} />
         <Route path="/board/calendar" element={<BoardCalendarPage />} />
         <Route path="/board/apps" element={<BoardAppsPage />} />
         <Route path="/board/plan" element={<BoardPlanListPage />} />

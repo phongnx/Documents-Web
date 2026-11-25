@@ -5287,3 +5287,141 @@ a.pl-src:hover { color: var(--primary); text-decoration: underline; }
   .pl-daygrid button { height: 56px; }
   .kml-menu.pl-head-menu, .kml-menu.pl-export-menu { right: 0; }
 }
+
+/* ---------- Dashboard Manager (nút ở Báo cáo ngày) ---------- */
+.k-dialog.dash-exp { max-width: min(1200px, calc(100vw - 32px)); }
+.dash-exp .html-frame { height: 62vh; border-radius: 10px; }
+.dash-exp-note { margin: 0 0 12px; color: var(--muted); }
+.dash-exp-warn { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; color: var(--warn); }
+.k-dialog-f .dash-exp-rows { margin-right: auto; }
+.dash-rows { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.dash-row {
+  display: grid; grid-template-columns: 28px 200px minmax(0, 1fr) auto; gap: 8px; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+}
+.dash-row-no { color: var(--muted); text-align: right; }
+.dash-row-label { height: 40px; }
+.dash-row-apps { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dash-row-chip { display: inline-flex; align-items: center; gap: 4px; }
+.dash-row-x {
+  display: inline-flex; border: 0; background: none; color: inherit; cursor: pointer; padding: 0;
+  min-width: 24px; min-height: 24px; align-items: center; justify-content: center;
+}
+.dash-row-add { height: 36px; width: auto; max-width: 220px; }
+.dash-row-empty { color: var(--muted); font-size: 13px; }
+.dash-row-act { display: flex; }
+.dash-row-outside { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+@media (max-width: 719px) {
+  .dash-row { grid-template-columns: 28px minmax(0, 1fr) auto; }
+  .dash-row-apps { grid-column: 2 / -1; grid-row: 2; }
+  .dash-row-act { grid-column: 3; grid-row: 1; }
+}
+@media (max-width: 519px) {
+  /* 3 nút footer không vừa 1 hàng → nút Khung app / Khung mặc định xuống hàng riêng. */
+  .k-dialog-f:has(.dash-exp-rows) { flex-wrap: wrap; }
+  .k-dialog-f .dash-exp-rows { flex-basis: 100%; justify-content: flex-start; }
+  .dash-exp .html-frame { height: 50vh; }
+}
+
+/* ---------- Tab Manager (/board/manager) ---------- */
+.mgr-warn { display: flex; gap: 8px; align-items: flex-start; color: var(--warn); background: var(--warn-bg); border-radius: 10px; padding: 10px 12px; }
+.mgr-legend { color: var(--muted); font-size: 13px; margin: 8px 0 12px; }
+.mgr-h2 { font-size: 16px; margin: 24px 0 8px; }
+.mgr-hint { margin: -4px 0 8px; font-size: 13px; }
+.mgr-table {
+  width: 100%; border-collapse: separate; border-spacing: 0; background: var(--card);
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+}
+.mgr-table th {
+  text-align: left; font-weight: 600; font-size: 13px; color: var(--muted); background: var(--subtle);
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+}
+.mgr-table td { vertical-align: top; padding: 12px; border-bottom: 1px solid var(--border); }
+.mgr-table tr:last-child td { border-bottom: 0; }
+.mgr-c-app { width: 180px; }
+.mgr-c-latest { width: 24%; }
+.mgr-c-fut { width: 24%; }
+.mgr-app { display: inline-flex; gap: 4px; align-items: center; min-height: 32px; font-weight: 600; color: var(--primary); text-decoration: none; }
+.mgr-app:hover { text-decoration: underline; }
+.mgr-app.is-plain { color: var(--text); }
+.mgr-table tr.is-na .mgr-app { color: var(--muted); }
+.mgr-app-sub { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 12px; color: var(--muted); }
+.mgr-na {
+  display: inline-block; font-weight: 600; font-size: 12px; color: var(--muted);
+  border: 1px dashed var(--border-strong); border-radius: 6px; padding: 0 8px;
+}
+.mgr-ro {
+  display: inline-block; font-weight: 600; font-size: 12px; color: var(--note);
+  border: 1px solid var(--note); border-radius: 6px; padding: 0 8px;
+}
+.mgr-it { padding: 8px 0; }
+.mgr-it + .mgr-it { border-top: 1px dashed var(--border); }
+.mgr-it-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mgr-cat { font-size: 12px; border-radius: 6px; padding: 0 6px; background: var(--base-bg); color: var(--base); }
+.mgr-cat.is-rel { background: var(--teal-bg); color: var(--teal); }
+.mgr-it-meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.mgr-it-bar { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.mgr-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--hover-bg); overflow: hidden; }
+.mgr-bar i { display: block; height: 100%; background: var(--primary); }
+.mgr-it.is-done .mgr-bar i { background: var(--pos); }
+.mgr-pct { font-size: 12px; color: var(--muted); min-width: 34px; text-align: right; }
+.mgr-details { font-size: 13px; margin-top: 4px; }
+.mgr-details summary { cursor: pointer; color: var(--primary); min-height: 24px; }
+.mgr-details ul { margin: 4px 0; padding-left: 18px; }
+.mgr-lt-d { font-size: 12px; color: var(--muted); }
+.mgr-lt { margin: 2px 0 0; padding-left: 16px; font-size: 14px; }
+.mgr-lt li { margin: 2px 0; }
+.mgr-fut ul { list-style: none; margin: 0; padding: 0; }
+.mgr-fut li { margin: 2px 0; }
+.mgr-fut-d { font-weight: 600; white-space: nowrap; }
+.mgr-fut-d.is-nodate { font-weight: 500; color: var(--muted); }
+.mgr-more {
+  border: 0; background: none; color: var(--primary); cursor: pointer; padding: 4px 0;
+  min-height: 32px; font: inherit; font-size: 13px;
+}
+.mgr-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 4px 16px; }
+.mgr-latest { margin-top: 8px; padding: 10px 16px; }
+.mgr-src { margin: 8px 0 0; }
+.mgr-flag { font-size: 12px; font-weight: 600; color: var(--warn); }
+@media (max-width: 839px) {
+  .mgr-table thead { display: none; }
+  .mgr-table, .mgr-table tbody, .mgr-table tr, .mgr-table td { display: block; width: 100%; }
+  .mgr-table tr { border-bottom: 1px solid var(--border); padding: 4px 0; }
+  .mgr-table tr:last-child { border-bottom: 0; }
+  .mgr-table td { border: 0; padding: 6px 12px; }
+  .mgr-table td.mgr-c-latest::before, .mgr-table td.mgr-c-fut::before {
+    content: attr(data-label); display: block; font-size: 12px; color: var(--muted); font-weight: 600;
+  }
+}
+@media (max-width: 839px) {
+  /* Tiêu đề + 2 nút không vừa 1 hàng → nút xuống hàng dưới, tiêu đề chiếm đủ chiều ngang. */
+  .mgr-page .kml-topbar { flex-wrap: wrap; padding-bottom: 8px; }
+  .mgr-page .kml-topbar-title { flex: 1 1 100%; }
+}
+/* Cột Dự kiến bấm được + dialog Task dự kiến (tab Manager) */
+.mgr-fut-btn {
+  display: block; width: 100%; text-align: left; border: 0; background: none; color: inherit;
+  font: inherit; padding: 4px 6px; margin: 0 -6px; border-radius: 6px; cursor: pointer; min-height: 32px;
+}
+.mgr-fut-btn:hover, .mgr-fut-btn:focus-visible { background: var(--hover-bg); }
+.mgr-fsec + .mgr-fsec { margin-top: 16px; }
+.mgr-fsec-h { font-size: 15px; margin: 0 0 6px; }
+.mgr-fcard {
+  border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 8px;
+  background: var(--card); scroll-margin: 12px;
+}
+.mgr-fcard.is-focus { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); background: var(--base-bg); }
+.mgr-fcard-h { display: flex; align-items: flex-start; gap: 8px; }
+.mgr-fcard-t { flex: 1; font-size: 15px; }
+.mgr-fcard-tags { margin-top: 4px; }
+.mgr-fcard-b { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 14px; }
+.mgr-fcard-b .markdown-body > :first-child { margin-top: 0; }
+.mgr-fcard-b .markdown-body > :last-child { margin-bottom: 0; }
+/* .k-dialog ul xoá dấu đầu dòng → trả lại cho mô tả task / đầu việc trong thẻ Dự kiến. */
+.k-dialog .mgr-fcard-b ul { list-style: disc; padding-left: 20px; margin: 4px 0; }
+.k-dialog .mgr-fcard-b ul ul { list-style: circle; }
+.k-dialog .mgr-fcard-b ol { list-style: decimal; padding-left: 20px; margin: 4px 0; }
+/* Tiêu đề Markdown trong mô tả task (thẻ Dự kiến) không to hơn tiêu đề thẻ. */
+.mgr-fcard-b .markdown-body h1, .mgr-fcard-b .markdown-body h2, .mgr-fcard-b .markdown-body h3 { font-size: 15px; margin: 8px 0 4px; border: 0; padding: 0; }
+.mgr-fcard-b .markdown-body h4, .mgr-fcard-b .markdown-body h5, .mgr-fcard-b .markdown-body h6 { font-size: 14px; margin: 8px 0 4px; }
+.mgr-fcard-b .markdown-body a { word-break: break-all; }
